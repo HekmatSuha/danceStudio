@@ -70,8 +70,7 @@ export async function listBookings(params?: {
   return withCache(cacheKey, 15000, async () => {
     let query = supabase
       .from('bookings')
-      .select(params?.select || '*')
-      .returns<Booking[]>();
+      .select(params?.select || '*');
 
     if (params?.studioIds?.length) {
       const { data: slotRows, error: slotError } = await supabase
@@ -90,7 +89,7 @@ export async function listBookings(params?: {
     if (params?.attended !== undefined) query = query.eq('attended', params.attended);
     if (params?.slotId) query = query.eq('appointment_slot', params.slotId);
 
-    const { data, error } = await query;
+    const { data, error } = await query.returns<Booking[]>();
     if (error) throw error;
 
     return data || [];
