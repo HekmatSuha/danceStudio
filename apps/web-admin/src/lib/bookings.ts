@@ -1,6 +1,7 @@
 'use client';
 
 import { supabase } from "./supabase";
+import { clearCacheByPrefix, withCache } from "./cache";
 
 export type Booking = {
   uuid: string;
@@ -26,6 +27,7 @@ export async function createBooking(slotId: string) {
     .single();
 
   if (error) throw error;
+  clearCacheByPrefix("bookings:");
   return data as Booking;
 }
 
@@ -36,19 +38,22 @@ export async function cancelBooking(bookingId: string) {
     .eq('uuid', bookingId);
     
   if (error) throw error;
+  clearCacheByPrefix("bookings:");
 }
 
 export async function fetchUserBookings() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Not authenticated");
 
-  const { data, error } = await supabase
-    .from('bookings')
-    .select('*')
-    .eq('user_id', user.id);
+  return withCache(`bookings:user:${user.id}`, 15000, async () => {
+    const { data, error } = await supabase
+      .from('bookings')
+      .select('*')
+      .eq('user_id', user.id);
 
-  if (error) throw error;
-  return data as Booking[];
+    if (error) throw error;
+    return data as Booking[];
+  });
 }
 
 export async function listBookings(params?: {
@@ -58,30 +63,34 @@ export async function listBookings(params?: {
   booking_date_to?: string;
   slotId?: string;
   studioIds?: string[];
+  select?: string;
 }) {
-  let query = supabase.from('bookings').select('*');
+  const cacheKey = `bookings:${JSON.stringify(params || {})}`;
+  return withCache(cacheKey, 15000, async () => {
+    let query = supabase.from('bookings').select(params?.select || '*');
 
-  if (params?.studioIds?.length) {
-    const { data: slotRows, error: slotError } = await supabase
-      .from("slots")
-      .select("uuid")
-      .in("studio_id", params.studioIds);
+    if (params?.studioIds?.length) {
+      const { data: slotRows, error: slotError } = await supabase
+        .from("slots")
+        .select("uuid")
+        .in("studio_id", params.studioIds);
 
-    if (slotError) throw slotError;
+      if (slotError) throw slotError;
 
-    const slotIds = (slotRows || []).map((row: any) => row.uuid);
-    if (slotIds.length === 0) return [];
-    query = query.in("appointment_slot", slotIds);
-  }
+      const slotIds = (slotRows || []).map((row: any) => row.uuid);
+      if (slotIds.length === 0) return [];
+      query = query.in("appointment_slot", slotIds);
+    }
 
-  if (params?.status) query = query.eq('status', params.status);
-  if (params?.attended !== undefined) query = query.eq('attended', params.attended);
-  if (params?.slotId) query = query.eq('appointment_slot', params.slotId);
+    if (params?.status) query = query.eq('status', params.status);
+    if (params?.attended !== undefined) query = query.eq('attended', params.attended);
+    if (params?.slotId) query = query.eq('appointment_slot', params.slotId);
 
-  const { data, error } = await query;
-  if (error) throw error;
+    const { data, error } = await query;
+    if (error) throw error;
 
-  return data as Booking[];
+    return data as Booking[];
+  });
 }
 
 export type BookingWithUser = {
@@ -134,5 +143,6 @@ export async function markAttendance(bookingId: string, attended: boolean) {
     .single();
     
   if (error) throw error;
+  clearCacheByPrefix("bookings:");
   return data;
 }

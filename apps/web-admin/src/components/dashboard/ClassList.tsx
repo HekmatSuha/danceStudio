@@ -45,6 +45,9 @@ export function ClassList({
         const data = await fetchClasses({
           trainer: instructorId === null ? undefined : instructorId || user.uuid,
           studioIds,
+          limit: visibleCount,
+          orderBy: "start_time",
+          orderAsc: sortBy === "date_asc",
         });
         setClasses(data);
       } catch (err) {
@@ -54,7 +57,7 @@ export function ClassList({
       }
     };
     load();
-  }, [user, refreshTrigger, instructorId, studioIds]);
+  }, [user, refreshTrigger, instructorId, studioIds, visibleCount, sortBy]);
 
   useEffect(() => {
     setVisibleCount(pageSize);

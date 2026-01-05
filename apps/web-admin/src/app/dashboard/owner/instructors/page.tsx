@@ -22,6 +22,12 @@ export default function OwnerInstructorsPage() {
   const [editSubmitting, setEditSubmitting] = useState(false);
 
   useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      if (data?.user?.id) setOwnerUserId(data.user.id);
+    });
+  }, []);
+
+  useEffect(() => {
     setLoading(true);
     let isMounted = true;
     const load = async () => {
@@ -44,20 +50,7 @@ export default function OwnerInstructorsPage() {
     return () => {
       isMounted = false;
     };
-  }, [refreshTrigger, studios]);
-
-  if (studiosLoading) {
-    return <div className="p-6 text-slate-500">Loading instructors...</div>;
-  }
-  if (role === "owner" && studios.length === 0) {
-    return null;
-  }
-
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (data?.user?.id) setOwnerUserId(data.user.id);
-    });
-  }, []);
+  }, [refreshTrigger, studios.map((studio) => studio.uuid).join(",")]);
 
   const filteredInstructors = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -73,6 +66,13 @@ export default function OwnerInstructorsPage() {
       return matchesSearch && matchesStudio && matchesStatus;
     });
   }, [instructors, search, studioFilter, statusFilter]);
+
+  if (studiosLoading) {
+    return <div className="p-6 text-slate-500">Loading instructors...</div>;
+  }
+  if (role === "owner" && studios.length === 0) {
+    return null;
+  }
 
   const handleEditSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();

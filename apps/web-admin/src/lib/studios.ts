@@ -1,6 +1,7 @@
 'use client';
 
 import { supabase } from "./supabase";
+import { clearCacheByPrefix, withCache } from "./cache";
 
 export type Studio = {
   uuid: string;
@@ -30,49 +31,52 @@ export type StudioStaff = {
 };
 
 export async function listStudios() {
-  const { data, error } = await supabase
-    .from('studios')
-    .select('*');
-    
-  if (error) throw error;
-  
-  return data as Studio[];
+  return withCache("studios:all", 30000, async () => {
+    const { data, error } = await supabase
+      .from('studios')
+      .select('*');
+
+    if (error) throw error;
+    return data as Studio[];
+  });
 }
 
 export async function fetchMyStudios() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Not authenticated");
 
-  // Query tenant_staff to find studios where the user is a staff member (owner/admin/instructor)
-  const { data: staffData, error: staffError } = await supabase
-    .from('tenant_staff')
-    .select(`
-      studio:studios(*)
-    `)
-    .eq('user_id', user.id);
+  return withCache(`studios:mine:${user.id}`, 20000, async () => {
+    // Query tenant_staff to find studios where the user is a staff member (owner/admin/instructor)
+    const { data: staffData, error: staffError } = await supabase
+      .from('tenant_staff')
+      .select(`
+        studio:studios(*)
+      `)
+      .eq('user_id', user.id);
 
-  if (staffError) {
-    console.warn("Failed to load tenant_staff studios:", staffError.message);
-  }
+    if (staffError) {
+      console.warn("Failed to load tenant_staff studios:", staffError.message);
+    }
 
-  const { data: ownedData, error: ownedError } = await supabase
-    .from('studios')
-    .select('*')
-    .eq('owner_id', user.id);
+    const { data: ownedData, error: ownedError } = await supabase
+      .from('studios')
+      .select('*')
+      .eq('owner_id', user.id);
 
-  if (ownedError) throw ownedError;
+    if (ownedError) throw ownedError;
 
-  const studios = new Map<string, Studio>();
+    const studios = new Map<string, Studio>();
 
-  (staffData || []).forEach((item: any) => {
-    if (item.studio?.uuid) studios.set(item.studio.uuid, item.studio as Studio);
+    (staffData || []).forEach((item: any) => {
+      if (item.studio?.uuid) studios.set(item.studio.uuid, item.studio as Studio);
+    });
+
+    (ownedData || []).forEach((studio: any) => {
+      if (studio?.uuid) studios.set(studio.uuid, studio as Studio);
+    });
+
+    return Array.from(studios.values());
   });
-
-  (ownedData || []).forEach((studio: any) => {
-    if (studio?.uuid) studios.set(studio.uuid, studio as Studio);
-  });
-
-  return Array.from(studios.values());
 }
 
 export async function createStudio(data: { name: string; city: string; address: string; latitude?: number | null; longitude?: number | null }) {
@@ -93,6 +97,7 @@ export async function createStudio(data: { name: string; city: string; address: 
     .single();
 
   if (error) throw error;
+  clearCacheByPrefix("studios:");
   return studio;
 }
 
@@ -111,6 +116,7 @@ export async function updateStudio(uuid: string, data: Partial<Studio>) {
     .single();
 
   if (error) throw error;
+  clearCacheByPrefix("studios:");
   return studio as Studio;
 }
 
@@ -121,16 +127,19 @@ export async function deleteStudio(uuid: string) {
     .eq('uuid', uuid);
 
   if (error) throw error;
+  clearCacheByPrefix("studios:");
 }
 
 export async function fetchRooms(studioId: string) {
-  const { data, error } = await supabase
-    .from('rooms')
-    .select('*')
-    .eq('studio_id', studioId);
+  return withCache(`rooms:${studioId}`, 20000, async () => {
+    const { data, error } = await supabase
+      .from('rooms')
+      .select('*')
+      .eq('studio_id', studioId);
 
-  if (error) throw error;
-  return data as Room[];
+    if (error) throw error;
+    return data as Room[];
+  });
 }
 
 export async function createRoom(data: { studioId: string; name: string; capacity: number; pricePerHour?: number; currency?: string }) {
@@ -147,6 +156,7 @@ export async function createRoom(data: { studioId: string; name: string; capacit
     .single();
 
   if (error) throw error;
+  clearCacheByPrefix("rooms:");
   return room as Room;
 }
 
@@ -164,6 +174,7 @@ export async function updateRoom(roomId: string, data: { name?: string; capacity
     .single();
 
   if (error) throw error;
+  clearCacheByPrefix("rooms:");
   return room as Room;
 }
 
@@ -174,6 +185,7 @@ export async function deleteRoom(roomId: string) {
     .eq('id', roomId);
 
   if (error) throw error;
+  clearCacheByPrefix("rooms:");
 }
 
 export async function fetchStudioStaff(studioId: string) {

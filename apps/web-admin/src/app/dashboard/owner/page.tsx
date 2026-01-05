@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   Plus,
   Building2,
@@ -11,45 +11,44 @@ import {
 } from "lucide-react";
 import { ClassForm } from "../../../components/dashboard/ClassForm";
 import { ClassList } from "../../../components/dashboard/ClassList";
-import { fetchClasses, type ClassEvent } from "../../../lib/classes";
-import { listBookings, type Booking } from "../../../lib/bookings";
+import { type ClassEvent } from "../../../lib/classes";
+import { type Booking } from "../../../lib/bookings";
 import { useOwnerStudiosGuard } from "../../../lib/useOwnerStudiosGuard";
+import { useAuthedSWR } from "../../../lib/useAuthedSWR";
 
 export default function OwnerDashboardPage() {
   const [showForm, setShowForm] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const { studios, loading: studiosLoading } = useOwnerStudiosGuard();
-  const [slots, setSlots] = useState<ClassEvent[]>([]);
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const studioIds = studios.length ? studios.map((studio) => studio.uuid) : undefined;
+  const studioIds = studios.length ? studios.map((studio) => studio.uuid) : null;
+  const studioIdsParam = studioIds ? studioIds.join(",") : null;
+  const {
+    data: slotsData,
+    isLoading: slotsLoading,
+    mutate: mutateSlots,
+  } = useAuthedSWR<ClassEvent[]>(
+    studioIdsParam
+      ? `/api/owner/classes?studioIds=${studioIdsParam}&limit=100`
+      : null
+  );
+  const {
+    data: bookingsData,
+    isLoading: bookingsLoading,
+    mutate: mutateBookings,
+  } = useAuthedSWR<Booking[]>(
+    studioIdsParam
+      ? `/api/owner/bookings?studioIds=${studioIdsParam}&select=uuid,status,attended,appointment_slot`
+      : null
+  );
+  const slots = slotsData || [];
+  const bookings = bookingsData || [];
 
   const handleSuccess = () => {
     setShowForm(false);
     setRefreshTrigger((prev) => prev + 1);
+    mutateSlots();
+    mutateBookings();
   };
-
-  useEffect(() => {
-    const load = async () => {
-      try {
-        if (!studioIds) {
-          setSlots([]);
-          setBookings([]);
-          return;
-        }
-        const [slotsRes, bookingsRes] = await Promise.all([
-          fetchClasses({ studioIds }),
-          listBookings({ studioIds }),
-        ]);
-        setSlots(slotsRes);
-        setBookings(bookingsRes);
-      } catch (err) {
-        console.warn("Failed to load dashboard data", err);
-      }
-    };
-    if (!studiosLoading) {
-      load();
-    }
-  }, [refreshTrigger, studiosLoading, studioIds]);
 
   const stats = useMemo(() => {
     const now = Date.now();
@@ -193,7 +192,7 @@ export default function OwnerDashboardPage() {
               </div>
             )}
 
-            {studioIds ? (
+            {studioIds && !studiosLoading && !slotsLoading && !bookingsLoading ? (
               <ClassList
                 refreshTrigger={refreshTrigger}
                 instructorId={null}

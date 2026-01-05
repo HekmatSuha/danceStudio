@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { fetchMyStudios, type Studio } from "./studios";
+import { type Studio } from "./studios";
 import { useAuthUser } from "./useAuthUser";
+import { useAuthedSWR } from "./useAuthedSWR";
 
 type UseOwnerStudiosGuardOptions = {
   redirectTo?: string;
@@ -12,9 +13,11 @@ type UseOwnerStudiosGuardOptions = {
 export function useOwnerStudiosGuard(options: UseOwnerStudiosGuardOptions = {}) {
   const router = useRouter();
   const { role, loading: authLoading } = useAuthUser();
-  const [studios, setStudios] = useState<Studio[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshKey, setRefreshKey] = useState(0);
+  const { data, isLoading, mutate } = useAuthedSWR<Studio[]>(
+    authLoading ? null : "/api/owner/studios"
+  );
+  const studios = data || [];
+  const loading = isLoading;
 
   useEffect(() => {
     if (authLoading) return;
@@ -24,32 +27,15 @@ export function useOwnerStudiosGuard(options: UseOwnerStudiosGuardOptions = {}) 
       router.replace(redirectTo);
       return;
     }
-
-    const load = async () => {
-      setLoading(true);
-      try {
-        const data = await fetchMyStudios();
-        setStudios(data);
-        if (role === "owner" && data.length === 0) {
-          router.replace(redirectTo);
-        }
-      } catch (err) {
-        console.warn("Failed to load owner studios", err);
-        if (role === "owner") {
-          router.replace(redirectTo);
-        }
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    load();
-  }, [authLoading, role, router, options.redirectTo, refreshKey]);
+    if (!isLoading && role === "owner" && studios.length === 0) {
+      router.replace(redirectTo);
+    }
+  }, [authLoading, role, router, options.redirectTo, isLoading, studios.length]);
 
   return {
     studios,
     loading,
     role,
-    reload: () => setRefreshKey((prev) => prev + 1),
+    reload: () => mutate(),
   };
 }

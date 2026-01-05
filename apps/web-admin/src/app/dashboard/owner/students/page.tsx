@@ -83,13 +83,6 @@ export default function OwnerStudentsPage() {
     }
   }, [studiosLoading, studios]);
 
-  if (studiosLoading) {
-    return <div className="p-6 text-slate-500">Loading students...</div>;
-  }
-  if (role === "owner" && studios.length === 0) {
-    return null;
-  }
-
   const filteredStudents = useMemo(() => {
     const query = search.trim().toLowerCase();
     return students.filter((s: any) =>
@@ -98,6 +91,13 @@ export default function OwnerStudentsPage() {
       s.last_name?.toLowerCase().includes(query)
     );
   }, [students, search]);
+
+  if (studiosLoading) {
+    return <div className="p-6 text-slate-500">Loading students...</div>;
+  }
+  if (role === "owner" && studios.length === 0) {
+    return null;
+  }
 
   const handleEditSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();

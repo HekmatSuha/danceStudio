@@ -1,51 +1,29 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
-import { listBookings, type Booking } from "../../../../lib/bookings";
-import { fetchClasses, type ClassEvent } from "../../../../lib/classes";
+import React, { useMemo, useState } from "react";
+import { type Booking } from "../../../../lib/bookings";
+import { type ClassEvent } from "../../../../lib/classes";
 import { useOwnerStudiosGuard } from "../../../../lib/useOwnerStudiosGuard";
+import { useAuthedSWR } from "../../../../lib/useAuthedSWR";
 
 export default function OwnerPaymentsPage() {
-  const [slots, setSlots] = useState<ClassEvent[]>([]);
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [loading, setLoading] = useState(true);
   const [paymentsFrom, setPaymentsFrom] = useState("");
   const [paymentsTo, setPaymentsTo] = useState("");
   const { studios, loading: studiosLoading, role } = useOwnerStudiosGuard();
-  const studioIds = studios.length ? studios.map((studio) => studio.uuid) : undefined;
-
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      try {
-        if (!studioIds) {
-          setSlots([]);
-          setBookings([]);
-          return;
-        }
-        const [slotsRes, bookingsRes] = await Promise.all([
-          fetchClasses({ studioIds }),
-          listBookings({ studioIds }),
-        ]);
-        setSlots(slotsRes);
-        setBookings(bookingsRes);
-      } catch (err) {
-        console.warn("Failed to load payments data", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    if (!studiosLoading) {
-      load();
-    }
-  }, [studioIds, studiosLoading]);
-
-  if (studiosLoading) {
-    return <div className="p-6 text-slate-500">Loading payments...</div>;
-  }
-  if (role === "owner" && !studioIds) {
-    return null;
-  }
+  const studioIds = studios.length ? studios.map((studio) => studio.uuid) : null;
+  const studioIdsParam = studioIds ? studioIds.join(",") : null;
+  const { data: slotsData, isLoading: slotsLoading } = useAuthedSWR<ClassEvent[]>(
+    studioIdsParam
+      ? `/api/owner/classes?studioIds=${studioIdsParam}&limit=250`
+      : null
+  );
+  const { data: bookingsData, isLoading: bookingsLoading } = useAuthedSWR<Booking[]>(
+    studioIdsParam
+      ? `/api/owner/bookings?studioIds=${studioIdsParam}&select=uuid,status,attended,appointment_slot`
+      : null
+  );
+  const slots = slotsData || [];
+  const bookings = bookingsData || [];
 
   const paymentsSummary = useMemo(() => {
     const from = paymentsFrom ? new Date(`${paymentsFrom}T00:00:00`).getTime() : null;
@@ -80,6 +58,13 @@ export default function OwnerPaymentsPage() {
 
     return { rows, totals };
   }, [slots, bookings, paymentsFrom, paymentsTo]);
+
+  if (studiosLoading || slotsLoading || bookingsLoading) {
+    return <div className="p-6 text-slate-500">Loading payments...</div>;
+  }
+  if (role === "owner" && !studioIds) {
+    return null;
+  }
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-purple-50">
@@ -122,7 +107,7 @@ export default function OwnerPaymentsPage() {
             </div>
 
             <div className="rounded-2xl border border-slate-100 bg-white/80 shadow-sm">
-              {loading ? (
+              {slotsLoading || bookingsLoading ? (
                 <div className="p-6 text-center text-slate-400">Loading payments...</div>
               ) : paymentsSummary.rows.length === 0 ? (
                 <div className="p-6 text-center text-slate-400">No classes in this range.</div>

@@ -1,6 +1,7 @@
 'use client';
 
 import { supabase } from "./supabase";
+import { clearCacheByPrefix, withCache } from "./cache";
 
 export type DanceLevel = "beginner" | "intermediate" | "advanced" | "all";
 
@@ -74,27 +75,41 @@ export async function fetchClasses(params?: {
   min_price?: number;
   max_price?: number;
   available_only?: boolean;
+  limit?: number;
+  offset?: number;
+  orderBy?: "start_time";
+  orderAsc?: boolean;
 }) {
-  let query = supabase
-    .from('slots')
-    .select(`
-      *,
-      studio:studios(uuid, name, city, address),
-      trainer:profiles(first_name, last_name),
-      room:rooms(name, capacity)
-    `);
+  const cacheKey = `classes:${JSON.stringify(params || {})}`;
+  return withCache(cacheKey, 15000, async () => {
+    let query = supabase
+      .from('slots')
+      .select(`
+        *,
+        studio:studios(uuid, name, city, address),
+        trainer:profiles(first_name, last_name),
+        room:rooms(name, capacity)
+      `);
 
-  if (params?.studio) query = query.eq('studio_id', params.studio);
-  if (params?.studioIds?.length) query = query.in('studio_id', params.studioIds);
-  if (params?.trainer) query = query.eq('trainer_id', params.trainer);
-  if (params?.dance_style) query = query.eq('dance_style_id', params.dance_style);
-  if (params?.start_date) query = query.gte('start_time', params.start_date);
-  if (params?.end_date) query = query.lte('start_time', params.end_date);
+    if (params?.studio) query = query.eq('studio_id', params.studio);
+    if (params?.studioIds?.length) query = query.in('studio_id', params.studioIds);
+    if (params?.trainer) query = query.eq('trainer_id', params.trainer);
+    if (params?.dance_style) query = query.eq('dance_style_id', params.dance_style);
+    if (params?.start_date) query = query.gte('start_time', params.start_date);
+    if (params?.end_date) query = query.lte('start_time', params.end_date);
+    if (params?.orderBy) {
+      query = query.order(params.orderBy, { ascending: params.orderAsc ?? false });
+    }
+    if (typeof params?.limit === "number") {
+      const offset = params.offset ?? 0;
+      query = query.range(offset, offset + params.limit - 1);
+    }
 
-  const { data, error } = await query;
-  if (error) throw error;
+    const { data, error } = await query;
+    if (error) throw error;
 
-  return (data || []).map(mapSlotToClass);
+    return (data || []).map(mapSlotToClass);
+  });
 }
 
 export async function deleteClass(slotId: string) {
@@ -104,6 +119,7 @@ export async function deleteClass(slotId: string) {
     .eq('uuid', slotId);
     
   if (error) throw error;
+  clearCacheByPrefix("classes:");
 }
 
 export type CreateClassInput = {
@@ -149,6 +165,7 @@ export async function createClass(input: CreateClassInput) {
     .single();
 
   if (error) throw error;
+  clearCacheByPrefix("classes:");
   return data;
 }
 
@@ -161,5 +178,6 @@ export async function markClassLocked(slotId: string, locked: boolean) {
     .single();
 
   if (error) throw error;
+  clearCacheByPrefix("classes:");
   return data;
 }

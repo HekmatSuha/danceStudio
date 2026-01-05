@@ -5,41 +5,32 @@ import { Pencil, Plus, Trash2 } from "lucide-react";
 import {
   createRoom,
   deleteRoom,
-  fetchRooms,
   updateRoom,
   type Room,
 } from "../../../../lib/studios";
 import { useOwnerStudiosGuard } from "../../../../lib/useOwnerStudiosGuard";
+import { useAuthedSWR } from "../../../../lib/useAuthedSWR";
 
 export default function OwnerRoomsPage() {
   const { studios, loading, role } = useOwnerStudiosGuard();
   const [selectedStudioId, setSelectedStudioId] = useState<string>("");
-  const [rooms, setRooms] = useState<Room[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [editingRoom, setEditingRoom] = useState<Room | null>(null);
+  const {
+    data: roomsData,
+    isLoading: roomsLoading,
+    mutate: mutateRooms,
+  } = useAuthedSWR<Room[]>(
+    selectedStudioId ? `/api/owner/rooms?studioId=${selectedStudioId}` : null
+  );
+  const rooms = roomsData || [];
 
   useEffect(() => {
     if (!selectedStudioId && studios.length) {
       setSelectedStudioId(studios[0].uuid);
     }
   }, [studios, selectedStudioId]);
-
-  useEffect(() => {
-    const loadRooms = async () => {
-      if (!selectedStudioId) {
-        setRooms([]);
-        return;
-      }
-      try {
-        const data = await fetchRooms(selectedStudioId);
-        setRooms(data);
-      } catch (err) {
-        console.warn("Failed to load rooms", err);
-      }
-    };
-    loadRooms();
-  }, [selectedStudioId]);
 
   const handleCreateRoom = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -57,8 +48,7 @@ export default function OwnerRoomsPage() {
           : undefined,
         currency: (formData.get("currency") as string) || "USD",
       });
-      const data = await fetchRooms(selectedStudioId);
-      setRooms(data);
+      await mutateRooms();
       setShowForm(false);
       form.reset();
     } catch (err) {
@@ -88,8 +78,7 @@ export default function OwnerRoomsPage() {
           : null,
         currency: (formData.get("currency") as string) || "USD",
       });
-      const data = await fetchRooms(selectedStudioId);
-      setRooms(data);
+      await mutateRooms();
       setEditingRoom(null);
     } catch (err) {
       console.error(err);
@@ -108,8 +97,7 @@ export default function OwnerRoomsPage() {
     setSubmitting(true);
     try {
       await deleteRoom(room.id);
-      const data = await fetchRooms(selectedStudioId);
-      setRooms(data);
+      await mutateRooms();
     } catch (err) {
       console.error(err);
       const message =
@@ -251,7 +239,7 @@ export default function OwnerRoomsPage() {
         </div>
       )}
 
-      {loading ? (
+      {loading || roomsLoading ? (
         <div className="text-center py-12 text-slate-400">Loading rooms...</div>
       ) : rooms.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-xl border border-dashed border-slate-300">

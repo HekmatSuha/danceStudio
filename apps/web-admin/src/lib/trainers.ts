@@ -1,6 +1,7 @@
 'use client';
 
 import { supabase } from "./supabase";
+import { withCache } from "./cache";
 
 export type Trainer = {
   uuid: string;
@@ -50,20 +51,23 @@ export async function fetchTrainers(studioIdOrOptions?: string | FetchTrainersOp
     query = query.eq('studio_id', studioId);
   }
 
-  const { data, error } = await query;
-  
-  if (error) throw error;
+  const cacheKey = `trainers:${JSON.stringify({ studioId, studioIds })}`;
+  return withCache(cacheKey, 20000, async () => {
+    const { data, error } = await query;
 
-  return data.map((item: any) => ({
-    uuid: item.user.id, // The User/Profile ID is the primary "Trainer" ID
-    first_name: item.user.first_name,
-    last_name: item.user.last_name,
-    bio: item.user.bio,
-    photo: item.user.avatar_url,
-    is_active: item.user.is_active ?? true,
-    studio: item.studio_id,
-    studio_details: item.studio,
-  })) as Trainer[];
+    if (error) throw error;
+
+    return data.map((item: any) => ({
+      uuid: item.user.id, // The User/Profile ID is the primary "Trainer" ID
+      first_name: item.user.first_name,
+      last_name: item.user.last_name,
+      bio: item.user.bio,
+      photo: item.user.avatar_url,
+      is_active: item.user.is_active ?? true,
+      studio: item.studio_id,
+      studio_details: item.studio,
+    })) as Trainer[];
+  });
 }
 
 export async function createTrainer(data: {
