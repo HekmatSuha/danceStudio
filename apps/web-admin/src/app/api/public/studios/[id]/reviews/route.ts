@@ -6,14 +6,13 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   if (!supabaseUrl || !supabaseAnonKey) {
     return NextResponse.json({ error: "Supabase env missing" }, { status: 500 });
   }
 
-  const studioId =
-    params?.id || req.nextUrl.pathname.split("/").filter(Boolean).slice(-2)[0] || "";
+  const { id: studioId } = await params;
   if (!studioId) {
     return NextResponse.json({ error: "Studio id is required" }, { status: 400 });
   }

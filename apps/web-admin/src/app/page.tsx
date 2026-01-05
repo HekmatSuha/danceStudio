@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { Suspense } from 'react';
 import { DanceStyleSearch } from '../components/DanceStyleSearch';
 import { About } from '../components/About';
 import { Classes } from '../components/Classes';
@@ -12,8 +12,12 @@ export default function App() {
   return (
     <div className="min-h-screen bg-white">
       <Navigation />
-      <DanceStyleSearch />
-      <Classes />
+      <Suspense fallback={<div className="h-64 flex items-center justify-center">Loading search...</div>}>
+        <DanceStyleSearch />
+      </Suspense>
+      <Suspense fallback={<div className="h-64 flex items-center justify-center">Loading classes...</div>}>
+        <Classes />
+      </Suspense>
       <About />
       <Schedule />
       <Instructors />

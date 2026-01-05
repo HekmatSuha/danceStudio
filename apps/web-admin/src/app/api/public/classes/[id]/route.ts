@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -21,7 +21,7 @@ function extractStoragePath(url: string) {
 }
 
 async function resolveImageUrl(
-  admin: ReturnType<typeof createClient> | null,
+  admin: SupabaseClient<any, "public", any> | null,
   rawUrl: string | null | undefined
 ) {
   if (!rawUrl) return null;
@@ -69,13 +69,13 @@ async function resolveImageUrl(
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   if (!supabaseUrl || !supabaseAnonKey) {
     return NextResponse.json({ error: "Supabase env missing" }, { status: 500 });
   }
 
-  const slotId = params.id;
+  const { id: slotId } = await params;
   if (!slotId) {
     return NextResponse.json({ error: "Class id is required" }, { status: 400 });
   }

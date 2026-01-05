@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -32,7 +32,7 @@ function extractStoragePath(url: string) {
 }
 
 async function resolveImageUrl(
-  admin: ReturnType<typeof createClient> | null,
+  admin: SupabaseClient<any, "public", any> | null,
   rawUrl: string | null | undefined,
   index: number
 ) {
