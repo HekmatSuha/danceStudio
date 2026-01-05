@@ -83,6 +83,15 @@ export type BookingWithUser = {
   } | null;
 };
 
+type BookingWithUserRow = Omit<BookingWithUser, "user"> & {
+  user: {
+    id: string;
+    first_name: string;
+    last_name: string;
+    email?: string | null;
+  }[] | null;
+};
+
 export async function fetchSlotBookings(slotId: string) {
   const { data, error } = await supabase
     .from('bookings')
@@ -96,7 +105,10 @@ export async function fetchSlotBookings(slotId: string) {
     .eq('appointment_slot', slotId);
 
   if (error) throw error;
-  return (data || []) as BookingWithUser[];
+  return ((data || []) as BookingWithUserRow[]).map((row) => ({
+    ...row,
+    user: row.user?.[0] ?? null
+  }));
 }
 
 export async function markAttendance(bookingId: string, attended: boolean) {
