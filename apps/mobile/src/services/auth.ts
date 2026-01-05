@@ -1,0 +1,176 @@
+import { supabase } from "../lib/supabase";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+export type MobileUserRole = "owner" | "instructor" | "student" | "super_admin";
+
+const ROLE_KEY = "dancecrm.role";
+
+export type AccountProfile = {
+  uuid: string;
+  username: string;
+  email: string | null;
+  first_name: string;
+  last_name: string;
+  phone_number?: string | null;
+  roles?: string; // keeping for compatibility, mapped from role
+  role?: MobileUserRole;
+  dance_level?: string;
+  interests?: string[];
+  gender?: string;
+};
+
+export async function register(input: {
+  email: string;
+  password: string;
+  firstName: string;
+  lastName: string;
+  phone?: string;
+  gender?: string;
+  role?: MobileUserRole;
+}) {
+  const role = input.role ?? "student";
+  
+  const { data, error } = await supabase.auth.signUp({
+    email: input.email.trim(),
+    password: input.password,
+    options: {
+      data: {
+        username: input.email.trim().toLowerCase(),
+        first_name: input.firstName.trim(),
+        last_name: input.lastName.trim(),
+        phone_number: input.phone?.trim() || "",
+        gender: input.gender?.trim() || "M",
+        role: role,
+      },
+    },
+  });
+
+  if (error) throw error;
+  
+  // If session exists immediately (no email confirmation required), set role
+  if (data.session) {
+    await setStoredRole(role);
+  }
+  
+  return data.user;
+}
+
+export async function login(emailOrUsername: string, password: string) {
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email: emailOrUsername.trim(),
+    password,
+  });
+
+  if (error) throw error;
+
+  const profile = await fetchProfile();
+  // Role is stored in profile or metadata. 
+  // We prefer the profile table if it exists, otherwise metadata.
+  const role = (profile.role as MobileUserRole) || "student";
+  await setStoredRole(role);
+  
+  return { profile, role };
+}
+
+export async function fetchProfile(): Promise<AccountProfile> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not authenticated");
+
+  // Try to fetch from profiles table
+  const { data: profile, error } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('id', user.id)
+    .single();
+
+  if (error && error.code !== 'PGRST116') {
+    // legitimate error
+    console.warn("Error fetching profile:", error);
+  }
+
+  // Fallback to user metadata if profile table entry is missing (e.g. latency)
+  const meta = user.user_metadata || {};
+  
+  const finalProfile: AccountProfile = {
+    uuid: user.id,
+    username: profile?.username || meta.username || user.email || "",
+    email: user.email || null,
+    first_name: profile?.first_name || meta.first_name || "",
+    last_name: profile?.last_name || meta.last_name || "",
+    phone_number: profile?.phone_number || meta.phone_number,
+    gender: profile?.gender || meta.gender,
+    role: profile?.role || meta.role,
+    roles: profile?.role || meta.role, // compatibility
+    dance_level: profile?.dance_level,
+    interests: profile?.interests,
+  };
+
+  return finalProfile;
+}
+
+export async function updateProfile(input: {
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+  gender?: string;
+  danceLevel?: string;
+  interests?: string[];
+}) {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not authenticated");
+
+  const updates: any = {};
+  if (input.firstName !== undefined) updates.first_name = input.firstName;
+  if (input.lastName !== undefined) updates.last_name = input.lastName;
+  if (input.phone !== undefined) updates.phone_number = input.phone;
+  if (input.gender !== undefined) updates.gender = input.gender;
+  if (input.danceLevel !== undefined) updates.dance_level = input.danceLevel;
+  if (input.interests !== undefined) updates.interests = input.interests;
+  updates.updated_at = new Date().toISOString();
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .update(updates)
+    .eq('id', user.id)
+    .select()
+    .single();
+
+  if (error) throw error;
+  
+  return fetchProfile();
+}
+
+export async function logout() {
+  await supabase.auth.signOut();
+  await clearStoredRole();
+}
+
+export async function setStoredRole(role: MobileUserRole) {
+  await AsyncStorage.setItem(ROLE_KEY, role);
+}
+
+export async function getStoredRole(): Promise<MobileUserRole | null> {
+  const raw = await AsyncStorage.getItem(ROLE_KEY);
+  if (raw === "owner" || raw === "instructor" || raw === "student") {
+    return raw;
+  }
+  return null;
+}
+
+export async function clearStoredRole() {
+  await AsyncStorage.removeItem(ROLE_KEY);
+}
+
+export async function requestPasswordReset(email: string) {
+  const { error } = await supabase.auth.resetPasswordForEmail(email);
+  if (error) throw error;
+}
+
+// Supabase handles confirmation via link, but if we need a code flow we might need to adjust.
+// For now, we stub this as the mobile flow might expect a link redirect.
+export async function confirmPasswordReset(code: string, password: string) {
+  // In Supabase, usually the user clicks a link that logs them in, then they update password.
+  // This function might need to be 'updatePassword' called after the link redirects them back to app.
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) throw error;
+}
