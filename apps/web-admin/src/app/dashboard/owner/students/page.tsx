@@ -77,11 +77,13 @@ export default function OwnerStudentsPage() {
     setLoading(false);
   };
 
+  const studioIdsKey = studios.map((studio) => studio.uuid).join(",");
+
   useEffect(() => {
     if (!studiosLoading) {
       refreshStudents();
     }
-  }, [studiosLoading, studios]);
+  }, [studiosLoading, studioIdsKey]);
 
   const filteredStudents = useMemo(() => {
     const query = search.trim().toLowerCase();

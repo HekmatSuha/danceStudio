@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAuthedSupabaseClient } from "../../../../lib/server-supabase";
 import { withServerCache } from "../../../../lib/server-cache";
 
-async function resolveStudios(auth: Awaited<ReturnType<typeof getAuthedSupabaseClient>>) {
+type AuthedClient = NonNullable<Awaited<ReturnType<typeof getAuthedSupabaseClient>>>;
+
+async function resolveStudios(auth: AuthedClient) {
   const { data: staffData } = await auth.supabase
     .from("tenant_staff")
     .select("studio_id")
