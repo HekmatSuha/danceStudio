@@ -22,8 +22,6 @@ export default function OwnerDashboardPage() {
   const [slots, setSlots] = useState<ClassEvent[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
-  const [paymentsFrom, setPaymentsFrom] = useState("");
-  const [paymentsTo, setPaymentsTo] = useState("");
 
   const handleSuccess = () => {
     setShowForm(false);
@@ -71,41 +69,6 @@ export default function OwnerDashboardPage() {
       revenue: `$${revenue.toLocaleString()}`,
     };
   }, [slots, studios, bookings]);
-
-  const paymentsSummary = useMemo(() => {
-    const from = paymentsFrom ? new Date(`${paymentsFrom}T00:00:00`).getTime() : null;
-    const to = paymentsTo ? new Date(`${paymentsTo}T23:59:59`).getTime() : null;
-    const filteredSlots = slots.filter((slot) => {
-      if (from && slot.startAt < from) return false;
-      if (to && slot.startAt > to) return false;
-      return true;
-    });
-
-    const slotsById = new Map(filteredSlots.map((slot) => [slot.id, slot]));
-    const rows = filteredSlots.map((slot) => {
-      const slotBookings = bookings.filter((b) => b.appointment_slot === slot.id);
-      const cancelled = slotBookings.filter((b) => b.status === "cancelled").length;
-      const confirmed = slotBookings.length - cancelled;
-      const price = slot.price || 0;
-      const revenue = confirmed * price;
-      return {
-        id: slot.id,
-        title: slot.title,
-        date: new Date(slot.startAt).toLocaleDateString(),
-        currency: slot.currency || "USD",
-        confirmed,
-        cancelled,
-        revenue,
-      };
-    });
-
-    const totals = rows.reduce<Record<string, number>>((acc, row) => {
-      acc[row.currency] = (acc[row.currency] || 0) + row.revenue;
-      return acc;
-    }, {});
-
-    return { rows, totals };
-  }, [slots, bookings, paymentsFrom, paymentsTo]);
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-purple-50">
@@ -194,7 +157,7 @@ export default function OwnerDashboardPage() {
             ))}
           </section>
 
-          <section id="payments" className="mt-12 space-y-4">
+          <section className="mt-12 space-y-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
@@ -231,84 +194,6 @@ export default function OwnerDashboardPage() {
             <ClassList refreshTrigger={refreshTrigger} instructorId={null} />
           </section>
 
-          <section className="mt-12 space-y-4">
-            <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-              <div>
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
-                  Payments
-                </p>
-                <h2 className="text-2xl font-bold text-slate-900">Revenue summary</h2>
-                <p className="text-sm text-slate-500">
-                  Revenue totals by class and time range.
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-3">
-                <div className="flex flex-col">
-                  <label className="text-xs text-slate-500">From</label>
-                  <input
-                    type="date"
-                    className="border border-slate-200 rounded-lg px-3 py-2 text-sm"
-                    value={paymentsFrom}
-                    onChange={(e) => setPaymentsFrom(e.target.value)}
-                  />
-                </div>
-                <div className="flex flex-col">
-                  <label className="text-xs text-slate-500">To</label>
-                  <input
-                    type="date"
-                    className="border border-slate-200 rounded-lg px-3 py-2 text-sm"
-                    value={paymentsTo}
-                    onChange={(e) => setPaymentsTo(e.target.value)}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-slate-100 bg-white/80 shadow-sm">
-              {loading ? (
-                <div className="p-6 text-center text-slate-400">Loading payments...</div>
-              ) : paymentsSummary.rows.length === 0 ? (
-                <div className="p-6 text-center text-slate-400">No classes in this range.</div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm text-slate-600">
-                    <thead className="bg-slate-50 border-b border-slate-100">
-                      <tr>
-                        <th className="px-4 py-3 text-left font-semibold text-slate-900">Class</th>
-                        <th className="px-4 py-3 text-left font-semibold text-slate-900">Date</th>
-                        <th className="px-4 py-3 text-right font-semibold text-slate-900">Bookings</th>
-                        <th className="px-4 py-3 text-right font-semibold text-slate-900">Cancelled</th>
-                        <th className="px-4 py-3 text-right font-semibold text-slate-900">Revenue</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {paymentsSummary.rows.map((row) => (
-                        <tr key={row.id} className="hover:bg-slate-50/50">
-                          <td className="px-4 py-3 font-medium text-slate-900">{row.title}</td>
-                          <td className="px-4 py-3">{row.date}</td>
-                          <td className="px-4 py-3 text-right">{row.confirmed}</td>
-                          <td className="px-4 py-3 text-right">{row.cancelled}</td>
-                          <td className="px-4 py-3 text-right font-semibold text-slate-900">
-                            {row.currency} {row.revenue.toLocaleString()}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-
-            {Object.keys(paymentsSummary.totals).length > 0 && (
-              <div className="flex flex-wrap gap-3 text-sm text-slate-600">
-                {Object.entries(paymentsSummary.totals).map(([currency, amount]) => (
-                  <span key={currency} className="px-3 py-1 rounded-full bg-slate-100">
-                    Total {currency}: {amount.toLocaleString()}
-                  </span>
-                ))}
-              </div>
-            )}
-          </section>
         </div>
       </div>
     </main>

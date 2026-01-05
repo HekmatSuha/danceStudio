@@ -58,7 +58,7 @@ export function DashboardNav({ children }: { children: React.ReactNode }) {
           { label: "Instructors", href: "/dashboard/owner/instructors", icon: <UserCircle size={20} /> },
           { label: "Rooms", href: "/dashboard/owner/rooms", icon: <DoorOpen size={20} /> },
           { label: "Students", href: "/dashboard/owner/students", icon: <Users size={20} /> },
-          { label: "Payments", href: "/dashboard/owner#payments", icon: <DollarSign size={20} /> },
+          { label: "Payments", href: "/dashboard/owner/payments", icon: <DollarSign size={20} /> },
         ];
       case "super_admin":
         return [

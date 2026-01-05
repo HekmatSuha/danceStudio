@@ -67,7 +67,10 @@ export default function OwnerRoomsPage() {
       form.reset();
     } catch (err) {
       console.error(err);
-      alert("Failed to create room.");
+      const message =
+        (err as { message?: string })?.message ||
+        "Failed to create room.";
+      alert(message);
     } finally {
       setSubmitting(false);
     }
@@ -93,7 +96,10 @@ export default function OwnerRoomsPage() {
       setEditingRoom(null);
     } catch (err) {
       console.error(err);
-      alert("Failed to update room.");
+      const message =
+        (err as { message?: string })?.message ||
+        "Failed to update room.";
+      alert(message);
     } finally {
       setSubmitting(false);
     }
@@ -108,7 +114,10 @@ export default function OwnerRoomsPage() {
       setRooms(data);
     } catch (err) {
       console.error(err);
-      alert("Failed to delete room.");
+      const message =
+        (err as { message?: string })?.message ||
+        "Failed to delete room.";
+      alert(message);
     } finally {
       setSubmitting(false);
     }
