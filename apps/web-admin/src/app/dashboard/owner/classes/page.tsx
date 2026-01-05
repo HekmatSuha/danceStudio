@@ -12,6 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../../../../components/ui/dialog";
+import { useOwnerStudiosGuard } from "../../../../lib/useOwnerStudiosGuard";
 
 export default function OwnerClassesPage() {
   const [showForm, setShowForm] = useState(false);
@@ -22,6 +23,8 @@ export default function OwnerClassesPage() {
   const [filter, setFilter] = useState<"all" | "upcoming" | "past">("upcoming");
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<"date_desc" | "date_asc" | "title">("date_desc");
+  const { studios, loading: studiosLoading, role } = useOwnerStudiosGuard();
+  const studioIds = studios.length ? studios.map((studio) => studio.uuid) : undefined;
 
   const handleCreated = () => {
     setShowForm(false);
@@ -61,6 +64,13 @@ export default function OwnerClassesPage() {
     const attended = roster.filter((b) => b.attended).length;
     return { total, cancelled, attended };
   }, [roster]);
+
+  if (studiosLoading) {
+    return <div className="p-6 text-slate-500">Loading classes...</div>;
+  }
+  if (role === "owner" && !studioIds) {
+    return null;
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-10">
@@ -129,6 +139,7 @@ export default function OwnerClassesPage() {
         searchTerm={search}
         sortBy={sortBy}
         pageSize={9}
+        studioIds={studioIds}
       />
 
       <Dialog open={!!selectedClassId} onOpenChange={(open) => !open && setSelectedClassId(null)}>

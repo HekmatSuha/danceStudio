@@ -2,32 +2,28 @@
 
 import React, { useEffect, useState } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
-import { createRoom, deleteRoom, fetchMyStudios, fetchRooms, updateRoom, type Room, type Studio } from "../../../../lib/studios";
+import {
+  createRoom,
+  deleteRoom,
+  fetchRooms,
+  updateRoom,
+  type Room,
+} from "../../../../lib/studios";
+import { useOwnerStudiosGuard } from "../../../../lib/useOwnerStudiosGuard";
 
 export default function OwnerRoomsPage() {
-  const [studios, setStudios] = useState<Studio[]>([]);
+  const { studios, loading, role } = useOwnerStudiosGuard();
   const [selectedStudioId, setSelectedStudioId] = useState<string>("");
   const [rooms, setRooms] = useState<Room[]>([]);
-  const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [editingRoom, setEditingRoom] = useState<Room | null>(null);
 
   useEffect(() => {
-    const loadStudios = async () => {
-      setLoading(true);
-      try {
-        const data = await fetchMyStudios();
-        setStudios(data);
-        if (data.length) setSelectedStudioId(data[0].uuid);
-      } catch (err) {
-        console.warn("Failed to load studios", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadStudios();
-  }, []);
+    if (!selectedStudioId && studios.length) {
+      setSelectedStudioId(studios[0].uuid);
+    }
+  }, [studios, selectedStudioId]);
 
   useEffect(() => {
     const loadRooms = async () => {
@@ -68,7 +64,8 @@ export default function OwnerRoomsPage() {
     } catch (err) {
       console.error(err);
       const message =
-        (err as { message?: string })?.message ||
+        (err as { message?: string; details?: string })?.message ||
+        (err as { details?: string })?.details ||
         "Failed to create room.";
       alert(message);
     } finally {
@@ -97,7 +94,8 @@ export default function OwnerRoomsPage() {
     } catch (err) {
       console.error(err);
       const message =
-        (err as { message?: string })?.message ||
+        (err as { message?: string; details?: string })?.message ||
+        (err as { details?: string })?.details ||
         "Failed to update room.";
       alert(message);
     } finally {
@@ -115,13 +113,23 @@ export default function OwnerRoomsPage() {
     } catch (err) {
       console.error(err);
       const message =
-        (err as { message?: string })?.message ||
+        (err as { message?: string; details?: string })?.message ||
+        (err as { details?: string })?.details ||
         "Failed to delete room.";
       alert(message);
     } finally {
       setSubmitting(false);
     }
   };
+
+  const canManageSelectedStudio = Boolean(selectedStudioId);
+
+  if (loading) {
+    return <div className="p-6 text-slate-500">Loading rooms...</div>;
+  }
+  if (role === "owner" && studios.length === 0) {
+    return null;
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-10">
@@ -134,6 +142,12 @@ export default function OwnerRoomsPage() {
           <button
             onClick={() => setShowForm(true)}
             className="flex items-center gap-2 bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors shadow-sm font-medium"
+            disabled={!canManageSelectedStudio || submitting}
+            title={
+              canManageSelectedStudio
+                ? "Add a room"
+                : "You do not have permission to manage rooms for this studio."
+            }
           >
             <Plus size={18} />
             Add Room
@@ -155,6 +169,12 @@ export default function OwnerRoomsPage() {
             </option>
           ))}
         </select>
+        {!loading && studios.length > 0 && !canManageSelectedStudio && (
+          <p className="text-sm text-amber-600 mt-2">
+            You can view rooms, but you do not have permission to create or edit
+            rooms for this studio.
+          </p>
+        )}
       </div>
 
       {showForm && (

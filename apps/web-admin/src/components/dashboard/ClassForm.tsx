@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Loader2, Plus, X } from "lucide-react";
 import { createClass, type CreateClassInput } from "../../lib/classes";
 import { useAuthUser } from "../../lib/useAuthUser";
-import { listStudios, type Studio, fetchRooms, type Room, createRoom } from "../../lib/studios";
+import { fetchMyStudios, type Studio, fetchRooms, type Room, createRoom } from "../../lib/studios";
 import { fetchTrainers, type Trainer } from "../../lib/trainers";
 import { fetchDanceStyles, type DanceStyle } from "../../lib/danceStyles";
 import { supabase } from "../../lib/supabase";
@@ -60,7 +60,7 @@ export function ClassForm({ onSuccess, onCancel }: ClassFormProps) {
       setLoadingData(true);
       try {
         const [studiosData, trainersData, stylesData] = await Promise.all([
-          listStudios(),
+          fetchMyStudios(),
           fetchTrainers(),
           fetchDanceStyles(),
         ]);

@@ -5,6 +5,7 @@ import { Plus, Search, UserCheck, UserX, Pencil, Trash2 } from "lucide-react";
 import { CreateUserForm } from "../../../../components/dashboard/CreateUserForm";
 import { supabase } from "../../../../lib/supabase";
 import { type AccountProfile } from "../../../../lib/auth";
+import { useOwnerStudiosGuard } from "../../../../lib/useOwnerStudiosGuard";
 
 export default function OwnerStudentsPage() {
   const [showForm, setShowForm] = useState(false);
@@ -13,6 +14,7 @@ export default function OwnerStudentsPage() {
   const [search, setSearch] = useState("");
   const [editingStudent, setEditingStudent] = useState<AccountProfile | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const { studios, loading: studiosLoading, role } = useOwnerStudiosGuard();
 
   const handleSuccess = () => {
     setShowForm(false);
@@ -22,25 +24,71 @@ export default function OwnerStudentsPage() {
   };
 
   const refreshStudents = async () => {
+    const studioIds = studios.map((studio) => studio.uuid);
     setLoading(true);
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("role", "student")
-      .order("created_at", { ascending: false });
+    if (studioIds.length === 0) {
+      setStudents([]);
+      setLoading(false);
+      return;
+    }
+
+    const { data: slotRows, error: slotError } = await supabase
+      .from("slots")
+      .select("uuid")
+      .in("studio_id", studioIds);
+
+    if (slotError) {
+      console.warn("Failed to load studio slots", slotError);
+      setStudents([]);
+      setLoading(false);
+      return;
+    }
+
+    const slotIds = (slotRows || []).map((row: any) => row.uuid);
+    if (slotIds.length === 0) {
+      setStudents([]);
+      setLoading(false);
+      return;
+    }
+
+    const { data: bookingRows, error } = await supabase
+      .from("bookings")
+      .select("user:profiles(*)")
+      .in("appointment_slot", slotIds);
 
     if (error) {
       console.warn("Failed to load students", error);
       setStudents([]);
-    } else {
-      setStudents(data as AccountProfile[]);
+      setLoading(false);
+      return;
     }
+
+    const unique = new Map<string, AccountProfile & { id?: string }>();
+    (bookingRows || []).forEach((row: any) => {
+      if (row?.user?.id) {
+        const user = row.user as AccountProfile & { id?: string };
+        if (!user.uuid && user.id) {
+          user.uuid = user.id;
+        }
+        unique.set(user.id || user.uuid || "", user);
+      }
+    });
+    setStudents(Array.from(unique.values()));
     setLoading(false);
   };
 
   useEffect(() => {
-    refreshStudents();
-  }, []);
+    if (!studiosLoading) {
+      refreshStudents();
+    }
+  }, [studiosLoading, studios]);
+
+  if (studiosLoading) {
+    return <div className="p-6 text-slate-500">Loading students...</div>;
+  }
+  if (role === "owner" && studios.length === 0) {
+    return null;
+  }
 
   const filteredStudents = useMemo(() => {
     const query = search.trim().toLowerCase();

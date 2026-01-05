@@ -3,13 +3,13 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Filter, Plus, Search, UserX, UserCheck } from "lucide-react";
 import { fetchTrainers, type Trainer } from "../../../../lib/trainers";
-import { fetchMyStudios, type Studio } from "../../../../lib/studios";
 import { createInstructorAction } from "../../../actions/create-instructor";
 import { supabase } from "../../../../lib/supabase";
+import { useOwnerStudiosGuard } from "../../../../lib/useOwnerStudiosGuard";
 
 export default function OwnerInstructorsPage() {
   const [instructors, setInstructors] = useState<Trainer[]>([]);
-  const [studios, setStudios] = useState<Studio[]>([]);
+  const { studios, loading: studiosLoading, role } = useOwnerStudiosGuard();
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
@@ -26,46 +26,13 @@ export default function OwnerInstructorsPage() {
     let isMounted = true;
     const load = async () => {
       try {
-        let resolvedStudios = await fetchMyStudios();
-        let ownerStudioIds: string[] = [];
-
-        if (resolvedStudios.length === 0) {
-          const { data: authData } = await supabase.auth.getUser();
-          const userId = authData?.user?.id;
-          if (userId) {
-            const { data: ownedStudios, error: ownedError } = await supabase
-              .from('studios')
-              .select('*')
-              .eq('owner_id', userId);
-
-            if (!ownedError && ownedStudios) {
-              resolvedStudios = ownedStudios as Studio[];
-            }
-
-            if (resolvedStudios.length === 0) {
-              const { data: ownerStaff, error: ownerStaffError } = await supabase
-                .from('tenant_staff')
-                .select('studio_id')
-                .eq('user_id', userId);
-
-              if (!ownerStaffError && ownerStaff) {
-                ownerStudioIds = ownerStaff.map((row: any) => row.studio_id);
-              }
-            }
-          }
-        }
-
-        const studioIds = resolvedStudios.length > 0
-          ? resolvedStudios.map((s) => s.uuid)
-          : ownerStudioIds;
-
+        const studioIds = studios.map((studio) => studio.uuid);
         const trainersData = studioIds.length > 0
           ? await fetchTrainers({ studioIds })
-          : await fetchTrainers();
+          : [];
 
         if (!isMounted) return;
         setInstructors(trainersData);
-        setStudios(resolvedStudios);
       } catch (err) {
         console.warn("Failed to load data", err);
       } finally {
@@ -77,7 +44,14 @@ export default function OwnerInstructorsPage() {
     return () => {
       isMounted = false;
     };
-  }, [refreshTrigger]);
+  }, [refreshTrigger, studios]);
+
+  if (studiosLoading) {
+    return <div className="p-6 text-slate-500">Loading instructors...</div>;
+  }
+  if (role === "owner" && studios.length === 0) {
+    return null;
+  }
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {

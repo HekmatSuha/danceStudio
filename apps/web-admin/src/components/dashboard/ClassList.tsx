@@ -14,6 +14,7 @@ type ClassListProps = {
   searchTerm?: string;
   sortBy?: "date_asc" | "date_desc" | "title";
   pageSize?: number;
+  studioIds?: string[];
 };
 
 export function ClassList({
@@ -24,6 +25,7 @@ export function ClassList({
   searchTerm,
   sortBy = "date_desc",
   pageSize = 9,
+  studioIds,
 }: ClassListProps) {
   const { user } = useAuthUser();
   const [classes, setClasses] = useState<ClassEvent[]>([]);
@@ -42,6 +44,7 @@ export function ClassList({
       try {
         const data = await fetchClasses({
           trainer: instructorId === null ? undefined : instructorId || user.uuid,
+          studioIds,
         });
         setClasses(data);
       } catch (err) {
@@ -51,7 +54,7 @@ export function ClassList({
       }
     };
     load();
-  }, [user, refreshTrigger, instructorId]);
+  }, [user, refreshTrigger, instructorId, studioIds]);
 
   useEffect(() => {
     setVisibleCount(pageSize);

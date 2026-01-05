@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { Plus, MapPin, Building2 } from "lucide-react";
-import { listStudios, createStudio, type Studio } from "../../../../lib/studios";
+import { createStudio } from "../../../../lib/studios";
+import { useOwnerStudiosGuard } from "../../../../lib/useOwnerStudiosGuard";
 
 const parseOptionalNumber = (value: FormDataEntryValue | null) => {
   if (value === null) return null;
@@ -13,18 +14,8 @@ const parseOptionalNumber = (value: FormDataEntryValue | null) => {
 };
 
 export default function OwnerStudiosPage() {
-  const [studios, setStudios] = useState<Studio[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { studios, loading, reload, role } = useOwnerStudiosGuard();
   const [showForm, setShowForm] = useState(false);
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
-
-  useEffect(() => {
-    setLoading(true);
-    listStudios()
-      .then(setStudios)
-      .catch((err) => console.warn("Failed to load studios", err))
-      .finally(() => setLoading(false));
-  }, [refreshTrigger]);
 
   const handleCreateStudio = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,13 +29,20 @@ export default function OwnerStudiosPage() {
         longitude: parseOptionalNumber(formData.get("longitude")),
       });
       setShowForm(false);
-      setRefreshTrigger((prev) => prev + 1);
+      reload();
     } catch (err: any) {
       console.error(err);
       const msg = err.response?.data?.detail || err.response?.data?.message || "Failed to create studio. You might not have permission.";
       alert(msg);
     }
   };
+
+  if (loading) {
+    return <div className="p-6 text-slate-500">Loading studios...</div>;
+  }
+  if (role === "owner" && studios.length === 0) {
+    return null;
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-10">

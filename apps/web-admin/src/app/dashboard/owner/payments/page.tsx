@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { listBookings, type Booking } from "../../../../lib/bookings";
 import { fetchClasses, type ClassEvent } from "../../../../lib/classes";
+import { useOwnerStudiosGuard } from "../../../../lib/useOwnerStudiosGuard";
 
 export default function OwnerPaymentsPage() {
   const [slots, setSlots] = useState<ClassEvent[]>([]);
@@ -10,14 +11,21 @@ export default function OwnerPaymentsPage() {
   const [loading, setLoading] = useState(true);
   const [paymentsFrom, setPaymentsFrom] = useState("");
   const [paymentsTo, setPaymentsTo] = useState("");
+  const { studios, loading: studiosLoading, role } = useOwnerStudiosGuard();
+  const studioIds = studios.length ? studios.map((studio) => studio.uuid) : undefined;
 
   useEffect(() => {
     const load = async () => {
       setLoading(true);
       try {
+        if (!studioIds) {
+          setSlots([]);
+          setBookings([]);
+          return;
+        }
         const [slotsRes, bookingsRes] = await Promise.all([
-          fetchClasses(),
-          listBookings(),
+          fetchClasses({ studioIds }),
+          listBookings({ studioIds }),
         ]);
         setSlots(slotsRes);
         setBookings(bookingsRes);
@@ -27,8 +35,17 @@ export default function OwnerPaymentsPage() {
         setLoading(false);
       }
     };
-    load();
-  }, []);
+    if (!studiosLoading) {
+      load();
+    }
+  }, [studioIds, studiosLoading]);
+
+  if (studiosLoading) {
+    return <div className="p-6 text-slate-500">Loading payments...</div>;
+  }
+  if (role === "owner" && !studioIds) {
+    return null;
+  }
 
   const paymentsSummary = useMemo(() => {
     const from = paymentsFrom ? new Date(`${paymentsFrom}T00:00:00`).getTime() : null;

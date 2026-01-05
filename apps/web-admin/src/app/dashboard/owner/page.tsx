@@ -12,16 +12,16 @@ import {
 import { ClassForm } from "../../../components/dashboard/ClassForm";
 import { ClassList } from "../../../components/dashboard/ClassList";
 import { fetchClasses, type ClassEvent } from "../../../lib/classes";
-import { listStudios, type Studio } from "../../../lib/studios";
 import { listBookings, type Booking } from "../../../lib/bookings";
+import { useOwnerStudiosGuard } from "../../../lib/useOwnerStudiosGuard";
 
 export default function OwnerDashboardPage() {
   const [showForm, setShowForm] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
-  const [studios, setStudios] = useState<Studio[]>([]);
+  const { studios, loading: studiosLoading } = useOwnerStudiosGuard();
   const [slots, setSlots] = useState<ClassEvent[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
-  const [loading, setLoading] = useState(true);
+  const studioIds = studios.length ? studios.map((studio) => studio.uuid) : undefined;
 
   const handleSuccess = () => {
     setShowForm(false);
@@ -30,24 +30,26 @@ export default function OwnerDashboardPage() {
 
   useEffect(() => {
     const load = async () => {
-      setLoading(true);
       try {
-        const [studiosRes, slotsRes, bookingsRes] = await Promise.all([
-          listStudios(),
-          fetchClasses(),
-          listBookings(),
+        if (!studioIds) {
+          setSlots([]);
+          setBookings([]);
+          return;
+        }
+        const [slotsRes, bookingsRes] = await Promise.all([
+          fetchClasses({ studioIds }),
+          listBookings({ studioIds }),
         ]);
-        setStudios(studiosRes);
         setSlots(slotsRes);
         setBookings(bookingsRes);
       } catch (err) {
         console.warn("Failed to load dashboard data", err);
-      } finally {
-        setLoading(false);
       }
     };
-    load();
-  }, [refreshTrigger]);
+    if (!studiosLoading) {
+      load();
+    }
+  }, [refreshTrigger, studiosLoading, studioIds]);
 
   const stats = useMemo(() => {
     const now = Date.now();
@@ -191,7 +193,15 @@ export default function OwnerDashboardPage() {
               </div>
             )}
 
-            <ClassList refreshTrigger={refreshTrigger} instructorId={null} />
+            {studioIds ? (
+              <ClassList
+                refreshTrigger={refreshTrigger}
+                instructorId={null}
+                studioIds={studioIds}
+              />
+            ) : (
+              <div className="text-center py-10 text-gray-500">Loading schedule...</div>
+            )}
           </section>
 
         </div>

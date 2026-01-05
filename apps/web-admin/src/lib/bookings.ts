@@ -57,8 +57,22 @@ export async function listBookings(params?: {
   booking_date_from?: string;
   booking_date_to?: string;
   slotId?: string;
+  studioIds?: string[];
 }) {
   let query = supabase.from('bookings').select('*');
+
+  if (params?.studioIds?.length) {
+    const { data: slotRows, error: slotError } = await supabase
+      .from("slots")
+      .select("uuid")
+      .in("studio_id", params.studioIds);
+
+    if (slotError) throw slotError;
+
+    const slotIds = (slotRows || []).map((row: any) => row.uuid);
+    if (slotIds.length === 0) return [];
+    query = query.in("appointment_slot", slotIds);
+  }
 
   if (params?.status) query = query.eq('status', params.status);
   if (params?.attended !== undefined) query = query.eq('attended', params.attended);

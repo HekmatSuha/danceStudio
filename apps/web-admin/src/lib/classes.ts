@@ -42,7 +42,7 @@ function mapSlotToClass(slot: any): ClassEvent {
 
   return {
     id: slot.uuid,
-    studioId: studio?.name || "studio",
+    studioId: studio?.uuid || slot.studio_id || "studio",
     title: slot.title || "Untitled Class",
     teacherId: slot.trainer_id || "",
     teacherName: trainerName,
@@ -67,6 +67,7 @@ function mapSlotToClass(slot: any): ClassEvent {
 export async function fetchClasses(params?: {
   trainer?: string;
   studio?: string;
+  studioIds?: string[];
   dance_style?: string;
   start_date?: string;
   end_date?: string;
@@ -78,12 +79,13 @@ export async function fetchClasses(params?: {
     .from('slots')
     .select(`
       *,
-      studio:studios(name, city, address),
+      studio:studios(uuid, name, city, address),
       trainer:profiles(first_name, last_name),
       room:rooms(name, capacity)
     `);
 
   if (params?.studio) query = query.eq('studio_id', params.studio);
+  if (params?.studioIds?.length) query = query.in('studio_id', params.studioIds);
   if (params?.trainer) query = query.eq('trainer_id', params.trainer);
   if (params?.dance_style) query = query.eq('dance_style_id', params.dance_style);
   if (params?.start_date) query = query.gte('start_time', params.start_date);
