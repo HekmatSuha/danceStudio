@@ -49,10 +49,11 @@ export async function fetchUserBookings() {
     const { data, error } = await supabase
       .from('bookings')
       .select('*')
-      .eq('user_id', user.id);
+      .eq('user_id', user.id)
+      .returns<Booking[]>();
 
     if (error) throw error;
-    return data as Booking[];
+    return data || [];
   });
 }
 
@@ -67,7 +68,10 @@ export async function listBookings(params?: {
 }) {
   const cacheKey = `bookings:${JSON.stringify(params || {})}`;
   return withCache(cacheKey, 15000, async () => {
-    let query = supabase.from('bookings').select(params?.select || '*');
+    let query = supabase
+      .from('bookings')
+      .select(params?.select || '*')
+      .returns<Booking[]>();
 
     if (params?.studioIds?.length) {
       const { data: slotRows, error: slotError } = await supabase
@@ -89,7 +93,7 @@ export async function listBookings(params?: {
     const { data, error } = await query;
     if (error) throw error;
 
-    return data as Booking[];
+    return data || [];
   });
 }
 
