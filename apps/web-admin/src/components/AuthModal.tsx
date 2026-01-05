@@ -75,6 +75,20 @@ export function AuthModal({
 
   if (!isOpen) return null;
 
+  const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number, message: string) => {
+    let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutHandle = setTimeout(() => reject(new Error(message)), timeoutMs);
+    });
+    try {
+      return await Promise.race([promise, timeoutPromise]);
+    } finally {
+      if (timeoutHandle) {
+        clearTimeout(timeoutHandle);
+      }
+    }
+  };
+
   const resetForm = () => {
     setFormData({
       firstName: "",
@@ -100,6 +114,7 @@ export function AuthModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     setError(null);
     setInfo(null);
 
@@ -132,15 +147,19 @@ export function AuthModal({
 
     try {
       if (mode === "signup") {
-        const { role: newRole } = await signUpWithEmail({
-          firstName: formData.firstName.trim(),
-          lastName: formData.lastName.trim() || "_",
-          email: trimmedEmail,
-          phone: formData.phone.trim(),
-          password,
-          role,
-          gender: formData.gender,
-        });
+        const { role: newRole } = await withTimeout(
+          signUpWithEmail({
+            firstName: formData.firstName.trim(),
+            lastName: formData.lastName.trim() || "_",
+            email: trimmedEmail,
+            phone: formData.phone.trim(),
+            password,
+            role,
+            gender: formData.gender,
+          }),
+          15000,
+          "Signup is taking too long. Please check your connection and try again."
+        );
         setInfo("Account created and signed in successfully.");
         // Short delay to show success message before redirecting
         setTimeout(() => {
@@ -149,10 +168,14 @@ export function AuthModal({
           navigateToDashboard(newRole);
         }, 1000);
       } else {
-        const result = await signInWithEmail({
-          email: trimmedEmail,
-          password,
-        });
+        const result = await withTimeout(
+          signInWithEmail({
+            email: trimmedEmail,
+            password,
+          }),
+          15000,
+          "Sign in is taking too long. Please check your connection and try again."
+        );
         setInfo(`Signed in as ${result.role}.`);
         setTimeout(() => {
           resetForm();

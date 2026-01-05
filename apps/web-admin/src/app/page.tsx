@@ -1,5 +1,5 @@
 import React from 'react';
-import { Hero } from '../components/Hero';
+import { DanceStyleSearch } from '../components/DanceStyleSearch';
 import { About } from '../components/About';
 import { Classes } from '../components/Classes';
 import { Schedule } from '../components/Schedule';
@@ -12,9 +12,9 @@ export default function App() {
   return (
     <div className="min-h-screen bg-white">
       <Navigation />
-      <Hero />
-      <About />
+      <DanceStyleSearch />
       <Classes />
+      <About />
       <Schedule />
       <Instructors />
       <BookingRequest />

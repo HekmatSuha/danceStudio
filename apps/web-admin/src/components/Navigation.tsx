@@ -77,13 +77,13 @@ export function Navigation() {
   return (
     <nav
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        isScrolled ? 'bg-white shadow-md' : 'bg-transparent'
-      }`}
+        isScrolled ? 'bg-white shadow-md' : 'bg-white/90'
+      } backdrop-blur border-b border-slate-200/70`}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-20">
           <a href="#" className="flex items-center space-x-2">
-            <div className={`transition-colors ${isScrolled ? 'text-purple-600' : 'text-white'}`}>
+            <div className="transition-colors text-purple-600">
               <svg
                 className="w-8 h-8"
                 viewBox="0 0 24 24"
@@ -95,7 +95,7 @@ export function Navigation() {
                 <path d="M2 17l10 5 10-5M2 12l10 5 10-5" />
               </svg>
             </div>
-            <span className={`transition-colors ${isScrolled ? 'text-gray-900' : 'text-white'}`}>
+            <span className="transition-colors text-slate-900">
               Elevate Dance Studio
             </span>
           </a>
@@ -106,9 +106,7 @@ export function Navigation() {
               <a
                 key={item.href}
                 href={item.href}
-                className={`transition-colors hover:text-purple-600 ${
-                  isScrolled ? 'text-gray-700' : 'text-white'
-                }`}
+                className="transition-colors text-slate-600 hover:text-purple-600"
               >
                 {item.label}
               </a>
@@ -117,21 +115,19 @@ export function Navigation() {
               <>
                 <Link
                   href={dashboardPath}
-                  className={`transition-colors hover:text-purple-200 ${
-                    isScrolled ? 'text-gray-700' : 'text-white'
-                  }`}
+                  className="transition-colors text-slate-600 hover:text-purple-600"
                 >
                   Dashboard
                 </Link>
                 <div className="relative" ref={profileRef}>
                   <button
                     onClick={() => setIsProfileOpen((v) => !v)}
-                    className="flex items-center gap-3 rounded-full px-3 py-1 hover:bg-white/10 transition-colors"
+                    className="flex items-center gap-3 rounded-full px-3 py-1 hover:bg-slate-100 transition-colors"
                   >
-                    <div className="h-8 w-8 rounded-full bg-white/20 text-white flex items-center justify-center text-sm font-semibold border border-white/40">
+                    <div className="h-8 w-8 rounded-full bg-purple-600 text-white flex items-center justify-center text-sm font-semibold">
                       {initials || 'U'}
                     </div>
-                    <div className={`${isScrolled ? 'text-gray-800' : 'text-white'} leading-tight text-left`}>
+                    <div className="text-slate-800 leading-tight text-left">
                       <div className="text-sm font-semibold">
                         {fullName || user.email || 'Signed in'}
                       </div>
@@ -166,9 +162,7 @@ export function Navigation() {
               <>
                 <button
                   onClick={() => openAuthModal('signin')}
-                  className={`transition-colors hover:text-purple-600 ${
-                    isScrolled ? 'text-gray-700' : 'text-white'
-                  }`}
+                  className="transition-colors text-slate-600 hover:text-purple-600"
                 >
                   Sign In
                 </button>
@@ -185,7 +179,7 @@ export function Navigation() {
           {/* Mobile Menu Button */}
           <button
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className={`md:hidden transition-colors ${isScrolled ? 'text-gray-900' : 'text-white'}`}
+            className="md:hidden transition-colors text-slate-900"
           >
             {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
           </button>

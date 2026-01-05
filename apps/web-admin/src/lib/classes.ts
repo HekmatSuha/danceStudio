@@ -65,6 +65,29 @@ function mapSlotToClass(slot: any): ClassEvent {
   };
 }
 
+function extractStoragePath(imageUrl: string) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!supabaseUrl) return null;
+  const publicPrefix = `${supabaseUrl}/storage/v1/object/public/`;
+  const signedPrefix = `${supabaseUrl}/storage/v1/object/sign/`;
+
+  if (imageUrl.startsWith(publicPrefix)) {
+    return imageUrl.slice(publicPrefix.length);
+  }
+
+  if (imageUrl.startsWith(signedPrefix)) {
+    const withoutPrefix = imageUrl.slice(signedPrefix.length);
+    const [path] = withoutPrefix.split("?");
+    return path || null;
+  }
+
+  if (imageUrl.startsWith("class-images/") || imageUrl.startsWith("image/")) {
+    return imageUrl;
+  }
+
+  return null;
+}
+
 export async function fetchClasses(params?: {
   trainer?: string;
   studio?: string;
@@ -113,12 +136,40 @@ export async function fetchClasses(params?: {
 }
 
 export async function deleteClass(slotId: string) {
+  const { data: slot, error: slotError } = await supabase
+    .from("slots")
+    .select("image_url")
+    .eq("uuid", slotId)
+    .single();
+
+  if (slotError) throw slotError;
+
   const { error } = await supabase
     .from('slots')
     .delete()
     .eq('uuid', slotId);
-    
+
   if (error) throw error;
+
+  const imageUrl = slot?.image_url as string | null | undefined;
+  if (imageUrl) {
+    const { count } = await supabase
+      .from("slots")
+      .select("uuid", { count: "exact", head: true })
+      .eq("image_url", imageUrl);
+
+    if (!count) {
+      const storagePath = extractStoragePath(imageUrl);
+      if (storagePath) {
+        const [bucket, ...rest] = storagePath.split("/");
+        const objectPath = rest.join("/");
+        if (bucket && objectPath) {
+          await supabase.storage.from(bucket).remove([objectPath]);
+        }
+      }
+    }
+  }
+
   clearCacheByPrefix("classes:");
 }
 

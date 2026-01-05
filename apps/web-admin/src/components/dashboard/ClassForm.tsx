@@ -139,6 +139,7 @@ export function ClassForm({ onSuccess, onCancel }: ClassFormProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
     setError(null);
     if (!canSubmit) {
       setError("Please fill in title, studio, date, and time.");
@@ -224,7 +225,8 @@ export function ClassForm({ onSuccess, onCancel }: ClassFormProps) {
 
       if (imageFile) {
         const safeName = imageFile.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-        const path = `${formData.studioId}/${Date.now()}-${safeName}`;
+        const safeStartTime = startTime.replace(":", "");
+        const path = `${formData.studioId}/${startDate}-${safeStartTime}-${safeName}`;
         const { error: uploadError } = await supabase.storage
           .from("class-images")
           .upload(path, imageFile, { upsert: true });
