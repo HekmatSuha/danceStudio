@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState } from "react";
 import useSWR from "swr";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   Calendar,
@@ -14,6 +14,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { useAuthUser } from "@/lib/useAuthUser";
+import { AuthModal } from "@/components/AuthModal";
 
 type Studio = {
   uuid: string;
@@ -61,9 +62,12 @@ const fetcher = (url: string) =>
 
 export default function StudioDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const studioId = typeof params?.id === "string" ? params.id : "";
   const { user, loading: authLoading } = useAuthUser();
   const [activeImage, setActiveImage] = useState(0);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [pendingBookingPath, setPendingBookingPath] = useState<string | null>(null);
 
   const { data: studio, isLoading: studioLoading } = useSWR<Studio>(
     studioId ? `/api/public/studios/${studioId}` : null,
@@ -131,6 +135,19 @@ export default function StudioDetailPage() {
     const lon = Number(studio.longitude);
     return `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=16/${lat}/${lon}`;
   }, [studio?.latitude, studio?.longitude]);
+
+  const handleBookNow = (slotId: string) => {
+    if (authLoading) return;
+    const bookingPath = studioId
+      ? `/bookings/${slotId}?studio=${studioId}`
+      : `/bookings/${slotId}`;
+    if (user) {
+      router.push(bookingPath);
+      return;
+    }
+    setPendingBookingPath(bookingPath);
+    setIsAuthModalOpen(true);
+  };
 
   if (studioLoading) {
     return <div className="py-16 text-center text-slate-500">Loading studio...</div>;
@@ -331,16 +348,14 @@ export default function StudioDetailPage() {
                           <div className="text-sm font-semibold text-slate-900">
                             {formatPrice(slot.currency, slot.price)}
                           </div>
-                          <Link
-                            href={
-                              user || authLoading
-                                ? `/bookings/${slot.id}`
-                                : "/login"
-                            }
-                            className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 sm:w-auto"
+                          <button
+                            type="button"
+                            onClick={() => handleBookNow(slot.id)}
+                            className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 sm:w-auto disabled:opacity-70"
+                            disabled={authLoading}
                           >
                             Book now <ArrowRight size={14} />
-                          </Link>
+                          </button>
                         </div>
                       </div>
                     );
@@ -391,6 +406,19 @@ export default function StudioDetailPage() {
           </div>
         </div>
       </section>
+      {!user && (
+        <AuthModal
+          isOpen={isAuthModalOpen}
+          onClose={() => setIsAuthModalOpen(false)}
+          initialMode="signin"
+          onAuthenticated={() => {
+            if (!pendingBookingPath) return;
+            const nextPath = pendingBookingPath;
+            setPendingBookingPath(null);
+            router.push(nextPath);
+          }}
+        />
+      )}
     </div>
   );
 }

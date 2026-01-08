@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { X, Mail, Lock, User, Phone } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -11,38 +12,19 @@ import {
   type UserRole,
 } from "../lib/auth";
 
-const roleCopy: Record<
-  UserRole,
-  { label: string; description: string }
-> = {
-  super_admin: {
-    label: "Super Admin",
-    description: "System administrator access.",
-  },
-  owner: {
-    label: "Studio Admin",
-    description: "Manage a studio (or multiple), team access, and billing.",
-  },
-  instructor: {
-    label: "Instructor",
-    description: "Create and manage classes you teach—at a studio or independently.",
-  },
-  student: {
-    label: "Student",
-    description: "Book classes and manage your profile.",
-  },
-};
 
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
   initialMode?: "signin" | "signup";
+  onAuthenticated?: (role: UserRole) => void;
 }
 
 export function AuthModal({
   isOpen,
   onClose,
   initialMode = "signin",
+  onAuthenticated,
 }: AuthModalProps) {
   const router = useRouter();
   const [mode, setMode] = useState<"signin" | "signup">(initialMode);
@@ -55,11 +37,15 @@ export function AuthModal({
     password: "",
     confirmPassword: "",
   });
-  const [role, setRole] = useState<UserRole>("student");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [isResetting, setIsResetting] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   useEffect(() => {
     setMode(initialMode);
@@ -73,7 +59,16 @@ export function AuthModal({
     }
   }, [isOpen]);
 
-  if (!isOpen) return null;
+  useEffect(() => {
+    if (!isOpen) return;
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [isOpen]);
+
+  if (!isOpen || !isMounted) return null;
 
   const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number, message: string) => {
     let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
@@ -99,7 +94,16 @@ export function AuthModal({
       password: "",
       confirmPassword: "",
     });
-    setRole("student");
+  };
+
+  const handleAuthSuccess = (userRole: UserRole) => {
+    resetForm();
+    onClose();
+    if (onAuthenticated) {
+      onAuthenticated(userRole);
+      return;
+    }
+    navigateToDashboard(userRole);
   };
 
   const navigateToDashboard = (userRole: UserRole) => {
@@ -154,7 +158,7 @@ export function AuthModal({
             email: trimmedEmail,
             phone: formData.phone.trim(),
             password,
-            role,
+            role: "student",
             gender: formData.gender,
           }),
           15000,
@@ -163,9 +167,7 @@ export function AuthModal({
         setInfo("Account created and signed in successfully.");
         // Short delay to show success message before redirecting
         setTimeout(() => {
-          resetForm();
-          onClose();
-          navigateToDashboard(newRole);
+          handleAuthSuccess(newRole);
         }, 1000);
       } else {
         const result = await withTimeout(
@@ -178,9 +180,7 @@ export function AuthModal({
         );
         setInfo(`Signed in as ${result.role}.`);
         setTimeout(() => {
-          resetForm();
-          onClose();
-          navigateToDashboard(result.role);
+          handleAuthSuccess(result.role);
         }, 500);
       }
     } catch (err: any) {
@@ -245,8 +245,8 @@ export function AuthModal({
     resetForm();
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+  return createPortal(
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
       <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
         {/* Close Button */}
         <button
@@ -457,43 +457,7 @@ export function AuthModal({
             </div>
           )}
 
-          {mode === "signup" && (
-            <div>
-              <label className="block mb-2 text-gray-700">
-                Choose a role *
-              </label>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {(Object.keys(roleCopy) as UserRole[]).map((value) => (
-                  <label
-                    key={value}
-                    className={`cursor-pointer rounded-lg border p-3 text-left transition-all ${
-                      role === value
-                        ? "border-purple-500 ring-2 ring-purple-100"
-                        : "border-gray-200 hover:border-purple-200"
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="role"
-                      value={value}
-                      className="sr-only"
-                      checked={role === value}
-                      onChange={() => setRole(value)}
-                    />
-                    <div className="font-semibold text-gray-900">
-                      {roleCopy[value].label}
-                    </div>
-                    <p className="text-sm text-gray-600 mt-1">
-                      {roleCopy[value].description}
-                    </p>
-                  </label>
-                ))}
-              </div>
-              <p className="mt-2 text-xs text-gray-500">
-                Studio admins can approve instructor access for their studio; independent instructors can join a studio later.
-              </p>
-            </div>
-          )}
+          
 
           {mode === "signin" && (
           <div className="flex justify-end">
@@ -550,6 +514,7 @@ export function AuthModal({
           </p>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

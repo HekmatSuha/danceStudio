@@ -3,7 +3,7 @@
 import React, { useMemo, useState } from "react";
 import useSWR from "swr";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Calendar, Clock, MapPin, Loader2, ArrowLeft } from "lucide-react";
 import { createBooking } from "@/lib/bookings";
 import { useAuthUser } from "@/lib/useAuthUser";
@@ -38,7 +38,9 @@ const fetcher = (url: string) =>
 export default function BookingPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const slotId = typeof params?.id === "string" ? params.id : "";
+  const studioId = (searchParams.get("studio") || "").trim();
   const { user, loading: authLoading } = useAuthUser();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -101,7 +103,22 @@ export default function BookingPage() {
   }
 
   if (!slot) {
-    return <div className="py-16 text-center text-slate-500">Class not found.</div>;
+    return (
+      <div className="py-16 text-center text-slate-500">
+        <div className="mb-3 text-base font-semibold text-slate-700">
+          Class not found.
+        </div>
+        <p className="mb-6 text-sm text-slate-500">
+          It may have been removed or the link is out of date.
+        </p>
+        <Link
+          href={studioId ? `/studios/${studioId}` : "/"}
+          className="inline-flex items-center justify-center rounded-full bg-purple-600 px-5 py-2 text-sm font-semibold text-white hover:bg-purple-700"
+        >
+          {studioId ? "Back to studio" : "Back to home"}
+        </Link>
+      </div>
+    );
   }
 
   return (
