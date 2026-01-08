@@ -19,8 +19,11 @@ export function useAuthUser(): AuthUserState {
 
   useEffect(() => {
     let mounted = true;
+    let inFlight = false;
 
     const loadProfile = async () => {
+      if (inFlight) return;
+      inFlight = true;
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) {
@@ -38,22 +41,44 @@ export function useAuthUser(): AuthUserState {
         }
       } catch (err) {
         if (mounted) setState({ user: null, role: null, loading: false });
+      } finally {
+        inFlight = false;
       }
     };
 
     loadProfile();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+      if (
+        event === 'SIGNED_IN' ||
+        event === 'TOKEN_REFRESHED' ||
+        event === 'INITIAL_SESSION' ||
+        event === 'USER_UPDATED'
+      ) {
         loadProfile();
       } else if (event === 'SIGNED_OUT') {
         if (mounted) setState({ user: null, role: null, loading: false });
       }
     });
 
+    const handleFocus = () => {
+      loadProfile();
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        loadProfile();
+      }
+    };
+
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
     return () => {
       mounted = false;
       subscription.unsubscribe();
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, []);
 
