@@ -97,6 +97,25 @@ export default function StudioDetailPage() {
     return { avg: sum / list.length, total: list.length };
   }, [reviews]);
 
+  const formatPrice = (currency: string, amount: number) => {
+    try {
+      return new Intl.NumberFormat(undefined, {
+        style: "currency",
+        currency,
+        maximumFractionDigits: 0,
+      }).format(amount);
+    } catch (error) {
+      return `${currency} ${amount}`;
+    }
+  };
+
+  const instagramUrl = useMemo(() => {
+    if (!studio?.instagram) return null;
+    if (studio.instagram.startsWith("http")) return studio.instagram;
+    const handle = studio.instagram.replace(/^@/, "");
+    return `https://www.instagram.com/${handle}`;
+  }, [studio?.instagram]);
+
   const mapUrl = useMemo(() => {
     if (!studio?.latitude || !studio?.longitude) return null;
     const lat = Number(studio.latitude);
@@ -104,6 +123,13 @@ export default function StudioDetailPage() {
     const delta = 0.01;
     const bbox = `${lon - delta}%2C${lat - delta}%2C${lon + delta}%2C${lat + delta}`;
     return `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&marker=${lat}%2C${lon}&layer=mapnik`;
+  }, [studio?.latitude, studio?.longitude]);
+
+  const mapLink = useMemo(() => {
+    if (!studio?.latitude || !studio?.longitude) return null;
+    const lat = Number(studio.latitude);
+    const lon = Number(studio.longitude);
+    return `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=16/${lat}/${lon}`;
   }, [studio?.latitude, studio?.longitude]);
 
   if (studioLoading) {
@@ -119,17 +145,18 @@ export default function StudioDetailPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-amber-50">
       <section className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         <div className="mb-6">
-          <Link href="/" className="text-sm text-purple-600 hover:text-purple-700">
-            ← Back to search
+          <Link href="/" className="text-sm text-slate-600 hover:text-slate-900">
+            Back to search
           </Link>
         </div>
 
         <div className="grid lg:grid-cols-[320px_1fr] gap-6">
-          <aside className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+          <aside className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-5 lg:sticky lg:top-6 h-fit">
             <div className="space-y-1">
+              <div className="text-xs uppercase tracking-widest text-slate-400">Studio</div>
               <h1 className="text-2xl font-semibold text-slate-900">{studio.name}</h1>
               <p className="text-sm text-slate-500">{studio.city || "Studio"}</p>
             </div>
@@ -146,25 +173,48 @@ export default function StudioDetailPage() {
               </span>
             </div>
 
-            <div className="space-y-3 text-sm text-slate-600">
+            <div className="grid gap-2">
+              <a
+                href="#classes"
+                className="inline-flex items-center justify-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
+              >
+                Book a class <ArrowRight size={14} />
+              </a>
               {studio.phone && (
-                <div className="flex items-center gap-2">
-                  <Phone size={16} className="text-slate-400" />
-                  <span>{studio.phone}</span>
-                </div>
+                <a
+                  href={`tel:${studio.phone}`}
+                  className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:border-slate-300 hover:text-slate-900"
+                >
+                  <Phone size={14} /> Call studio
+                </a>
               )}
-              {studio.instagram && (
-                <div className="flex items-center gap-2">
-                  <Instagram size={16} className="text-slate-400" />
-                  <span>{studio.instagram}</span>
-                </div>
+              {instagramUrl && (
+                <a
+                  href={instagramUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:border-slate-300 hover:text-slate-900"
+                >
+                  <Instagram size={14} /> Instagram
+                </a>
               )}
+            </div>
+
+            <div className="space-y-3 text-sm text-slate-600">
               {studio.address && (
-                <div className="flex items-center gap-2">
-                  <MapPin size={16} className="text-slate-400" />
+                <div className="flex items-start gap-2">
+                  <MapPin size={16} className="mt-0.5 text-slate-400" />
                   <span>{studio.address}</span>
                 </div>
               )}
+              <div className="flex items-center gap-3 text-xs text-slate-500">
+                <span className="rounded-full bg-slate-100 px-2 py-1">
+                  {classes?.length ? `${classes.length} upcoming` : "No classes yet"}
+                </span>
+                <span className="rounded-full bg-slate-100 px-2 py-1">
+                  {stats.total ? "Rated" : "New studio"}
+                </span>
+              </div>
             </div>
 
             {mapUrl ? (
@@ -172,9 +222,19 @@ export default function StudioDetailPage() {
                 <iframe
                   title="Studio map"
                   src={mapUrl}
-                  className="h-48 w-full"
+                  className="h-44 w-full"
                   loading="lazy"
                 />
+                {mapLink && (
+                  <a
+                    href={mapLink}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block border-t border-slate-200 px-3 py-2 text-xs font-medium text-slate-600 hover:text-slate-900"
+                  >
+                    Open in map
+                  </a>
+                )}
               </div>
             ) : (
               <div className="rounded-xl bg-slate-100 p-3 text-xs text-slate-500">
@@ -192,14 +252,14 @@ export default function StudioDetailPage() {
                   className="h-[320px] w-full object-cover"
                 />
               </div>
-              <div className="mt-4 flex gap-3 overflow-x-auto pb-1">
+              <div className="mt-4 flex items-center gap-3 overflow-x-auto pb-1">
                 {images.map((url, index) => (
                   <button
                     key={url}
                     type="button"
                     onClick={() => setActiveImage(index)}
                     className={`h-16 w-24 shrink-0 overflow-hidden rounded-lg border ${
-                      activeImage === index ? "border-purple-500" : "border-transparent"
+                      activeImage === index ? "border-slate-900" : "border-transparent"
                     }`}
                   >
                     <img src={url} alt="" className="h-full w-full object-cover" />
@@ -208,11 +268,14 @@ export default function StudioDetailPage() {
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+            <div id="classes" className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-slate-900">Upcoming classes</h2>
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-900">Upcoming classes</h2>
+                  <p className="text-xs text-slate-500">Pick a class and reserve your spot.</p>
+                </div>
                 {classesLoading && (
-                  <div className="text-xs text-slate-400">Loading…</div>
+                  <div className="text-xs text-slate-400">Loading...</div>
                 )}
               </div>
 
@@ -243,7 +306,7 @@ export default function StudioDetailPage() {
                     return (
                       <div
                         key={slot.id}
-                        className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border border-slate-100 rounded-xl p-4"
+                        className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 rounded-xl border border-slate-100 bg-white p-4 transition hover:border-slate-200 hover:shadow-sm"
                       >
                         <div className="space-y-1">
                           <h3 className="text-base font-semibold text-slate-900">{slot.title}</h3>
@@ -257,11 +320,16 @@ export default function StudioDetailPage() {
                               <Clock size={14} />
                               {timeLabel}
                             </span>
+                            {slot.capacity ? (
+                              <span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] text-slate-600">
+                                {slot.capacity} spots
+                              </span>
+                            ) : null}
                           </div>
                         </div>
                         <div className="flex items-center gap-3">
                           <div className="text-sm font-semibold text-slate-900">
-                            {slot.currency} {slot.price}
+                            {formatPrice(slot.currency, slot.price)}
                           </div>
                           <Link
                             href={
@@ -269,7 +337,7 @@ export default function StudioDetailPage() {
                                 ? `/bookings/${slot.id}`
                                 : "/login"
                             }
-                            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-purple-600 text-white text-sm font-medium hover:bg-purple-700"
+                            className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
                           >
                             Book now <ArrowRight size={14} />
                           </Link>
@@ -284,7 +352,9 @@ export default function StudioDetailPage() {
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
               <h2 className="text-lg font-semibold text-slate-900 mb-4">Reviews</h2>
               {(reviews || []).length === 0 ? (
-                <div className="text-sm text-slate-500">No reviews yet.</div>
+                <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+                  No reviews yet. Be the first to share your experience.
+                </div>
               ) : (
                 <div className="space-y-4">
                   {(reviews || []).slice(0, 6).map((review) => (
