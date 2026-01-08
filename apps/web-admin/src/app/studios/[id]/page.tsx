@@ -154,7 +154,7 @@ export default function StudioDetailPage() {
         </div>
 
         <div className="grid lg:grid-cols-[320px_1fr] gap-6">
-          <aside className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-5 lg:sticky lg:top-6 h-fit">
+          <aside className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5 space-y-5 lg:sticky lg:top-6 h-fit">
             <div className="space-y-1">
               <div className="text-xs uppercase tracking-widest text-slate-400">Studio</div>
               <h1 className="text-2xl font-semibold text-slate-900">{studio.name}</h1>
@@ -176,14 +176,14 @@ export default function StudioDetailPage() {
             <div className="grid gap-2">
               <a
                 href="#classes"
-                className="inline-flex items-center justify-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 sm:w-auto"
               >
                 Book a class <ArrowRight size={14} />
               </a>
               {studio.phone && (
                 <a
                   href={`tel:${studio.phone}`}
-                  className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:border-slate-300 hover:text-slate-900"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:border-slate-300 hover:text-slate-900 sm:w-auto"
                 >
                   <Phone size={14} /> Call studio
                 </a>
@@ -193,7 +193,7 @@ export default function StudioDetailPage() {
                   href={instagramUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:border-slate-300 hover:text-slate-900"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:border-slate-300 hover:text-slate-900 sm:w-auto"
                 >
                   <Instagram size={14} /> Instagram
                 </a>
@@ -222,7 +222,7 @@ export default function StudioDetailPage() {
                 <iframe
                   title="Studio map"
                   src={mapUrl}
-                  className="h-44 w-full"
+                  className="h-40 w-full sm:h-44"
                   loading="lazy"
                 />
                 {mapLink && (
@@ -249,7 +249,7 @@ export default function StudioDetailPage() {
                 <img
                   src={images[activeImage]}
                   alt={studio.name}
-                  className="h-[320px] w-full object-cover"
+                  className="h-[240px] w-full object-cover sm:h-[320px]"
                 />
               </div>
               <div className="mt-4 flex items-center gap-3 overflow-x-auto pb-1">
@@ -258,7 +258,7 @@ export default function StudioDetailPage() {
                     key={url}
                     type="button"
                     onClick={() => setActiveImage(index)}
-                    className={`h-16 w-24 shrink-0 overflow-hidden rounded-lg border ${
+                    className={`h-14 w-20 shrink-0 overflow-hidden rounded-lg border sm:h-16 sm:w-24 ${
                       activeImage === index ? "border-slate-900" : "border-transparent"
                     }`}
                   >
@@ -327,7 +327,7 @@ export default function StudioDetailPage() {
                             ) : null}
                           </div>
                         </div>
-                        <div className="flex items-center gap-3">
+                        <div className="flex w-full items-center justify-between gap-3 sm:w-auto sm:justify-start">
                           <div className="text-sm font-semibold text-slate-900">
                             {formatPrice(slot.currency, slot.price)}
                           </div>
@@ -337,7 +337,7 @@ export default function StudioDetailPage() {
                                 ? `/bookings/${slot.id}`
                                 : "/login"
                             }
-                            className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
+                            className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 sm:w-auto"
                           >
                             Book now <ArrowRight size={14} />
                           </Link>
