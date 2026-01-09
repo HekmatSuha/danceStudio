@@ -6,6 +6,7 @@ import { LogOut, ArrowLeft, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useAuthUser } from "../../lib/useAuthUser";
 import { signOut, updateProfile } from "../../lib/auth";
+import { getErrorMessage } from "../../lib/errors";
 
 export default function ProfilePage() {
   const { user, loading } = useAuthUser();
@@ -50,8 +51,8 @@ export default function ProfilePage() {
         interests: interests.split(",").map(s => s.trim()).filter(Boolean)
       });
       setStatus("Profile updated.");
-    } catch (err: any) {
-      setStatus(err?.message || "Failed to update profile.");
+    } catch (err: unknown) {
+      setStatus(getErrorMessage(err, "Failed to update profile."));
     } finally {
       setSaving(false);
     }

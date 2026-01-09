@@ -11,7 +11,6 @@ import {
   Loader2,
   Clock3,
   Search,
-  Filter,
 } from "lucide-react";
 import { fetchClasses, type ClassEvent } from "../../lib/classes";
 import { fetchDanceStyles, type DanceStyle } from "../../lib/danceStyles";

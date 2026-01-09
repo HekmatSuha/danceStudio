@@ -6,7 +6,6 @@ import {
   Pressable,
   ActivityIndicator,
   StyleSheet,
-  Alert,
   RefreshControl,
 } from "react-native";
 import { listSlots, type Slot } from "../../../src/services/slots";
@@ -18,7 +17,6 @@ export default function InstructorScheduleScreen() {
   const [slots, setSlots] = useState<Slot[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [userName, setUserName] = useState("Instructor");
 
   const loadData = async () => {
     try {
@@ -29,7 +27,6 @@ export default function InstructorScheduleScreen() {
 
       const profile = await fetchProfile().catch(() => null);
       if (profile) {
-        setUserName(profile.first_name || "Instructor");
         // Fetch slots for this trainer. 
         // We assume listSlots supports 'trainer' or we filter client side if not.
         // Since we don't have the trainer ID easily without profile.uuid, we rely on backend filtering 

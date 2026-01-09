@@ -5,6 +5,7 @@ import { Clock, Users, ChevronLeft, ChevronRight, Heart } from 'lucide-react';
 import useSWR from 'swr';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 
 type ClassCard = {
   id: string;
@@ -34,6 +35,7 @@ export function Classes() {
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
+  const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
 
   const updateScrollState = () => {
     const el = scrollerRef.current;
@@ -115,23 +117,28 @@ export function Classes() {
             onScroll={handleScroll}
             className="flex gap-6 overflow-x-auto scroll-smooth pb-2"
           >
-            {classes.map((classItem, index) => (
+            {classes.map((classItem, index) => {
+              const fallbackUrl = fallbackImages[index % fallbackImages.length];
+              const imageUrl = failedImages[classItem.id]
+                ? fallbackUrl
+                : classItem.imageUrl || fallbackUrl;
+              return (
               <Link
                 key={classItem.id}
                 href={classItem.studioId ? `/studios/${classItem.studioId}` : "/studios"}
                 className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm hover:shadow-lg transition-shadow min-w-[260px] sm:min-w-[300px] lg:min-w-[280px] w-[260px] sm:w-[300px] lg:w-[280px] shrink-0"
               >
-                <div className="relative">
-                  <img
-                    src={classItem.imageUrl || fallbackImages[index % fallbackImages.length]}
+                <div className="relative h-44 w-full">
+                  <Image
+                    src={imageUrl}
                     alt={classItem.title}
-                    className="h-44 w-full object-cover"
-                    loading="lazy"
-                    onError={(event) => {
-                      const target = event.currentTarget;
-                      if (target.dataset.fallbackApplied) return;
-                      target.dataset.fallbackApplied = "true";
-                      target.src = fallbackImages[index % fallbackImages.length];
+                    fill
+                    className="object-cover"
+                    sizes="(min-width: 1024px) 280px, (min-width: 640px) 300px, 260px"
+                    onError={() => {
+                      if (!failedImages[classItem.id]) {
+                        setFailedImages((prev) => ({ ...prev, [classItem.id]: true }));
+                      }
                     }}
                   />
                   <button
@@ -167,7 +174,7 @@ export function Classes() {
                   </div>
                 </div>
               </Link>
-            ))}
+            )})}
           </div>
         )}
       </div>

@@ -3,8 +3,9 @@
 import React, { useMemo, useState } from "react";
 import useSWR from "swr";
 import Link from "next/link";
+import Image from "next/image";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { Calendar, Clock, MapPin, Loader2, ArrowLeft } from "lucide-react";
+import { Calendar, MapPin, Loader2, ArrowLeft } from "lucide-react";
 import { createBooking } from "@/lib/bookings";
 import { useAuthUser } from "@/lib/useAuthUser";
 
@@ -30,7 +31,9 @@ const fetcher = (url: string) =>
   fetch(url).then(async (res) => {
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      throw new Error(data.error || "Failed to load.");
+      const error = new Error(data.error || "Failed to load.") as Error & { status?: number };
+      error.status = res.status;
+      throw error;
     }
     return res.json();
   });
@@ -48,7 +51,18 @@ export default function BookingPage() {
 
   const { data: slot, isLoading } = useSWR<SlotDetail>(
     slotId ? `/api/public/classes/${slotId}` : null,
-    fetcher
+    fetcher,
+    {
+      shouldRetryOnError: false,
+      onErrorRetry: (error, key, config, revalidate, { retryCount }) => {
+        // Never retry on 404
+        if (error.status === 404) return;
+        // Only retry up to 3 times for other errors
+        if (retryCount >= 3) return;
+        // Retry after 5 seconds
+        setTimeout(() => revalidate({ retryCount }), 5000);
+      }
+    }
   );
 
   const dateLabel = useMemo(() => {
@@ -131,7 +145,15 @@ export default function BookingPage() {
         <div className="mt-6 grid lg:grid-cols-[1.2fr_0.8fr] gap-6">
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
             {slot.imageUrl && (
-              <img src={slot.imageUrl} alt={slot.title} className="h-60 w-full object-cover" />
+              <div className="relative h-60 w-full">
+                <Image
+                  src={slot.imageUrl}
+                  alt={slot.title}
+                  fill
+                  className="object-cover"
+                  sizes="(min-width: 1024px) 480px, 100vw"
+                />
+              </div>
             )}
             <div className="p-6 space-y-3">
               <div>

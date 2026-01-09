@@ -6,11 +6,13 @@ import { Shield, Search, Pencil, Trash2 } from "lucide-react";
 import { type AccountProfile } from "../../../../lib/auth";
 import { deleteUserAction, updateUserProfileAction } from "../../../actions/manage-user";
 
+type ProfileRow = AccountProfile & { id?: string; created_at?: string };
+
 export default function SuperAdminUsersPage() {
-  const [users, setUsers] = useState<AccountProfile[]>([]);
+  const [users, setUsers] = useState<ProfileRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [editingUser, setEditingUser] = useState<AccountProfile | null>(null);
+  const [editingUser, setEditingUser] = useState<ProfileRow | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -24,7 +26,7 @@ export default function SuperAdminUsersPage() {
       if (error) {
         console.error("Error fetching users:", error);
       } else {
-        setUsers(data as AccountProfile[]);
+        setUsers(data as ProfileRow[]);
       }
       setLoading(false);
     };
@@ -58,13 +60,15 @@ export default function SuperAdminUsersPage() {
       role: formData.get("role") as AccountProfile["role"],
     };
 
-    setUsers((prev) => prev.map((u: any) => ((u as any).id === (editingUser as any).id ? updated : u)));
+    setUsers((prev) =>
+      prev.map((u) => ((u.id || u.uuid) === (editingUser.id || editingUser.uuid) ? updated : u))
+    );
     setEditingUser(null);
     setSubmitting(false);
   };
 
-  const handleDelete = async (user: AccountProfile) => {
-    const id = (user as any).id as string;
+  const handleDelete = async (user: ProfileRow) => {
+    const id = user.id || user.uuid;
     if (!id) return;
     if (!confirm(`Delete ${user.first_name} ${user.last_name}? This cannot be undone.`)) return;
     setSubmitting(true);
@@ -74,7 +78,7 @@ export default function SuperAdminUsersPage() {
       setSubmitting(false);
       return;
     }
-    setUsers((prev) => prev.filter((u: any) => (u as any).id !== id));
+    setUsers((prev) => prev.filter((u) => (u.id || u.uuid) !== id));
     setSubmitting(false);
   };
 
@@ -102,7 +106,7 @@ export default function SuperAdminUsersPage() {
         <div className="mb-6 max-w-3xl bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
           <h3 className="text-lg font-bold mb-4">Edit User</h3>
           <form onSubmit={handleEditSubmit} className="space-y-4">
-            <input type="hidden" name="userId" value={(editingUser as any).id} />
+            <input type="hidden" name="userId" value={editingUser.id || editingUser.uuid || ""} />
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">First Name *</label>
@@ -153,7 +157,7 @@ export default function SuperAdminUsersPage() {
                   </tr>
                 ) : (
                   filteredUsers.map((user) => (
-                    <tr key={(user as any).id} className="hover:bg-slate-50 transition-colors">
+                    <tr key={user.id || user.uuid} className="hover:bg-slate-50 transition-colors">
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
                           <div className="h-10 w-10 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center font-bold">
@@ -184,7 +188,7 @@ export default function SuperAdminUsersPage() {
                         {user.email}
                       </td>
                       <td className="px-6 py-4">
-                        {(user as any).created_at ? new Date((user as any).created_at).toLocaleDateString() : "-"}
+                        {user.created_at ? new Date(user.created_at).toLocaleDateString() : "-"}
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex justify-end gap-2">

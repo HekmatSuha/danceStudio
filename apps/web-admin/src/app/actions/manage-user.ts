@@ -48,11 +48,12 @@ export async function updateUserProfileAction(formData: FormData): Promise<Manag
     return { success: false, message: "Cannot edit super admin users." };
   }
 
-  const updates: Record<string, any> = {};
+  const updates: { first_name?: string; last_name?: string; role?: UserRole; updated_at: string } = {
+    updated_at: new Date().toISOString(),
+  };
   if (firstName !== undefined) updates.first_name = firstName;
   if (lastName !== undefined) updates.last_name = lastName;
   if (role) updates.role = role;
-  updates.updated_at = new Date().toISOString();
 
   const { error } = await supabaseAdmin
     .from('profiles')

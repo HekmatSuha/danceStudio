@@ -21,7 +21,7 @@ function extractStoragePath(url: string) {
 }
 
 async function resolveImageUrl(
-  admin: SupabaseClient<any, "public", any> | null,
+  admin: SupabaseClient | null,
   rawUrl: string | null | undefined
 ) {
   if (!rawUrl) return null;

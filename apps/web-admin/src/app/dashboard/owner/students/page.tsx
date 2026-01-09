@@ -1,18 +1,21 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
-import { Plus, Search, UserCheck, UserX, Pencil, Trash2 } from "lucide-react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { Plus, UserCheck, UserX, Pencil, Trash2 } from "lucide-react";
 import { CreateUserForm } from "../../../../components/dashboard/CreateUserForm";
 import { supabase } from "../../../../lib/supabase";
 import { type AccountProfile } from "../../../../lib/auth";
 import { useOwnerStudiosGuard } from "../../../../lib/useOwnerStudiosGuard";
 
+type StudentRow = AccountProfile & { id?: string; created_at?: string; is_active?: boolean | null };
+type BookingRow = { user?: StudentRow | null };
+
 export default function OwnerStudentsPage() {
   const [showForm, setShowForm] = useState(false);
-  const [students, setStudents] = useState<AccountProfile[]>([]);
+  const [students, setStudents] = useState<StudentRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [editingStudent, setEditingStudent] = useState<AccountProfile | null>(null);
+  const [editingStudent, setEditingStudent] = useState<StudentRow | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const { studios, loading: studiosLoading, role } = useOwnerStudiosGuard();
 
@@ -23,7 +26,7 @@ export default function OwnerStudentsPage() {
     refreshStudents();
   };
 
-  const refreshStudents = async () => {
+  const refreshStudents = useCallback(async () => {
     const studioIds = studios.map((studio) => studio.uuid);
     setLoading(true);
     if (studioIds.length === 0) {
@@ -44,7 +47,7 @@ export default function OwnerStudentsPage() {
       return;
     }
 
-    const slotIds = (slotRows || []).map((row: any) => row.uuid);
+    const slotIds = (slotRows as Array<{ uuid: string }> | null | undefined)?.map((row) => row.uuid) ?? [];
     if (slotIds.length === 0) {
       setStudents([]);
       setLoading(false);
@@ -63,19 +66,17 @@ export default function OwnerStudentsPage() {
       return;
     }
 
-    const unique = new Map<string, AccountProfile & { id?: string }>();
-    (bookingRows || []).forEach((row: any) => {
-      if (row?.user?.id) {
-        const user = row.user as AccountProfile & { id?: string };
-        if (!user.uuid && user.id) {
-          user.uuid = user.id;
-        }
-        unique.set(user.id || user.uuid || "", user);
+    const unique = new Map<string, StudentRow>();
+    (bookingRows as BookingRow[] | null | undefined)?.forEach((row) => {
+      const user = row.user ?? null;
+      if (user?.id || user?.uuid) {
+        const stableUser = { ...user, uuid: user.uuid || user.id };
+        unique.set(stableUser.id || stableUser.uuid || "", stableUser);
       }
     });
     setStudents(Array.from(unique.values()));
     setLoading(false);
-  };
+  }, [studios]);
 
   const studioIdsKey = studios.map((studio) => studio.uuid).join(",");
 
@@ -83,11 +84,11 @@ export default function OwnerStudentsPage() {
     if (!studiosLoading) {
       refreshStudents();
     }
-  }, [studiosLoading, studioIdsKey]);
+  }, [studiosLoading, studioIdsKey, refreshStudents]);
 
   const filteredStudents = useMemo(() => {
     const query = search.trim().toLowerCase();
-    return students.filter((s: any) =>
+    return students.filter((s) =>
       s.email?.toLowerCase().includes(query) ||
       s.first_name?.toLowerCase().includes(query) ||
       s.last_name?.toLowerCase().includes(query)
@@ -106,6 +107,11 @@ export default function OwnerStudentsPage() {
     if (!editingStudent) return;
     setSubmitting(true);
     const formData = new FormData(e.currentTarget);
+    const studentId = editingStudent.id || editingStudent.uuid;
+    if (!studentId) {
+      setSubmitting(false);
+      return;
+    }
     try {
       const { error } = await supabase
         .from("profiles")
@@ -114,13 +120,13 @@ export default function OwnerStudentsPage() {
           last_name: formData.get("lastName") as string,
           phone_number: formData.get("phone") as string,
         })
-        .eq("id", (editingStudent as any).id);
+        .eq("id", studentId);
 
       if (error) throw error;
 
       setStudents((prev) =>
-        prev.map((s: any) =>
-          (s as any).id === (editingStudent as any).id
+        prev.map((s) =>
+          (s.id || s.uuid) === studentId
             ? {
                 ...s,
                 first_name: formData.get("firstName") as string,
@@ -139,7 +145,9 @@ export default function OwnerStudentsPage() {
     }
   };
 
-  const handleToggleActive = async (student: any) => {
+  const handleToggleActive = async (student: StudentRow) => {
+    const studentId = student.id || student.uuid;
+    if (!studentId) return;
     const nextActive = !(student.is_active ?? true);
     if (!confirm(`${nextActive ? "Activate" : "Deactivate"} ${student.first_name} ${student.last_name}?`)) return;
     setSubmitting(true);
@@ -147,11 +155,11 @@ export default function OwnerStudentsPage() {
       const { error } = await supabase
         .from("profiles")
         .update({ is_active: nextActive })
-        .eq("id", student.id);
+        .eq("id", studentId);
       if (error) throw error;
       setStudents((prev) =>
-        prev.map((s: any) =>
-          (s as any).id === student.id ? { ...s, is_active: nextActive } : s
+        prev.map((s) =>
+          (s.id || s.uuid) === studentId ? { ...s, is_active: nextActive } : s
         )
       );
     } catch (err) {
@@ -162,16 +170,18 @@ export default function OwnerStudentsPage() {
     }
   };
 
-  const handleDeleteStudent = async (student: any) => {
+  const handleDeleteStudent = async (student: StudentRow) => {
+    const studentId = student.id || student.uuid;
+    if (!studentId) return;
     if (!confirm(`Delete ${student.first_name} ${student.last_name}?`)) return;
     setSubmitting(true);
     try {
       const { error } = await supabase
         .from("profiles")
         .delete()
-        .eq("id", student.id);
+        .eq("id", studentId);
       if (error) throw error;
-      setStudents((prev) => prev.filter((s: any) => (s as any).id !== student.id));
+      setStudents((prev) => prev.filter((s) => (s.id || s.uuid) !== studentId));
     } catch (err) {
       console.error(err);
       alert("Failed to delete student.");
@@ -268,7 +278,7 @@ export default function OwnerStudentsPage() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredStudents.map((student) => (
-                  <tr key={(student as any).id} className="hover:bg-slate-50 transition-colors">
+                  <tr key={student.id || student.uuid} className="hover:bg-slate-50 transition-colors">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         <div className="h-10 w-10 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center font-bold">
@@ -286,7 +296,7 @@ export default function OwnerStudentsPage() {
                     </td>
                     <td className="px-6 py-4">{student.email}</td>
                     <td className="px-6 py-4">
-                      {(student as any).created_at ? new Date((student as any).created_at).toLocaleDateString() : "-"}
+                      {student.created_at ? new Date(student.created_at).toLocaleDateString() : "-"}
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex justify-end gap-2">
@@ -300,16 +310,16 @@ export default function OwnerStudentsPage() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleToggleActive(student as any)}
+                          onClick={() => handleToggleActive(student)}
                           className="p-2 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
-                          title={((student as any).is_active ?? true) ? "Deactivate" : "Activate"}
+                          title={(student.is_active ?? true) ? "Deactivate" : "Activate"}
                           disabled={submitting}
                         >
-                          {((student as any).is_active ?? true) ? <UserX size={16} /> : <UserCheck size={16} />}
+                          {(student.is_active ?? true) ? <UserX size={16} /> : <UserCheck size={16} />}
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleDeleteStudent(student as any)}
+                          onClick={() => handleDeleteStudent(student)}
                           className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                           title="Delete student"
                           disabled={submitting}

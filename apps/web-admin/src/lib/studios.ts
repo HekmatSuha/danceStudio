@@ -30,6 +30,21 @@ export type StudioStaff = {
   photo?: string;
 };
 
+type StaffStudioRow = {
+  studio?: Studio | null;
+};
+
+type StudioStaffRow = {
+  id: string;
+  role: string;
+  user: {
+    id: string;
+    first_name?: string | null;
+    last_name?: string | null;
+    avatar_url?: string | null;
+  };
+};
+
 export async function listStudios() {
   return withCache("studios:all", 30000, async () => {
     const { data, error } = await supabase
@@ -67,12 +82,12 @@ export async function fetchMyStudios() {
 
     const studios = new Map<string, Studio>();
 
-    (staffData || []).forEach((item: any) => {
-      if (item.studio?.uuid) studios.set(item.studio.uuid, item.studio as Studio);
+    (staffData as StaffStudioRow[] | null | undefined)?.forEach((item) => {
+      if (item.studio?.uuid) studios.set(item.studio.uuid, item.studio);
     });
 
-    (ownedData || []).forEach((studio: any) => {
-      if (studio?.uuid) studios.set(studio.uuid, studio as Studio);
+    (ownedData as Studio[] | null | undefined)?.forEach((studio) => {
+      if (studio?.uuid) studios.set(studio.uuid, studio);
     });
 
     return Array.from(studios.values());
@@ -200,14 +215,14 @@ export async function fetchStudioStaff(studioId: string) {
 
   if (error) throw error;
   
-  return data.map((item: any) => ({
+  return (data as StudioStaffRow[]).map((item) => ({
     id: item.id,
     user_id: item.user.id,
-    first_name: item.user.first_name,
-    last_name: item.user.last_name,
-    photo: item.user.avatar_url,
+    first_name: item.user.first_name || "",
+    last_name: item.user.last_name || "",
+    photo: item.user.avatar_url || undefined,
     role: item.role,
-  })) as StudioStaff[];
+  }));
 }
 
 export async function addStudioStaff(studioId: string, userId: string, role: string = 'instructor') {

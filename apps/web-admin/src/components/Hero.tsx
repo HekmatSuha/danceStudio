@@ -1,15 +1,19 @@
 import React from 'react';
 import { ArrowRight } from 'lucide-react';
+import Image from 'next/image';
 
 export function Hero() {
   return (
     <div className="relative h-screen flex items-center justify-center overflow-hidden">
       {/* Background Image */}
       <div className="absolute inset-0">
-        <img
+        <Image
           src="https://images.unsplash.com/photo-1690267647311-eeeac21df6c4?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxtb2Rlcm4lMjBkYW5jZSUyMHN0dWRpb3xlbnwxfHx8fDE3NjU2MjM5NTh8MA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral"
           alt="Dance Studio"
-          className="w-full h-full object-cover"
+          fill
+          className="object-cover"
+          sizes="100vw"
+          priority
         />
         <div className="absolute inset-0 bg-gradient-to-r from-purple-900/80 to-pink-900/60"></div>
       </div>

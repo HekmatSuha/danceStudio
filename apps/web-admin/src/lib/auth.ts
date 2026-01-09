@@ -20,13 +20,22 @@ export type AccountProfile = {
   interests?: string[];
 };
 
-export const toUserRole = (roles?: any, user?: Partial<AccountProfile>): UserRole => {
+type RoleInput =
+  | Array<{ code?: string | null } | string>
+  | string
+  | null
+  | undefined;
+
+export const toUserRole = (roles?: RoleInput, user?: Partial<AccountProfile>): UserRole => {
   if (user?.is_superuser) return "super_admin";
   
   let rolesStr = "";
   if (Array.isArray(roles)) {
     rolesStr = roles
-      .map((r) => (typeof r === "object" ? r.code : String(r)))
+      .map((r) => {
+        if (typeof r === "string") return r;
+        return r?.code ?? "";
+      })
       .join(",")
       .toUpperCase();
   } else if (typeof roles === "string") {
@@ -82,7 +91,7 @@ export async function signUpWithEmail(input: {
 }
 
 export async function signInWithEmail(params: { email: string; password: string }) {
-  const { data, error } = await supabase.auth.signInWithPassword({
+  const { error } = await supabase.auth.signInWithPassword({
     email: params.email.trim(),
     password: params.password,
   });
@@ -118,6 +127,7 @@ export async function fetchProfile(): Promise<AccountProfile> {
     .select('*')
     .eq('id', user.id)
     .single();
+  if (error) throw error;
 
   const meta = user.user_metadata || {};
 
@@ -151,16 +161,17 @@ export async function updateProfile(input: {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Not authenticated");
 
-  const updates: any = {};
+  const updates: { [key: string]: string | string[] | null | undefined } = {
+    updated_at: new Date().toISOString(),
+  };
   if (input.firstName !== undefined) updates.first_name = input.firstName;
   if (input.lastName !== undefined) updates.last_name = input.lastName;
   if (input.phone !== undefined) updates.phone_number = input.phone;
   if (input.gender !== undefined) updates.gender = input.gender;
   if (input.danceLevel !== undefined) updates.dance_level = input.danceLevel;
   if (input.interests !== undefined) updates.interests = input.interests;
-  updates.updated_at = new Date().toISOString();
 
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from('profiles')
     .update(updates)
     .eq('id', user.id)

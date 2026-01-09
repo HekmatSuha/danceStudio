@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAuthedSupabaseClient } from "../../../../lib/server-supabase";
 import { withServerCache } from "../../../../lib/server-cache";
 
+type StudioRow = { uuid: string } & Record<string, unknown>;
+type StaffStudioRow = { studio?: StudioRow | null };
+
 export async function GET(req: NextRequest) {
   const auth = await getAuthedSupabaseClient(req);
   if (!auth) {
@@ -26,11 +29,11 @@ export async function GET(req: NextRequest) {
 
     if (ownedError) throw ownedError;
 
-    const studiosMap = new Map<string, any>();
-    (staffData || []).forEach((item: any) => {
+    const studiosMap = new Map<string, StudioRow>();
+    (staffData as StaffStudioRow[] | null | undefined)?.forEach((item) => {
       if (item.studio?.uuid) studiosMap.set(item.studio.uuid, item.studio);
     });
-    (ownedData || []).forEach((studio: any) => {
+    (ownedData as StudioRow[] | null | undefined)?.forEach((studio) => {
       if (studio?.uuid) studiosMap.set(studio.uuid, studio);
     });
 

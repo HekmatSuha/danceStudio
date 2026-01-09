@@ -7,17 +7,13 @@ import {
   ActivityIndicator,
   StyleSheet,
   ScrollView,
-  RefreshControl,
-  Image,
-  Alert
+  RefreshControl
 } from "react-native";
 import { listSlots, type Slot } from "../../src/services/slots";
-import { listBookings, createBooking, type Booking } from "../../src/services/bookings";
+import { listBookings, type Booking } from "../../src/services/bookings";
 import { fetchProfile, getStoredRole } from "../../src/services/auth";
 import { router } from "expo-router";
-import { getStoredTokens } from "../../src/lib/api";
 import { Ionicons } from "@expo/vector-icons";
-import { Colors } from "../../constants/theme";
 
 export default function StudentDashboard() {
   const [slots, setSlots] = useState<Slot[]>([]);
@@ -25,7 +21,6 @@ export default function StudentDashboard() {
   const [userName, setUserName] = useState("Dancer");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [bookingInProcess, setBookingInProcess] = useState<string | null>(null);
 
   const loadData = async () => {
     try {
@@ -81,24 +76,6 @@ export default function StudentDashboard() {
     
     return upcoming[0] || null;
   }, [myBookings]);
-
-  const handleBook = async (slot: Slot) => {
-    const tokens = await getStoredTokens();
-    if (!tokens) {
-      router.replace("/(auth)/login");
-      return;
-    }
-    setBookingInProcess(slot.uuid);
-    try {
-      await createBooking(slot.uuid);
-      Alert.alert("Success", "Class booked successfully!");
-      onRefresh();
-    } catch (err: any) {
-      Alert.alert("Error", err?.message || "Failed to book class");
-    } finally {
-      setBookingInProcess(null);
-    }
-  };
 
   if (loading) {
     return (
@@ -215,7 +192,7 @@ export default function StudentDashboard() {
         <View style={styles.progressCard}>
           <View style={styles.progressRow}>
             <Ionicons name="trophy-outline" size={20} color="#eab308" />
-            <Text style={styles.progressText}>You're doing great! Keep it up.</Text>
+            <Text style={styles.progressText}>You&apos;re doing great! Keep it up.</Text>
           </View>
           <View style={styles.progressBarBg}>
             <View style={[styles.progressBarFill, { width: '30%' }]} />

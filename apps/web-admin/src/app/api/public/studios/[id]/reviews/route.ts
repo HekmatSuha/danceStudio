@@ -4,6 +4,15 @@ import { createClient } from "@supabase/supabase-js";
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
+type ReviewRow = {
+  uuid: string;
+  rating?: number | null;
+  comment?: string | null;
+  studio_response?: string | null;
+  created_at?: string | null;
+  user?: { first_name?: string | null; last_name?: string | null } | null;
+};
+
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -34,7 +43,7 @@ export async function GET(
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const mapped = (data || []).map((row: any) => ({
+  const mapped = (data as ReviewRow[] | null | undefined)?.map((row) => ({
     uuid: row.uuid,
     rating: row.rating ?? 0,
     comment: row.comment || "",

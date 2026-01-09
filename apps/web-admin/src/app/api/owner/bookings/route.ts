@@ -3,6 +3,9 @@ import { getAuthedSupabaseClient } from "../../../../lib/server-supabase";
 import { withServerCache } from "../../../../lib/server-cache";
 
 type AuthedClient = NonNullable<Awaited<ReturnType<typeof getAuthedSupabaseClient>>>;
+type StudioIdRow = { studio_id?: string | null };
+type OwnedStudioRow = { uuid?: string | null };
+type SlotRow = { uuid: string };
 
 async function resolveStudios(auth: AuthedClient) {
   const { data: staffData } = await auth.supabase
@@ -16,8 +19,12 @@ async function resolveStudios(auth: AuthedClient) {
     .eq("owner_id", auth.userId);
 
   const ids = new Set<string>();
-  (staffData || []).forEach((row: any) => ids.add(row.studio_id));
-  (ownedData || []).forEach((row: any) => ids.add(row.uuid));
+  (staffData as StudioIdRow[] | null | undefined)?.forEach((row) => {
+    if (row.studio_id) ids.add(row.studio_id);
+  });
+  (ownedData as OwnedStudioRow[] | null | undefined)?.forEach((row) => {
+    if (row.uuid) ids.add(row.uuid);
+  });
   return Array.from(ids);
 }
 
@@ -48,7 +55,7 @@ export async function GET(req: NextRequest) {
 
     if (slotError) throw slotError;
 
-    const slotIds = (slotRows || []).map((row: any) => row.uuid);
+    const slotIds = (slotRows as SlotRow[] | null | undefined)?.map((row) => row.uuid) ?? [];
     if (slotIds.length === 0) return [];
 
     const { data: bookings, error } = await auth.supabase

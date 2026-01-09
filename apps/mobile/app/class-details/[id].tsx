@@ -7,7 +7,6 @@ import {
   ScrollView,
   Pressable,
   Alert,
-  Image,
 } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import { listSlots, type Slot } from "../../src/services/slots";

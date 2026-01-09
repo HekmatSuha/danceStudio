@@ -1,7 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
-import Link from "next/link";
+import React, { useEffect, useState } from "react";
 import useSWR from "swr";
 import { Search } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -24,12 +23,12 @@ type StudioResult = {
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 export function DanceStyleSearch() {
-  const [query, setQuery] = useState("");
-  const [debouncedQuery, setDebouncedQuery] = useState("");
   const router = useRouter();
   const searchParams = useSearchParams();
+  const initialQuery = searchParams.get("style") || "";
+  const [query, setQuery] = useState(initialQuery);
+  const [debouncedQuery, setDebouncedQuery] = useState(initialQuery);
   const searchParamsString = searchParams.toString();
-  const didInitFromUrl = useRef(false);
 
   useEffect(() => {
     const handle = setTimeout(() => setDebouncedQuery(query.trim()), 300);
@@ -43,16 +42,6 @@ export function DanceStyleSearch() {
       : null,
     fetcher
   );
-
-  useEffect(() => {
-    if (didInitFromUrl.current) return;
-    const styleParam = searchParams.get("style") || "";
-    if (styleParam) {
-      setQuery(styleParam);
-      setDebouncedQuery(styleParam);
-    }
-    didInitFromUrl.current = true;
-  }, [searchParams]);
 
   useEffect(() => {
     const params = new URLSearchParams(searchParamsString);

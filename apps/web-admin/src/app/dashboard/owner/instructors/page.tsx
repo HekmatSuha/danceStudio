@@ -6,6 +6,7 @@ import { fetchTrainers, type Trainer } from "../../../../lib/trainers";
 import { createInstructorAction } from "../../../actions/create-instructor";
 import { supabase } from "../../../../lib/supabase";
 import { useOwnerStudiosGuard } from "../../../../lib/useOwnerStudiosGuard";
+import { getErrorMessage } from "../../../../lib/errors";
 
 export default function OwnerInstructorsPage() {
   const [instructors, setInstructors] = useState<Trainer[]>([]);
@@ -20,6 +21,10 @@ export default function OwnerInstructorsPage() {
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("active");
   const [editingInstructor, setEditingInstructor] = useState<Trainer | null>(null);
   const [editSubmitting, setEditSubmitting] = useState(false);
+  const studioIdsKey = useMemo(
+    () => studios.map((studio) => studio.uuid).join(","),
+    [studios],
+  );
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -50,7 +55,7 @@ export default function OwnerInstructorsPage() {
     return () => {
       isMounted = false;
     };
-  }, [refreshTrigger, studios.map((studio) => studio.uuid).join(",")]);
+  }, [refreshTrigger, studioIdsKey, studios]);
 
   const filteredInstructors = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -164,8 +169,8 @@ export default function OwnerInstructorsPage() {
       } else {
         alert("Error: " + result.message);
       }
-    } catch (err: any) {
-      alert("An unexpected error occurred.");
+    } catch (err: unknown) {
+      alert(getErrorMessage(err, "An unexpected error occurred."));
     } finally {
       setSubmitting(false);
     }
@@ -385,7 +390,7 @@ export default function OwnerInstructorsPage() {
 
               <div className="mt-4 space-y-2 text-sm text-slate-600">
                  {instructor.bio && (
-                   <p className="line-clamp-2 italic">"{instructor.bio}"</p>
+                   <p className="line-clamp-2 italic">&quot;{instructor.bio}&quot;</p>
                  )}
                  {instructor.studio_details && (
                     <p className="text-xs text-slate-400">

@@ -5,11 +5,10 @@ import { Compass, Heart, CalendarDays } from "lucide-react";
 import { StudentClassList } from "../../../components/dashboard/StudentClassList";
 import { listBookings, type Booking } from "../../../lib/bookings";
 
-import { useAuthUser } from "../../../lib/useAuthUser";
 
 export default function StudentDashboardPage() {
-  const { user } = useAuthUser();
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [now] = useState(() => Date.now());
 
   useEffect(() => {
     listBookings()
@@ -18,7 +17,6 @@ export default function StudentDashboardPage() {
   }, []);
 
   const stats = useMemo(() => {
-    const now = Date.now();
     const upcoming = bookings.filter((b) =>
       b.booking_date ? new Date(b.booking_date).getTime() > now : true,
     );
@@ -27,7 +25,7 @@ export default function StudentDashboardPage() {
       saved: 0,
       recommendations: "Curated for you",
     };
-  }, [bookings]);
+  }, [bookings, now]);
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-sky-50">

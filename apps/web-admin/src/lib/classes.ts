@@ -28,9 +28,39 @@ export type ClassEvent = {
   isLocked?: boolean;
 };
 
-// ... helper types can stay or be simplified ...
+type SlotRow = {
+  uuid: string;
+  studio_id?: string | null;
+  title?: string | null;
+  trainer_id?: string | null;
+  description?: string | null;
+  price?: number | string | null;
+  currency?: string | null;
+  max_participants?: number | null;
+  start_time: string;
+  end_time: string;
+  created_at?: string | null;
+  recurring_rule?: string | null;
+  room_id?: string | null;
+  image_url?: string | null;
+  is_locked?: boolean | null;
+  studio?: {
+    uuid?: string | null;
+    name?: string | null;
+    city?: string | null;
+    address?: string | null;
+  } | null;
+  trainer?: {
+    first_name?: string | null;
+    last_name?: string | null;
+  } | null;
+  room?: {
+    name?: string | null;
+    capacity?: number | null;
+  } | null;
+};
 
-function mapSlotToClass(slot: any): ClassEvent {
+function mapSlotToClass(slot: SlotRow): ClassEvent {
   const trainer = slot.trainer; // joined profile
   const studio = slot.studio;   // joined studio
   const room = slot.room;       // joined room

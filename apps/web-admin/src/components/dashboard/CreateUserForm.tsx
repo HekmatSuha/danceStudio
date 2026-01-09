@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { Loader2, Plus, X } from "lucide-react";
 import { registerUser, type UserRole } from "../../lib/auth";
+import { getErrorMessage } from "../../lib/errors";
 
 interface CreateUserFormProps {
   initialRole: UserRole;
@@ -40,32 +41,35 @@ export function CreateUserForm({ initialRole, onSuccess, onCancel }: CreateUserF
         gender: formData.gender,
       });
       onSuccess();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("User Creation Error:", err);
-      if (err.response) {
-        console.error("Response Data:", err.response.data);
-        const data = err.response.data;
+      const data =
+        err && typeof err === "object" && "response" in err
+          ? (err as { response?: { data?: unknown } }).response?.data
+          : undefined;
+      if (data) {
+        console.error("Response Data:", data);
         
         // Helper to extract text from various error formats
-        const extractText = (val: any): string => {
-           if (typeof val === 'string') return val;
-           if (Array.isArray(val)) {
-             return val.map(extractText).join(', ');
-           }
-           if (typeof val === 'object' && val !== null) {
-             if (val.message) return val.message;
-             if (val.detail) return val.detail;
-             // If it's just a raw object, try to show it as JSON or generic
-             return JSON.stringify(val); // Last resort
-           }
-           return String(val);
+        const extractText = (val: unknown): string => {
+          if (typeof val === "string") return val;
+          if (Array.isArray(val)) {
+            return val.map(extractText).join(", ");
+          }
+          if (typeof val === "object" && val !== null) {
+            const record = val as Record<string, unknown>;
+            if (typeof record.message === "string") return record.message;
+            if (typeof record.detail === "string") return record.detail;
+            return JSON.stringify(val); // Last resort
+          }
+          return String(val);
         };
 
-        if (typeof data === 'string') {
+        if (typeof data === "string") {
            setError(data);
-        } else if (data.detail) {
-           setError(data.detail);
-        } else if (typeof data === 'object') {
+        } else if (typeof data === "object" && data !== null && "detail" in data) {
+           setError(String((data as { detail?: unknown }).detail ?? ""));
+        } else if (typeof data === "object" && data !== null) {
            const messages = Object.entries(data)
              .map(([key, val]) => {
                // Capitalize key for display
@@ -78,7 +82,7 @@ export function CreateUserForm({ initialRole, onSuccess, onCancel }: CreateUserF
            setError("Failed to create user. Server returned an error.");
         }
       } else {
-        setError(err.message || "Failed to create user. Please check the inputs.");
+        setError(getErrorMessage(err, "Failed to create user. Please check the inputs."));
       }
     } finally {
       setLoading(false);

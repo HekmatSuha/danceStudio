@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { createBooking } from "../lib/bookings";
+import { getErrorMessage } from "../lib/errors";
 
 export function BookingRequest() {
   const [className, setClassName] = useState("");
@@ -20,10 +21,10 @@ export function BookingRequest() {
       setClassName("");
       setPreferredDate("");
       setMessage("");
-    } catch (err: any) {
+    } catch (err: unknown) {
       setStatus({
         type: "error",
-        text: err?.message || "Unable to send request. Please try again.",
+        text: getErrorMessage(err, "Unable to send request. Please try again."),
       });
     } finally {
       setLoading(false);
@@ -37,7 +38,7 @@ export function BookingRequest() {
           <p className="uppercase tracking-wide text-sm text-purple-100 mb-2">Book Your Spot</p>
           <h2 className="text-3xl font-semibold mb-3">Request a class booking directly</h2>
           <p className="text-purple-100 mb-8">
-            Tell us which class or style you want to join and your preferred time. We'll confirm availability.
+            Tell us which class or style you want to join and your preferred time. We&apos;ll confirm availability.
           </p>
         </div>
 

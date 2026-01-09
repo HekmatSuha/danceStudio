@@ -9,6 +9,12 @@ export type DanceStyle = {
   description?: string;
 };
 
+type DanceStyleRow = {
+  uuid: string;
+  name: string;
+  description?: string | null;
+};
+
 export async function fetchDanceStyles() {
   return withCache("dance_styles:all", 60000, async () => {
     const { data, error } = await supabase
@@ -18,10 +24,10 @@ export async function fetchDanceStyles() {
 
     if (error) throw error;
 
-    return data.map((d: any) => ({
+    return (data as DanceStyleRow[]).map((d) => ({
       uuid: d.uuid,
       name: d.name,
-      description: d.description,
-    })) as DanceStyle[];
+      description: d.description ?? undefined,
+    }));
   });
 }

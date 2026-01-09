@@ -40,8 +40,9 @@ export default function OwnerDashboardPage() {
       ? `/api/owner/bookings?studioIds=${studioIdsParam}&select=uuid,status,attended,appointment_slot`
       : null
   );
-  const slots = slotsData || [];
-  const bookings = bookingsData || [];
+  const slots = useMemo(() => slotsData || [], [slotsData]);
+  const bookings = useMemo(() => bookingsData || [], [bookingsData]);
+  const [now] = useState(() => Date.now());
 
   const handleSuccess = () => {
     setShowForm(false);
@@ -51,7 +52,6 @@ export default function OwnerDashboardPage() {
   };
 
   const stats = useMemo(() => {
-    const now = Date.now();
     const upcomingCount = slots.filter((s) => s.startAt > now).length;
     const totalCapacity = slots.reduce((sum, s) => sum + (s.capacity || 0), 0);
     const totalReserved = slots.reduce(
@@ -69,7 +69,7 @@ export default function OwnerDashboardPage() {
       bookings: bookings.length,
       revenue: `$${revenue.toLocaleString()}`,
     };
-  }, [slots, studios, bookings]);
+  }, [slots, studios, bookings, now]);
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-purple-50">

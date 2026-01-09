@@ -32,7 +32,7 @@ function extractStoragePath(url: string) {
 }
 
 async function resolveImageUrl(
-  admin: SupabaseClient<any, "public", any> | null,
+  admin: SupabaseClient | null,
   rawUrl: string | null | undefined,
   index: number
 ) {
@@ -111,7 +111,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: stylesError.message }, { status: 500 });
     }
 
-    styleIds = (styles || []).map((s: any) => s.uuid);
+    styleIds = (styles as Array<{ uuid: string }> | null | undefined)?.map((s) => s.uuid) ?? [];
     if (styleIds.length === 0) {
       return NextResponse.json([]);
     }
@@ -149,7 +149,20 @@ export async function GET(req: NextRequest) {
   }
 
   const mapped = await Promise.all(
-    (data || []).map(async (slot: any, index: number) => {
+    ((data as Array<{
+      uuid: string;
+      title?: string | null;
+      description?: string | null;
+      start_time?: string | null;
+      end_time?: string | null;
+      price?: number | null;
+      currency?: string | null;
+      studio_id?: string | null;
+      max_participants?: number | null;
+      image_url?: string | null;
+      dance_style?: { name?: string | null } | null;
+      studio?: { uuid?: string | null; name?: string | null; city?: string | null; address?: string | null } | null;
+    }> | null | undefined) ?? []).map(async (slot, index: number) => {
       const start = slot.start_time ? new Date(slot.start_time) : null;
       const end = slot.end_time ? new Date(slot.end_time) : null;
       const durationMinutes =

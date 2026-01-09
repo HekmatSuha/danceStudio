@@ -1,5 +1,6 @@
 import React from 'react';
 import { Instagram, Mail } from 'lucide-react';
+import Image from 'next/image';
 
 export function Instructors() {
   const instructors = [
@@ -46,11 +47,15 @@ export function Instructors() {
               className="group relative"
             >
               <div className="aspect-[3/4] overflow-hidden rounded-lg mb-4">
-                <img
-                  src={instructor.image}
-                  alt={instructor.name}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                />
+                <div className="relative h-full w-full">
+                  <Image
+                    src={instructor.image}
+                    alt={instructor.name}
+                    fill
+                    className="object-cover group-hover:scale-105 transition-transform duration-500"
+                    sizes="(min-width: 1024px) 25vw, (min-width: 768px) 50vw, 100vw"
+                  />
+                </div>
               </div>
               <div className="text-center">
                 <h3 className="mb-1">{instructor.name}</h3>

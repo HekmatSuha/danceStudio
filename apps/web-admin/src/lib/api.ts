@@ -6,6 +6,7 @@ const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3000/api/v1";
 
 type Tokens = { access: string; refresh: string };
+type RefreshResponse = { access: string; refresh?: string | null };
 const TOKEN_KEY = "dancecrm.web.tokens";
 const AUTH_EVENT = "dancecrm.auth.changed";
 
@@ -47,13 +48,14 @@ async function refreshAccess(): Promise<string | null> {
         const res = await axios.post(`${API_BASE_URL}/auth/refresh/`, {
           refresh: current.refresh,
         });
+        const payload = res.data as RefreshResponse;
         const next: Tokens = {
-          access: (res.data as any).access,
-          refresh: (res.data as any).refresh ?? current.refresh,
+          access: payload.access,
+          refresh: payload.refresh ?? current.refresh,
         };
         setTokens(next);
         return next.access;
-      } catch (err) {
+      } catch {
         clearTokens();
         return null;
       } finally {

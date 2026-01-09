@@ -157,7 +157,7 @@ export default function LoginScreen() {
             </Pressable>
 
             <View style={styles.switchRow}>
-              <Text style={styles.switchText}>Don't have an account?</Text>
+              <Text style={styles.switchText}>Don&apos;t have an account?</Text>
               <Link href="/(auth)/register" style={styles.switchLink}>
                 Sign up
               </Link>

@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
 
     const tokens = generateTokens(newUser.uuid);
     return NextResponse.json(tokens, { status: 201 });
-  } catch (error) {
+  } catch {
     return NextResponse.json({ detail: "Invalid request" }, { status: 400 });
   }
 }

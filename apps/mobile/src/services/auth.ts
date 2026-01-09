@@ -56,7 +56,7 @@ export async function register(input: {
 }
 
 export async function login(emailOrUsername: string, password: string) {
-  const { data, error } = await supabase.auth.signInWithPassword({
+  const { error } = await supabase.auth.signInWithPassword({
     email: emailOrUsername.trim(),
     password,
   });
@@ -128,7 +128,7 @@ export async function updateProfile(input: {
   if (input.interests !== undefined) updates.interests = input.interests;
   updates.updated_at = new Date().toISOString();
 
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from('profiles')
     .update(updates)
     .eq('id', user.id)

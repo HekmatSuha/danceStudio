@@ -8,7 +8,7 @@ export type Trainer = {
   first_name: string;
   last_name: string;
   bio?: string;
-  photo?: string;
+  photo?: string | null;
   is_active?: boolean;
   studio?: string | null;
   studio_details?: {
@@ -22,6 +22,23 @@ export type Trainer = {
 type FetchTrainersOptions = {
   studioId?: string;
   studioIds?: string[];
+};
+
+type TrainerRow = {
+  studio_id: string;
+  studio?: {
+    name?: string | null;
+    city?: string | null;
+    address?: string | null;
+  } | null;
+  user: {
+    id: string;
+    first_name?: string | null;
+    last_name?: string | null;
+    avatar_url?: string | null;
+    bio?: string | null;
+    is_active?: boolean | null;
+  };
 };
 
 export async function fetchTrainers(studioIdOrOptions?: string | FetchTrainersOptions) {
@@ -57,15 +74,15 @@ export async function fetchTrainers(studioIdOrOptions?: string | FetchTrainersOp
 
     if (error) throw error;
 
-    return data.map((item: any) => ({
+    return (data as TrainerRow[]).map((item) => ({
       uuid: item.user.id, // The User/Profile ID is the primary "Trainer" ID
-      first_name: item.user.first_name,
-      last_name: item.user.last_name,
-      bio: item.user.bio,
-      photo: item.user.avatar_url,
+      first_name: item.user.first_name || "",
+      last_name: item.user.last_name || "",
+      bio: item.user.bio ?? undefined,
+      photo: item.user.avatar_url ?? null,
       is_active: item.user.is_active ?? true,
       studio: item.studio_id,
-      studio_details: item.studio,
+      studio_details: item.studio ?? undefined,
     })) as Trainer[];
   });
 }
@@ -74,7 +91,7 @@ export async function createTrainer(data: {
   first_name: string;
   last_name: string;
   bio?: string;
-  photo?: any;
+  photo?: string | null;
   studio?: string | null;
 }) {
   // Creating a "Trainer" usually means creating a User account. 

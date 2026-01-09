@@ -11,6 +11,15 @@ type StudioRow = {
   address?: string | null;
 };
 
+type StyleRow = {
+  uuid: string;
+};
+
+type SlotRow = {
+  studio?: StudioRow | null;
+  dance_style?: { name?: string | null } | null;
+};
+
 export async function GET(req: NextRequest) {
   if (!supabaseUrl || !supabaseAnonKey) {
     return NextResponse.json({ error: "Supabase env missing" }, { status: 500 });
@@ -35,7 +44,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: stylesError.message }, { status: 500 });
   }
 
-  const styleIds = (styles || []).map((style: any) => style.uuid);
+  const styleIds = (styles as StyleRow[] | null | undefined)?.map((style) => style.uuid) ?? [];
   if (styleIds.length === 0) {
     return NextResponse.json([]);
   }
@@ -54,9 +63,9 @@ export async function GET(req: NextRequest) {
   }
 
   const studiosMap = new Map<string, { studio: StudioRow; styles: string[] }>();
-  (slots || []).forEach((slot: any) => {
-    const studio = slot.studio as StudioRow | null;
-    const styleName = slot.dance_style?.name as string | undefined;
+  (slots as SlotRow[] | null | undefined)?.forEach((slot) => {
+    const studio = slot.studio ?? null;
+    const styleName = slot.dance_style?.name ?? undefined;
     if (!studio?.uuid) return;
 
     const existing = studiosMap.get(studio.uuid);

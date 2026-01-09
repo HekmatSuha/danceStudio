@@ -23,8 +23,11 @@ export async function listReviews(params?: {
   const res = await api.get("/studios/reviews/", { params });
   if (Array.isArray(res.data)) {
     return res.data as Review[];
-  } else if (res.data && Array.isArray((res.data as any).results)) {
-    return (res.data as any).results as Review[];
+  } else if (res.data && typeof res.data === "object") {
+    const payload = res.data as { results?: unknown };
+    if (Array.isArray(payload.results)) {
+      return payload.results as Review[];
+    }
   }
   return [];
 }

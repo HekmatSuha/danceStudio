@@ -4,6 +4,7 @@ import React, { useMemo, useState } from "react";
 import useSWR from "swr";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import {
   Calendar,
   Clock,
@@ -108,7 +109,7 @@ export default function StudioDetailPage() {
         currency,
         maximumFractionDigits: 0,
       }).format(amount);
-    } catch (error) {
+    } catch {
       return `${currency} ${amount}`;
     }
   };
@@ -118,7 +119,7 @@ export default function StudioDetailPage() {
     if (studio.instagram.startsWith("http")) return studio.instagram;
     const handle = studio.instagram.replace(/^@/, "");
     return `https://www.instagram.com/${handle}`;
-  }, [studio?.instagram]);
+  }, [studio]);
 
   const mapUrl = useMemo(() => {
     if (!studio?.latitude || !studio?.longitude) return null;
@@ -127,14 +128,14 @@ export default function StudioDetailPage() {
     const delta = 0.01;
     const bbox = `${lon - delta}%2C${lat - delta}%2C${lon + delta}%2C${lat + delta}`;
     return `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&marker=${lat}%2C${lon}&layer=mapnik`;
-  }, [studio?.latitude, studio?.longitude]);
+  }, [studio]);
 
   const mapLink = useMemo(() => {
     if (!studio?.latitude || !studio?.longitude) return null;
     const lat = Number(studio.latitude);
     const lon = Number(studio.longitude);
     return `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=16/${lat}/${lon}`;
-  }, [studio?.latitude, studio?.longitude]);
+  }, [studio]);
 
   const handleBookNow = (slotId: string) => {
     if (authLoading) return;
@@ -262,11 +263,13 @@ export default function StudioDetailPage() {
 
           <div className="space-y-6">
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
-              <div className="rounded-xl overflow-hidden bg-slate-100">
-                <img
+              <div className="relative h-[240px] w-full overflow-hidden rounded-xl bg-slate-100 sm:h-[320px]">
+                <Image
                   src={images[activeImage]}
                   alt={studio.name}
-                  className="h-[240px] w-full object-cover sm:h-[320px]"
+                  fill
+                  className="object-cover"
+                  sizes="(min-width: 1024px) 640px, 100vw"
                 />
               </div>
               <div className="mt-4 flex items-center gap-3 overflow-x-auto pb-1">
@@ -279,7 +282,14 @@ export default function StudioDetailPage() {
                       activeImage === index ? "border-slate-900" : "border-transparent"
                     }`}
                   >
-                    <img src={url} alt="" className="h-full w-full object-cover" />
+                    <Image
+                      src={url}
+                      alt=""
+                      width={96}
+                      height={64}
+                      className="h-full w-full object-cover"
+                      sizes="96px"
+                    />
                   </button>
                 ))}
               </div>

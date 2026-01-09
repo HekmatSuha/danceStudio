@@ -14,7 +14,6 @@ import { listStudios, type Studio } from "../../src/services/studios";
 import { listSlots, type Slot } from "../../src/services/slots";
 import { listBookings, type Booking } from "../../src/services/bookings";
 import { Fonts } from "@/constants/theme";
-import { Ionicons } from "@expo/vector-icons";
 
 type Range = "week" | "month";
 
@@ -48,7 +47,6 @@ export default function OwnerDashboardScreen() {
   const [slots, setSlots] = useState<Slot[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
 
   const isWide = width >= 920;
 
@@ -66,7 +64,6 @@ export default function OwnerDashboardScreen() {
       console.warn("Failed to load owner data", err);
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
   };
 

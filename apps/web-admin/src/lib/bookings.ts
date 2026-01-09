@@ -80,7 +80,7 @@ export async function listBookings(params?: {
 
       if (slotError) throw slotError;
 
-      const slotIds = (slotRows || []).map((row: any) => row.uuid);
+      const slotIds = (slotRows as Array<{ uuid: string }> | null | undefined)?.map((row) => row.uuid) ?? [];
       if (slotIds.length === 0) return [];
       query = query.in("appointment_slot", slotIds);
     }

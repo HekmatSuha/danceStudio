@@ -1,6 +1,7 @@
 'use server';
 
 import { supabaseAdmin } from "../../lib/supabase-admin";
+import { getErrorMessage } from "../../lib/errors";
 
 export type CreateInstructorResult = {
   success: boolean;
@@ -87,7 +88,7 @@ export async function createInstructorAction(formData: FormData): Promise<Create
 
     return { success: true, message: "Instructor created successfully.", userId };
 
-  } catch (err: any) {
-    return { success: false, message: err.message || "Unknown server error." };
+  } catch (err: unknown) {
+    return { success: false, message: getErrorMessage(err, "Unknown server error.") };
   }
 }

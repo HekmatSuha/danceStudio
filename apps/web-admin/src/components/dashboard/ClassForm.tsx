@@ -8,6 +8,7 @@ import { fetchMyStudios, type Studio, fetchRooms, type Room, createRoom } from "
 import { fetchTrainers, type Trainer } from "../../lib/trainers";
 import { fetchDanceStyles, type DanceStyle } from "../../lib/danceStyles";
 import { supabase } from "../../lib/supabase";
+import Image from "next/image";
 
 interface ClassFormProps {
   onSuccess: () => void;
@@ -202,9 +203,19 @@ export function ClassForm({ onSuccess, onCancel }: ClassFormProps) {
       let finalTrainerId = formData.trainerId;
       
       // Safe check for trainer role
-      const isTrainer = Array.isArray(user?.roles) 
-        ? user.roles.some((r: any) => r.code === "TRAINER" || r.code === "INSTRUCTOR")
-        : (typeof user?.roles === 'string' && (user.roles.includes("TRAINER") || user.roles.includes("INSTRUCTOR")));
+      const isTrainer = Array.isArray(user?.roles)
+        ? user.roles.some((r) => {
+            if (typeof r === "string") {
+              return r === "TRAINER" || r === "INSTRUCTOR";
+            }
+            if (typeof r === "object" && r && "code" in r) {
+              const code = String((r as { code?: string }).code ?? "");
+              return code === "TRAINER" || code === "INSTRUCTOR";
+            }
+            return false;
+          })
+        : typeof user?.roles === "string" &&
+          (user.roles.includes("TRAINER") || user.roles.includes("INSTRUCTOR"));
 
       if (!finalTrainerId && isTrainer) {
           finalTrainerId = user?.uuid;
@@ -571,11 +582,16 @@ export function ClassForm({ onSuccess, onCancel }: ClassFormProps) {
           onChange={(e) => setImageFile(e.target.files?.[0] || null)}
         />
         {imagePreviewUrl && (
-          <img
-            src={imagePreviewUrl}
-            alt="Class preview"
-            className="h-40 w-full rounded-lg object-cover border border-gray-200"
-          />
+          <div className="relative h-40 w-full overflow-hidden rounded-lg border border-gray-200">
+            <Image
+              src={imagePreviewUrl}
+              alt="Class preview"
+              fill
+              className="object-cover"
+              sizes="100vw"
+              unoptimized
+            />
+          </div>
         )}
       </div>
 

@@ -63,7 +63,7 @@ export default function ProfileScreen() {
         danceLevel: data.dance_level || "Beginner",
         interests: (data.interests || []).join(", "),
       });
-    } catch (err) {
+    } catch {
       Alert.alert("Error", "Failed to load profile.");
     } finally {
       setLoading(false);

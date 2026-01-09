@@ -30,7 +30,7 @@ export async function searchRooms(params: {
   end_time?: string;
 }) {
   // 1. Base query for rooms with studio details
-  let query = supabase
+  const query = supabase
     .from('rooms')
     .select(`
       id, name, capacity, price_per_hour,
@@ -45,14 +45,22 @@ export async function searchRooms(params: {
   const { data, error } = await query;
   if (error) throw error;
 
-  let results = data.map((r: any) => ({
+  const roomRows = data as Array<{
+    id: string;
+    name: string;
+    capacity: number;
+    price_per_hour: number;
+    studio?: { name?: string | null; city?: string | null; address?: string | null } | null;
+  }>;
+
+  let results = roomRows.map((r) => ({
     id: r.id,
     name: r.name,
     capacity: r.capacity,
     price_per_hour: r.price_per_hour,
-    studio_name: r.studio?.name,
-    studio_city: r.studio?.city,
-    studio_address: r.studio?.address,
+    studio_name: r.studio?.name ?? "",
+    studio_city: r.studio?.city ?? "",
+    studio_address: r.studio?.address ?? "",
   })) as RoomSearchResult[];
 
   if (params.city) {

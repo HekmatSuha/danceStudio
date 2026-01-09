@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -35,7 +35,7 @@ export default function InstructorRosterScreen() {
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState<string | null>(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
       // Filter bookings by this slot ID
@@ -55,11 +55,11 @@ export default function InstructorRosterScreen() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
 
   useEffect(() => {
     load();
-  }, [id]);
+  }, [load]);
 
   const toggleAttendance = async (booking: BookingWithDetails) => {
     // API docs: POST /bookings/{uuid}/mark_attendance/
@@ -69,7 +69,7 @@ export default function InstructorRosterScreen() {
     try {
       await markAttendance(booking.uuid, newValue);
       setBookings(prev => prev.map(b => b.uuid === booking.uuid ? { ...b, attended: newValue } : b));
-    } catch (err: any) {
+    } catch {
       Alert.alert("Error", "Could not update attendance.");
     } finally {
       setToggling(null);

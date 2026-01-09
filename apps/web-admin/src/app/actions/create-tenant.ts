@@ -1,6 +1,7 @@
 'use server';
 
 import { supabaseAdmin } from "../../lib/supabase-admin";
+import { getErrorMessage } from "../../lib/errors";
 
 export type CreateTenantResult = {
   success: boolean;
@@ -102,8 +103,8 @@ export async function createTenantAction(formData: FormData): Promise<CreateTena
       ownerId: newOwnerId
     };
 
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Server Action Error:", err);
-    return { success: false, message: err.message || "An unexpected error occurred." };
+    return { success: false, message: getErrorMessage(err) };
   }
 }

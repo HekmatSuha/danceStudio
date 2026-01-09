@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, KeyRound, Lock, Mail } from "lucide-react";
 import Link from "next/link";
 import { sendResetPassword, confirmPasswordReset } from "../../lib/auth";
+import { getErrorMessage } from "../../lib/errors";
 
 function ResetPageInner() {
   const router = useRouter();
@@ -27,10 +28,10 @@ function ResetPageInner() {
       await sendResetPassword(email.trim());
       setStatus({ type: "success", text: "Code sent. Check your email." });
       setStep("confirm");
-    } catch (err: any) {
+    } catch (err: unknown) {
       setStatus({
         type: "error",
-        text: err?.message || "Unable to send reset code.",
+        text: getErrorMessage(err, "Unable to send reset code."),
       });
     } finally {
       setLoading(false);
@@ -49,10 +50,10 @@ function ResetPageInner() {
       await confirmPasswordReset(code.trim(), password);
       setStatus({ type: "success", text: "Password updated. You can sign in now." });
       setTimeout(() => router.push("/login"), 800);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setStatus({
         type: "error",
-        text: err?.message || "Invalid code or password.",
+        text: getErrorMessage(err, "Invalid code or password."),
       });
     } finally {
       setLoading(false);

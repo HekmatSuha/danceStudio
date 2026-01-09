@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { Plus, MapPin, Building2, User, Pencil, Trash2 } from "lucide-react";
 import { listStudios, updateStudio, deleteStudio, type Studio } from "../../../../lib/studios";
 import { createTenantAction } from "../../../actions/create-tenant";
+import { getErrorMessage } from "../../../../lib/errors";
 
 const parseOptionalNumber = (value: FormDataEntryValue | null) => {
   if (value === null) return null;
@@ -43,8 +44,8 @@ export default function SuperAdminStudiosPage() {
       } else {
         alert("Error: " + result.message);
       }
-    } catch (err: any) {
-      alert("An unexpected error occurred.");
+    } catch (err: unknown) {
+      alert(getErrorMessage(err, "An unexpected error occurred."));
     } finally {
       setSubmitting(false);
     }
@@ -66,9 +67,9 @@ export default function SuperAdminStudiosPage() {
       });
       setEditingStudio(null);
       setRefreshTrigger((prev) => prev + 1);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      alert("Failed to update studio.");
+      alert(getErrorMessage(err, "Failed to update studio."));
     } finally {
       setSubmitting(false);
     }
@@ -79,9 +80,14 @@ export default function SuperAdminStudiosPage() {
     try {
       await deleteStudio(studio.uuid);
       setRefreshTrigger((prev) => prev + 1);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      alert("Failed to delete studio. Ensure all related data (classes, staff) is removed first.");
+      alert(
+        getErrorMessage(
+          err,
+          "Failed to delete studio. Ensure all related data (classes, staff) is removed first."
+        )
+      );
     }
   };
 

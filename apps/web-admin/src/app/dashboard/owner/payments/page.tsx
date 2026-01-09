@@ -22,8 +22,8 @@ export default function OwnerPaymentsPage() {
       ? `/api/owner/bookings?studioIds=${studioIdsParam}&select=uuid,status,attended,appointment_slot`
       : null
   );
-  const slots = slotsData || [];
-  const bookings = bookingsData || [];
+  const slots = useMemo(() => slotsData || [], [slotsData]);
+  const bookings = useMemo(() => bookingsData || [], [bookingsData]);
 
   const paymentsSummary = useMemo(() => {
     const from = paymentsFrom ? new Date(`${paymentsFrom}T00:00:00`).getTime() : null;

@@ -39,7 +39,7 @@ export function useAuthUser(): AuthUserState {
             loading: false,
           });
         }
-      } catch (err) {
+      } catch {
         if (mounted) setState({ user: null, role: null, loading: false });
       } finally {
         inFlight = false;
@@ -48,7 +48,7 @@ export function useAuthUser(): AuthUserState {
 
     loadProfile();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (
         event === 'SIGNED_IN' ||
         event === 'TOKEN_REFRESHED' ||

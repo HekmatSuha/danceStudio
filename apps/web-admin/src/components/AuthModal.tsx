@@ -11,6 +11,7 @@ import {
   sendResetPassword,
   type UserRole,
 } from "../lib/auth";
+import { getErrorMessage } from "../lib/errors";
 
 
 interface AuthModalProps {
@@ -183,25 +184,26 @@ export function AuthModal({
           handleAuthSuccess(result.role);
         }, 500);
       }
-    } catch (err: any) {
-      const data = err?.response?.data;
+    } catch (err: unknown) {
+      const data =
+        err && typeof err === "object" && "response" in err
+          ? (err as { response?: { data?: unknown } }).response?.data
+          : undefined;
       const serverMsg =
-        data?.detail ||
-        data?.error ||
-        (typeof data === "string"
-          ? data
-          : Array.isArray(data)
-            ? data.join(", ")
-            : typeof data === "object"
-              ? Object.entries(data)
-                  .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : v}`)
-                  .join(" | ")
-              : null);
-      const message =
-        serverMsg ||
-        (err instanceof Error
-          ? err.message
-          : "Something went wrong. Please try again.");
+        data && typeof data === "object" && "detail" in data
+          ? String((data as { detail?: unknown }).detail ?? "")
+          : data && typeof data === "object" && "error" in data
+            ? String((data as { error?: unknown }).error ?? "")
+            : typeof data === "string"
+              ? data
+              : Array.isArray(data)
+                ? data.join(", ")
+                : data && typeof data === "object"
+                  ? Object.entries(data as Record<string, unknown>)
+                      .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : String(v)}`)
+                      .join(" | ")
+                  : null;
+      const message = serverMsg || getErrorMessage(err, "Something went wrong. Please try again.");
       setError(message);
     } finally {
       setIsSubmitting(false);
@@ -229,12 +231,8 @@ export function AuthModal({
     try {
       await sendResetPassword(formData.email);
       setInfo("Password reset code sent. Check your inbox.");
-    } catch (err: any) {
-      const message =
-        err instanceof Error
-          ? err.message
-          : "Unable to send reset email right now.";
-      setError(message);
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Unable to send reset email right now."));
     } finally {
       setIsResetting(false);
     }

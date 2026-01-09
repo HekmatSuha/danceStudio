@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { Plus, MapPin, Building2 } from "lucide-react";
 import { createStudio } from "../../../../lib/studios";
 import { useOwnerStudiosGuard } from "../../../../lib/useOwnerStudiosGuard";
+import { getErrorMessage } from "../../../../lib/errors";
 
 const parseOptionalNumber = (value: FormDataEntryValue | null) => {
   if (value === null) return null;
@@ -30,9 +31,18 @@ export default function OwnerStudiosPage() {
       });
       setShowForm(false);
       reload();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      const msg = err.response?.data?.detail || err.response?.data?.message || "Failed to create studio. You might not have permission.";
+      const data =
+        err && typeof err === "object" && "response" in err
+          ? (err as { response?: { data?: unknown } }).response?.data
+          : undefined;
+      const msg =
+        data && typeof data === "object" && data !== null && "detail" in data
+          ? String((data as { detail?: unknown }).detail ?? "")
+          : data && typeof data === "object" && data !== null && "message" in data
+            ? String((data as { message?: unknown }).message ?? "")
+            : getErrorMessage(err, "Failed to create studio. You might not have permission.");
       alert(msg);
     }
   };

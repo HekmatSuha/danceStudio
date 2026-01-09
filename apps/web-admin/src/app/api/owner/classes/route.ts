@@ -2,7 +2,42 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAuthedSupabaseClient } from "../../../../lib/server-supabase";
 import { withServerCache } from "../../../../lib/server-cache";
 
-function mapSlotToClass(slot: any) {
+type SlotRow = {
+  uuid: string;
+  studio_id?: string | null;
+  title?: string | null;
+  trainer_id?: string | null;
+  description?: string | null;
+  price?: number | string | null;
+  currency?: string | null;
+  max_participants?: number | null;
+  start_time: string;
+  end_time: string;
+  created_at?: string | null;
+  recurring_rule?: string | null;
+  room_id?: string | null;
+  image_url?: string | null;
+  is_locked?: boolean | null;
+  studio?: {
+    uuid?: string | null;
+    name?: string | null;
+    city?: string | null;
+    address?: string | null;
+  } | null;
+  trainer?: {
+    first_name?: string | null;
+    last_name?: string | null;
+  } | null;
+  room?: {
+    name?: string | null;
+    capacity?: number | null;
+  } | null;
+};
+
+type StaffStudioRow = { studio_id?: string | null };
+type OwnedStudioRow = { uuid?: string | null };
+
+function mapSlotToClass(slot: SlotRow) {
   const trainer = slot.trainer;
   const studio = slot.studio;
   const room = slot.room;
@@ -53,8 +88,12 @@ async function resolveStudios(auth: AuthedClient) {
     .eq("owner_id", auth.userId);
 
   const ids = new Set<string>();
-  (staffData || []).forEach((row: any) => ids.add(row.studio_id));
-  (ownedData || []).forEach((row: any) => ids.add(row.uuid));
+  (staffData as StaffStudioRow[] | null | undefined)?.forEach((row) => {
+    if (row.studio_id) ids.add(row.studio_id);
+  });
+  (ownedData as OwnedStudioRow[] | null | undefined)?.forEach((row) => {
+    if (row.uuid) ids.add(row.uuid);
+  });
   return Array.from(ids);
 }
 
