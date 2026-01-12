@@ -5,6 +5,8 @@ export type Studio = {
   name: string;
   address?: string;
   city?: string;
+  latitude?: number | null;
+  longitude?: number | null;
 };
 
 export async function listStudios() {

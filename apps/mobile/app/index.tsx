@@ -1,6 +1,6 @@
 import { Redirect } from "expo-router";
 
-// Default entrypoint: send users to the auth flow instead of the tab shell.
+// Default entrypoint: send users to the public tab shell.
 export default function Index() {
-  return <Redirect href="/(auth)/login" />;
+  return <Redirect href="/(tabs)" />;
 }

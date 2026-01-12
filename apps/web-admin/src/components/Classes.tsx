@@ -27,9 +27,12 @@ const fetcher = (url: string) => fetch(url).then((res) => res.json());
 export function Classes() {
   const searchParams = useSearchParams();
   const style = (searchParams.get("style") || "").trim();
-  const url = style
-    ? `/api/public/classes?style=${encodeURIComponent(style)}&limit=16`
-    : "/api/public/classes?limit=16";
+  const query = (searchParams.get("q") || "").trim();
+  const url = query
+    ? `/api/public/classes?q=${encodeURIComponent(query)}&limit=16`
+    : style
+      ? `/api/public/classes?style=${encodeURIComponent(style)}&limit=16`
+      : "/api/public/classes?limit=16";
   const { data, isLoading } = useSWR<ClassCard[]>(url, fetcher);
   const classes = data || [];
   const scrollerRef = useRef<HTMLDivElement | null>(null);
@@ -56,9 +59,10 @@ export function Classes() {
   };
 
   const heading = useMemo(() => {
+    if (query) return `Results for "${query}"`;
     if (!style) return "Popular classes";
     return `Classes for "${style}"`;
-  }, [style]);
+  }, [query, style]);
 
   const fallbackImages = useMemo(
     () => [

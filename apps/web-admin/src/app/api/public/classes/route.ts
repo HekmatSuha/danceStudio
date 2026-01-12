@@ -87,6 +87,7 @@ export async function GET(req: NextRequest) {
   }
 
   const style = (req.nextUrl.searchParams.get("style") || "").trim();
+  const q = (req.nextUrl.searchParams.get("q") || "").trim();
   const studioId = (req.nextUrl.searchParams.get("studioId") || "").trim();
   const limit = Number(req.nextUrl.searchParams.get("limit") || "12");
 
@@ -99,12 +100,16 @@ export async function GET(req: NextRequest) {
       })
     : null;
 
+  const queryText = q || style;
   let styleIds: string[] = [];
-  if (style) {
+  let studioIds: string[] = [];
+  let trainerIds: string[] = [];
+
+  if (queryText) {
     const { data: styles, error: stylesError } = await supabase
       .from("dance_styles")
       .select("uuid")
-      .ilike("name", `%${style}%`)
+      .ilike("name", `%${queryText}%`)
       .limit(10);
 
     if (stylesError) {
@@ -112,7 +117,33 @@ export async function GET(req: NextRequest) {
     }
 
     styleIds = (styles as Array<{ uuid: string }> | null | undefined)?.map((s) => s.uuid) ?? [];
-    if (styleIds.length === 0) {
+
+    const { data: studios, error: studiosError } = await supabase
+      .from("studios")
+      .select("uuid")
+      .ilike("name", `%${queryText}%`)
+      .limit(20);
+
+    if (studiosError) {
+      return NextResponse.json({ error: studiosError.message }, { status: 500 });
+    }
+
+    studioIds = (studios as Array<{ uuid: string }> | null | undefined)?.map((s) => s.uuid) ?? [];
+
+    const { data: trainers, error: trainersError } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("role", "instructor")
+      .or(`first_name.ilike.%${queryText}%,last_name.ilike.%${queryText}%`)
+      .limit(20);
+
+    if (trainersError) {
+      return NextResponse.json({ error: trainersError.message }, { status: 500 });
+    }
+
+    trainerIds = (trainers as Array<{ id: string }> | null | undefined)?.map((t) => t.id) ?? [];
+
+    if (styleIds.length === 0 && studioIds.length === 0 && trainerIds.length === 0) {
       return NextResponse.json([]);
     }
   }
@@ -136,7 +167,16 @@ export async function GET(req: NextRequest) {
     .order("start_time", { ascending: true })
     .limit(limit);
 
-  if (styleIds.length) {
+  if (queryText) {
+    const filters = [
+      styleIds.length ? `dance_style_id.in.(${styleIds.join(",")})` : null,
+      studioIds.length ? `studio_id.in.(${studioIds.join(",")})` : null,
+      trainerIds.length ? `trainer_id.in.(${trainerIds.join(",")})` : null,
+    ].filter(Boolean);
+    if (filters.length) {
+      query = query.or(filters.join(","));
+    }
+  } else if (styleIds.length) {
     query = query.in("dance_style_id", styleIds);
   }
   if (studioId) {

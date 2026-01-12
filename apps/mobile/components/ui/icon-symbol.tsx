@@ -17,6 +17,9 @@ const MAPPING = {
   'house.fill': 'home',
   'paperplane.fill': 'send',
   'chart.bar.fill': 'bar-chart',
+  'calendar': 'calendar-today',
+  'photo.fill': 'photo',
+  'person.crop.circle': 'person',
   'chevron.left.forwardslash.chevron.right': 'code',
   'chevron.right': 'chevron-right',
 } as IconMapping;

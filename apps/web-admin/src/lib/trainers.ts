@@ -89,6 +89,7 @@ export async function fetchTrainers(studioIdOrOptions?: string | FetchTrainersOp
 
 export async function createTrainer(data: {
   first_name: string;
+  
   last_name: string;
   bio?: string;
   photo?: string | null;

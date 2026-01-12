@@ -25,7 +25,7 @@ const fetcher = (url: string) => fetch(url).then((res) => res.json());
 export function DanceStyleSearch() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const initialQuery = searchParams.get("style") || "";
+  const initialQuery = searchParams.get("q") || searchParams.get("style") || "";
   const [query, setQuery] = useState(initialQuery);
   const [debouncedQuery, setDebouncedQuery] = useState(initialQuery);
   const searchParamsString = searchParams.toString();
@@ -46,11 +46,13 @@ export function DanceStyleSearch() {
   useEffect(() => {
     const params = new URLSearchParams(searchParamsString);
     if (debouncedQuery.length >= 2) {
-      if (params.get("style") !== debouncedQuery) {
-        params.set("style", debouncedQuery);
+      if (params.get("q") !== debouncedQuery) {
+        params.set("q", debouncedQuery);
+        params.delete("style");
         router.replace(`/?${params.toString()}`, { scroll: false });
       }
-    } else if (params.has("style")) {
+    } else if (params.has("q") || params.has("style")) {
+      params.delete("q");
       params.delete("style");
       const next = params.toString();
       router.replace(next ? `/?${next}` : "/", { scroll: false });
@@ -78,7 +80,7 @@ export function DanceStyleSearch() {
                 <input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search ballet, hip-hop, salsa..."
+                  placeholder="Search style, studio, or instructor..."
                   className="flex-1 text-base md:text-lg border-none focus:outline-none placeholder:text-slate-400"
                 />
               </div>
