@@ -215,7 +215,7 @@ export async function fetchStudioStaff(studioId: string) {
 
   if (error) throw error;
   
-  return (data as StudioStaffRow[]).map((item) => ({
+  return (data as unknown as StudioStaffRow[]).map((item) => ({
     id: item.id,
     user_id: item.user.id,
     first_name: item.user.first_name || "",
