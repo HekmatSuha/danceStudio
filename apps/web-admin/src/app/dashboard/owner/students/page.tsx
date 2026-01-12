@@ -67,7 +67,7 @@ export default function OwnerStudentsPage() {
     }
 
     const unique = new Map<string, StudentRow>();
-    (bookingRows as BookingRow[] | null | undefined)?.forEach((row) => {
+    (bookingRows as unknown as BookingRow[] | null | undefined)?.forEach((row) => {
       const user = row.user ?? null;
       if (user?.id || user?.uuid) {
         const stableUser = { ...user, uuid: user.uuid || user.id };
