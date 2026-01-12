@@ -220,7 +220,6 @@ export async function GET(req: NextRequest) {
         description: slot.description || "Discover a class that matches your rhythm.",
         imageUrl,
         duration: `${durationMinutes} min`,
-        level: "All Levels",
         capacity: slot.max_participants ?? 15,
         price: slot.price ?? 0,
         currency: slot.currency || "USD",
