@@ -74,7 +74,7 @@ export async function fetchTrainers(studioIdOrOptions?: string | FetchTrainersOp
 
     if (error) throw error;
 
-    return (data as TrainerRow[]).map((item) => ({
+    return (data as unknown as TrainerRow[]).map((item) => ({
       uuid: item.user.id, // The User/Profile ID is the primary "Trainer" ID
       first_name: item.user.first_name || "",
       last_name: item.user.last_name || "",
