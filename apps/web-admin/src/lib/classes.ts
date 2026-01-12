@@ -34,6 +34,7 @@ type SlotRow = {
   title?: string | null;
   trainer_id?: string | null;
   description?: string | null;
+  level?: DanceLevel | null;
   price?: number | string | null;
   currency?: string | null;
   max_participants?: number | null;
@@ -78,7 +79,7 @@ function mapSlotToClass(slot: SlotRow): ClassEvent {
     teacherId: slot.trainer_id || "",
     teacherName: trainerName,
     locationName: location,
-    level: "all",
+    level: slot.level || "all",
     description: slot.description || undefined,
     price: Number(slot.price || 0),
     currency: slot.currency || "USD",
@@ -207,6 +208,7 @@ export type CreateClassInput = {
   studioId: string;
   title: string;
   description?: string;
+  level?: DanceLevel;
   price: number;
   currency?: string;
   capacity: number;
@@ -230,6 +232,7 @@ export async function createClass(input: CreateClassInput) {
       studio_id: input.studioId, 
       title: input.title,
       description: input.description,
+      level: input.level || "all",
       price: input.price,
       currency: input.currency || "USD",
       max_participants: input.capacity,

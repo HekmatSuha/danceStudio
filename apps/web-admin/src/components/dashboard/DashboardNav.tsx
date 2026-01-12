@@ -18,6 +18,7 @@ import {
   ChevronRight,
   DoorOpen,
   DollarSign,
+  Home,
 } from "lucide-react";
 import { useAuthUser } from "../../lib/useAuthUser";
 import { signOut, type UserRole } from "../../lib/auth";
@@ -136,6 +137,16 @@ export function DashboardNav({ children }: { children: React.ReactNode }) {
 
           {/* Navigation Links */}
           <nav className="flex-1 px-3 space-y-1">
+            <Link
+              href="/"
+              onClick={() => setIsMobileOpen(false)}
+              className="flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+            >
+              <span className="text-gray-400">
+                <Home size={20} />
+              </span>
+              Home
+            </Link>
             <p className="px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 mt-2">
               Menu
             </p>

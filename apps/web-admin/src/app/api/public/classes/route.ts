@@ -160,6 +160,7 @@ export async function GET(req: NextRequest) {
       end_time,
       price,
       currency,
+      level,
       studio_id,
       max_participants,
       image_url,
@@ -201,6 +202,7 @@ export async function GET(req: NextRequest) {
       end_time?: string | null;
       price?: number | null;
       currency?: string | null;
+      level?: "beginner" | "intermediate" | "advanced" | "all" | null;
       studio_id?: string | null;
       max_participants?: number | null;
       image_url?: string | null;
@@ -222,6 +224,7 @@ export async function GET(req: NextRequest) {
         capacity: slot.max_participants ?? 15,
         price: slot.price ?? 0,
         currency: slot.currency || "USD",
+        level: slot.level || "all",
         styleName: slot.dance_style?.name || null,
         studioId: slot.studio?.uuid || slot.studio_id || null,
         studioName: slot.studio?.name || null,

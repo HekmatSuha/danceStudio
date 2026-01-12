@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { Loader2, Plus, X } from "lucide-react";
-import { createClass, type CreateClassInput } from "../../lib/classes";
+import { createClass, type CreateClassInput, type DanceLevel } from "../../lib/classes";
 import { useAuthUser } from "../../lib/useAuthUser";
 import { fetchMyStudios, type Studio, fetchRooms, type Room, createRoom } from "../../lib/studios";
 import { fetchTrainers, type Trainer } from "../../lib/trainers";
@@ -34,6 +34,7 @@ export function ClassForm({ onSuccess, onCancel }: ClassFormProps) {
   const [formData, setFormData] = useState<Partial<CreateClassInput>>({
     title: "",
     description: "",
+    level: "all",
     price: 0,
     currency: "USD",
     capacity: 10,
@@ -263,6 +264,7 @@ export function ClassForm({ onSuccess, onCancel }: ClassFormProps) {
           endAt: end,
           trainerId: finalTrainerId || undefined,
           danceStyleId: formData.danceStyleId,
+          level: formData.level,
           recurringRule,
           imageUrl,
         });
@@ -377,6 +379,20 @@ export function ClassForm({ onSuccess, onCancel }: ClassFormProps) {
                 {s.name}
               </option>
             ))}
+          </select>
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-sm font-medium text-gray-700">Class Level</label>
+          <select
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none bg-white"
+            value={formData.level ?? "all"}
+            onChange={(e) => setFormData({ ...formData, level: e.target.value as DanceLevel })}
+          >
+            <option value="all">All Levels</option>
+            <option value="beginner">Beginner</option>
+            <option value="intermediate">Intermediate</option>
+            <option value="advanced">Advanced</option>
           </select>
         </div>
 
