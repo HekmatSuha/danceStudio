@@ -20,8 +20,8 @@ type ProfileRow = {
 };
 
 type SlotRow = {
-  studio?: StudioRow | null;
-  dance_style?: { name?: string | null } | null;
+  studio?: StudioRow | StudioRow[] | null;
+  dance_style?: { name?: string | null } | { name?: string | null }[] | null;
 };
 
 export async function GET(req: NextRequest) {
@@ -106,8 +106,11 @@ export async function GET(req: NextRequest) {
     }
 
     (slots as SlotRow[] | null | undefined)?.forEach((slot) => {
-      const studio = slot.studio ?? null;
-      const styleName = slot.dance_style?.name ?? undefined;
+      const studioRaw = slot.studio ?? null;
+      const studio = Array.isArray(studioRaw) ? studioRaw[0] : studioRaw;
+      const styleRaw = slot.dance_style ?? null;
+      const style = Array.isArray(styleRaw) ? styleRaw[0] : styleRaw;
+      const styleName = style?.name ?? undefined;
       if (!studio?.uuid) return;
 
       const existing = studiosMap.get(studio.uuid);
