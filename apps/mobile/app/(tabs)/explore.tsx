@@ -283,14 +283,18 @@ export default function ExploreScreen() {
     if (!needle) return slots;
     return slots.filter((slot) => {
       const studioName = slot.studio_details?.name || "";
+      const studioAddress = slot.studio_details?.address || "";
       const styleName = slot.dance_style_details?.name || "";
+      const description = slot.description || "";
       const trainerFirst = slot.trainer_details?.trainer_details?.first_name || "";
       const trainerLast = slot.trainer_details?.trainer_details?.last_name || "";
       const trainerName = `${trainerFirst} ${trainerLast}`.trim();
       return (
         slot.title.toLowerCase().includes(needle) ||
         studioName.toLowerCase().includes(needle) ||
+        studioAddress.toLowerCase().includes(needle) ||
         styleName.toLowerCase().includes(needle) ||
+        description.toLowerCase().includes(needle) ||
         trainerFirst.toLowerCase().includes(needle) ||
         trainerLast.toLowerCase().includes(needle) ||
         trainerName.toLowerCase().includes(needle)

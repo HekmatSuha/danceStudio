@@ -101,6 +101,7 @@ export async function GET(req: NextRequest) {
     : null;
 
   const queryText = q || style;
+  const queryToken = queryText.replace(/,/g, " ").trim();
   let styleIds: string[] = [];
   let studioIds: string[] = [];
   let trainerIds: string[] = [];
@@ -143,7 +144,8 @@ export async function GET(req: NextRequest) {
 
     trainerIds = (trainers as Array<{ id: string }> | null | undefined)?.map((t) => t.id) ?? [];
 
-    if (styleIds.length === 0 && studioIds.length === 0 && trainerIds.length === 0) {
+    const hasNameQuery = queryToken.length > 0;
+    if (!hasNameQuery && styleIds.length === 0 && studioIds.length === 0 && trainerIds.length === 0) {
       return NextResponse.json([]);
     }
   }
@@ -172,6 +174,8 @@ export async function GET(req: NextRequest) {
       styleIds.length ? `dance_style_id.in.(${styleIds.join(",")})` : null,
       studioIds.length ? `studio_id.in.(${studioIds.join(",")})` : null,
       trainerIds.length ? `trainer_id.in.(${trainerIds.join(",")})` : null,
+      queryToken ? `title.ilike.%${queryToken}%` : null,
+      queryToken ? `description.ilike.%${queryToken}%` : null,
     ].filter(Boolean);
     if (filters.length) {
       query = query.or(filters.join(","));
