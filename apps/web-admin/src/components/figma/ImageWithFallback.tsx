@@ -29,7 +29,6 @@ export function ImageWithFallback(props: Props) {
           src={imageSrc}
           alt={imageAlt}
           fill
-          unoptimized
           onError={handleError}
           {...rest}
         />
@@ -45,7 +44,6 @@ export function ImageWithFallback(props: Props) {
       height={typeof height === 'number' ? height : 88}
       className={className}
       style={style}
-      unoptimized
       onError={handleError}
       {...rest}
     />

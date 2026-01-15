@@ -49,7 +49,7 @@ export async function listStudios() {
   return withCache("studios:all", 30000, async () => {
     const { data, error } = await supabase
       .from('studios')
-      .select('*');
+      .select('uuid, name, city, address, latitude, longitude');
 
     if (error) throw error;
     return data as Studio[];
@@ -61,22 +61,21 @@ export async function fetchMyStudios() {
   if (!user) throw new Error("Not authenticated");
 
   return withCache(`studios:mine:${user.id}`, 20000, async () => {
-    // Query tenant_staff to find studios where the user is a staff member (owner/admin/instructor)
-    const { data: staffData, error: staffError } = await supabase
-      .from('tenant_staff')
-      .select(`
-        studio:studios(*)
-      `)
-      .eq('user_id', user.id);
+    const [staffResult, ownedResult] = await Promise.all([
+      supabase
+        .from('tenant_staff')
+        .select(`
+          studio:studios(uuid, name, city, address, latitude, longitude)
+        `)
+        .eq('user_id', user.id),
+      supabase
+        .from('studios')
+        .select('uuid, name, city, address, latitude, longitude')
+        .eq('owner_id', user.id)
+    ]);
 
-    if (staffError) {
-      console.warn("Failed to load tenant_staff studios:", staffError.message);
-    }
-
-    const { data: ownedData, error: ownedError } = await supabase
-      .from('studios')
-      .select('*')
-      .eq('owner_id', user.id);
+    const { data: staffData, error: staffError } = staffResult;
+    const { data: ownedData, error: ownedError } = ownedResult;
 
     if (ownedError) throw ownedError;
 
@@ -149,7 +148,7 @@ export async function fetchRooms(studioId: string) {
   return withCache(`rooms:${studioId}`, 20000, async () => {
     const { data, error } = await supabase
       .from('rooms')
-      .select('*')
+      .select('id, studio_id, name, capacity, price_per_hour, currency')
       .eq('studio_id', studioId);
 
     if (error) throw error;

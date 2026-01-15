@@ -139,7 +139,7 @@ export async function fetchClasses(params?: {
     let query = supabase
       .from('slots')
       .select(`
-        *,
+        uuid, studio_id, title, trainer_id, description, level, price, currency, max_participants, start_time, end_time, created_at, recurring_rule, room_id, image_url, is_locked,
         studio:studios(uuid, name, city, address),
         trainer:profiles(first_name, last_name),
         room:rooms(name, capacity)
@@ -162,7 +162,7 @@ export async function fetchClasses(params?: {
     const { data, error } = await query;
     if (error) throw error;
 
-    return (data || []).map(mapSlotToClass);
+    return (data as unknown as SlotRow[]).map(mapSlotToClass);
   });
 }
 

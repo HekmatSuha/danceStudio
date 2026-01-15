@@ -48,7 +48,7 @@ export async function fetchUserBookings() {
   return withCache(`bookings:user:${user.id}`, 15000, async () => {
     const { data, error } = await supabase
       .from('bookings')
-      .select('*')
+      .select('uuid, appointment_slot, status, booking_date, attended')
       .eq('user_id', user.id)
       .returns<Booking[]>();
 
@@ -70,7 +70,7 @@ export async function listBookings(params?: {
   return withCache(cacheKey, 15000, async () => {
     let query = supabase
       .from('bookings')
-      .select(params?.select || '*');
+      .select(params?.select || 'uuid, appointment_slot, status, booking_date, attended, user_id');
 
     if (params?.studioIds?.length) {
       const { data: slotRows, error: slotError } = await supabase
@@ -88,6 +88,8 @@ export async function listBookings(params?: {
     if (params?.status) query = query.eq('status', params.status);
     if (params?.attended !== undefined) query = query.eq('attended', params.attended);
     if (params?.slotId) query = query.eq('appointment_slot', params.slotId);
+    if (params?.booking_date_from) query = query.gte('booking_date', params.booking_date_from);
+    if (params?.booking_date_to) query = query.lte('booking_date', params.booking_date_to);
 
     const { data, error } = await query.returns<Booking[]>();
     if (error) throw error;

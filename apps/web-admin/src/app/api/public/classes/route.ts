@@ -40,42 +40,30 @@ async function resolveImageUrl(
     return pickImage(index);
   }
 
+  // If it's already a full URL, return it
   if (rawUrl.startsWith("http")) {
-    const storagePath = extractStoragePath(rawUrl);
-    if (admin && storagePath) {
-      const [bucket, ...rest] = storagePath.split("/");
-      const objectPath = rest.join("/");
-      if (bucket && objectPath) {
-        const { data } = await admin.storage
-          .from(bucket)
-          .createSignedUrl(objectPath, 60 * 60);
-        if (data?.signedUrl) {
-          return data.signedUrl;
-        }
-      }
-    }
     return rawUrl;
   }
 
+  // Construct public URL for Supabase Storage
+  // Assuming 'class-images' and 'image' buckets are public
   let bucket = "class-images";
   let objectPath = rawUrl;
+  
   const parts = rawUrl.split("/");
   if (parts[0] === "class-images" || parts[0] === "image") {
     bucket = parts[0];
     objectPath = parts.slice(1).join("/");
   }
 
-  if (admin) {
-    const { data } = await admin.storage
-      .from(bucket)
-      .createSignedUrl(objectPath, 60 * 60);
-    if (data?.signedUrl) {
-      return data.signedUrl;
-    }
+  // Remove leading slash from objectPath to prevent double slashes
+  if (objectPath.startsWith("/")) {
+    objectPath = objectPath.slice(1);
   }
 
   if (supabaseUrl) {
-    return `${supabaseUrl}/storage/v1/object/public/${bucket}/${objectPath}`;
+    const baseUrl = supabaseUrl.endsWith("/") ? supabaseUrl.slice(0, -1) : supabaseUrl;
+    return `${baseUrl}/storage/v1/object/public/${bucket}/${objectPath}`;
   }
 
   return pickImage(index);
