@@ -37,7 +37,7 @@ export default function OwnerInstructorsPage() {
     let isMounted = true;
     const load = async () => {
       try {
-        const studioIds = studios.map((studio) => studio.uuid);
+        const studioIds = studioIdsKey ? studioIdsKey.split(",") : [];
         const trainersData = studioIds.length > 0
           ? await fetchTrainers({ studioIds })
           : [];
@@ -55,7 +55,7 @@ export default function OwnerInstructorsPage() {
     return () => {
       isMounted = false;
     };
-  }, [refreshTrigger, studioIdsKey, studios]);
+  }, [refreshTrigger, studioIdsKey]);
 
   const filteredInstructors = useMemo(() => {
     const query = search.trim().toLowerCase();

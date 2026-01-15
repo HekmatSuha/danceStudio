@@ -20,7 +20,7 @@ export async function createBooking(slotId: string) {
     .insert({
       user_id: user.id,
       appointment_slot: slotId,
-      status: 'confirmed',
+      status: 'pending',
       booking_date: new Date().toISOString()
     })
     .select()

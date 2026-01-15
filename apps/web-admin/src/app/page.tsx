@@ -2,7 +2,6 @@ import React, { Suspense } from 'react';
 import { DanceStyleSearch } from '../components/DanceStyleSearch';
 import { About } from '../components/About';
 import { Classes } from '../components/Classes';
-import { Schedule } from '../components/Schedule';
 import { Instructors } from '../components/Instructors';
 import { Contact } from '../components/Contact';
 import { Navigation } from '../components/Navigation';
@@ -19,7 +18,6 @@ export default function App() {
         <Classes />
       </Suspense>
       <About />
-      <Schedule />
       <Instructors />
       <BookingRequest />
       <Contact />

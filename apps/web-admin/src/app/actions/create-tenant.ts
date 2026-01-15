@@ -24,11 +24,16 @@ export async function createTenantAction(formData: FormData): Promise<CreateTena
   const address = formData.get("address") as string;
   const latitude = parseOptionalNumber(formData.get("latitude"));
   const longitude = parseOptionalNumber(formData.get("longitude"));
+  const whatsapp = (formData.get("whatsapp") as string) || null;
   
   const ownerEmail = formData.get("ownerEmail") as string;
   const ownerPassword = formData.get("ownerPassword") as string;
   const ownerFirstName = formData.get("ownerFirstName") as string;
   const ownerLastName = formData.get("ownerLastName") as string;
+
+  if (!whatsapp) {
+    return { success: false, message: "WhatsApp is required for the studio." };
+  }
 
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY === 'YOUR_SERVICE_ROLE_KEY_HERE') {
     return { success: false, message: "Server Error: Missing Service Role Key. Please configure env vars." };
@@ -75,6 +80,7 @@ export async function createTenantAction(formData: FormData): Promise<CreateTena
         address,
         latitude,
         longitude,
+        whatsapp,
         owner_id: newOwnerId
       })
       .select()

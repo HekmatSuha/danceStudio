@@ -64,12 +64,17 @@ export default function SuperAdminStudiosPage() {
         address: formData.get("address") as string,
         latitude: parseOptionalNumber(formData.get("latitude")),
         longitude: parseOptionalNumber(formData.get("longitude")),
+        whatsapp: (formData.get("whatsapp") as string) || null,
       });
       setEditingStudio(null);
       setRefreshTrigger((prev) => prev + 1);
     } catch (err: unknown) {
-      console.error(err);
-      alert(getErrorMessage(err, "Failed to update studio."));
+      console.error("Failed to update studio", err);
+      const message =
+        err && typeof err === "object" && "message" in err
+          ? String((err as { message?: unknown }).message ?? "")
+          : getErrorMessage(err, "Failed to update studio.");
+      alert(message || "Failed to update studio.");
     } finally {
       setSubmitting(false);
     }
@@ -145,6 +150,16 @@ export default function SuperAdminStudiosPage() {
                     <input name="longitude" type="number" step="0.000001" min="-180" max="180" className="w-full border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="e.g. 76.889709" />
                 </div>
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">WhatsApp</label>
+                <input
+                  name="whatsapp"
+                  type="tel"
+                  required
+                  className="w-full border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                  placeholder="e.g. +77011234567"
+                />
+              </div>
             </div>
 
             {/* Owner Details */}
@@ -218,6 +233,16 @@ export default function SuperAdminStudiosPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Longitude</label>
                   <input name="longitude" type="number" step="0.000001" min="-180" max="180" defaultValue={editingStudio.longitude ?? ""} className="w-full border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
                </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">WhatsApp</label>
+              <input
+                name="whatsapp"
+                type="tel"
+                defaultValue={editingStudio.whatsapp ?? ""}
+                required
+                className="w-full border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              />
             </div>
             <div className="flex justify-end gap-2 pt-4">
               <button type="button" onClick={() => setEditingStudio(null)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button>

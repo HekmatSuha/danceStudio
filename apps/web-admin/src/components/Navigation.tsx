@@ -40,9 +40,8 @@ export function Navigation() {
   }, []);
 
   const navItems = [
-    { label: 'About', href: '#about' },
+    { label: 'Studios', href: '#studios' },
     { label: 'Classes', href: '#classes' },
-    { label: 'Schedule', href: '#schedule' },
     { label: 'Instructors', href: '#instructors' },
     { label: 'Contact', href: '#contact' },
   ];

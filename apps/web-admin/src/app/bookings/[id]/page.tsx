@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
 import Link from "next/link";
 import Image from "next/image";
@@ -46,22 +46,23 @@ export default function BookingPage() {
   const studioId = (searchParams.get("studio") || "").trim();
   const { user, loading: authLoading } = useAuthUser();
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
 
-  const { data: slot, isLoading } = useSWR<SlotDetail>(
+  const { data: slot, isLoading, error: loadError } = useSWR<SlotDetail>(
     slotId ? `/api/public/classes/${slotId}` : null,
     fetcher,
     {
       shouldRetryOnError: false,
-      onErrorRetry: (error, key, config, revalidate, { retryCount }) => {
-        // Never retry on 404
-        if (error.status === 404) return;
-        // Only retry up to 3 times for other errors
+      onErrorRetry: (err, _key, _config, revalidate, { retryCount }) => {
+        if (err.status === 404) return;
         if (retryCount >= 3) return;
-        // Retry after 5 seconds
         setTimeout(() => revalidate({ retryCount }), 5000);
-      }
+      },
     }
   );
 
@@ -83,7 +84,7 @@ export default function BookingPage() {
           minute: "2-digit",
         })}`
       : start.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-    return `${date} • ${time}`;
+    return `${date} - ${time}`;
   }, [slot?.startTime, slot?.endTime]);
 
   const durationLabel = useMemo(() => {
@@ -95,33 +96,67 @@ export default function BookingPage() {
     return `${minutes} min`;
   }, [slot?.startTime, slot?.endTime]);
 
+  useEffect(() => {
+    if (!user) return;
+    setFirstName(user.first_name || "");
+    setLastName(user.last_name || "");
+    setEmail(user.email || "");
+    setPhone(user.phone_number || "");
+  }, [user]);
+
   const handleConfirm = async () => {
     if (!slotId) return;
-    setError(null);
+    setSubmitError(null);
     setSubmitting(true);
     try {
-      await createBooking(slotId);
+      const booking = await createBooking(slotId);
       setSuccess(true);
+      if (typeof window !== "undefined") {
+        const payload = {
+          firstName,
+          lastName,
+          email,
+          phone,
+        };
+        window.sessionStorage.setItem("bookingDetails", JSON.stringify(payload));
+      }
       setTimeout(() => {
-        router.push("/dashboard/student");
+        router.push(`/payment?bookingId=${booking.uuid}`);
       }, 800);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Unable to book this class.");
+      setSubmitError(err instanceof Error ? err.message : "Unable to book this class.");
     } finally {
       setSubmitting(false);
     }
   };
 
   if (isLoading) {
-    return <div className="py-16 text-center text-slate-500">Loading booking…</div>;
+    return <div className="py-16 text-center text-slate-500">Loading booking...</div>;
+  }
+
+  if (loadError) {
+    return (
+      <div className="py-16 text-center text-slate-500">
+        <div className="mb-3 text-base font-semibold text-slate-700">
+          Unable to load this class.
+        </div>
+        <p className="mb-6 text-sm text-slate-500">
+          {loadError.message || "Please try again."}
+        </p>
+        <Link
+          href={studioId ? `/studios/${studioId}` : "/"}
+          className="inline-flex items-center justify-center rounded-full bg-purple-600 px-5 py-2 text-sm font-semibold text-white hover:bg-purple-700"
+        >
+          {studioId ? "Back to studio" : "Back to home"}
+        </Link>
+      </div>
+    );
   }
 
   if (!slot) {
     return (
       <div className="py-16 text-center text-slate-500">
-        <div className="mb-3 text-base font-semibold text-slate-700">
-          Class not found.
-        </div>
+        <div className="mb-3 text-base font-semibold text-slate-700">Class not found.</div>
         <p className="mb-6 text-sm text-slate-500">
           It may have been removed or the link is out of date.
         </p>
@@ -138,13 +173,16 @@ export default function BookingPage() {
   return (
     <div className="min-h-screen bg-slate-50">
       <section className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <Link href={`/studios/${slot.studio?.uuid || ""}`} className="inline-flex items-center gap-2 text-sm text-purple-600 hover:text-purple-700">
+        <Link
+          href={`/studios/${slot.studio?.uuid || ""}`}
+          className="inline-flex items-center gap-2 text-sm text-purple-600 hover:text-purple-700"
+        >
           <ArrowLeft size={16} /> Back to studio
         </Link>
 
         <div className="mt-6 grid lg:grid-cols-[1.2fr_0.8fr] gap-6">
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-            {slot.imageUrl && (
+            {slot.imageUrl && /^https?:\/\//.test(slot.imageUrl) && (
               <div className="relative h-60 w-full">
                 <Image
                   src={slot.imageUrl}
@@ -158,9 +196,7 @@ export default function BookingPage() {
             <div className="p-6 space-y-3">
               <div>
                 <h1 className="text-2xl font-semibold text-slate-900">{slot.title}</h1>
-                {slot.studio && (
-                  <p className="text-sm text-slate-500">{slot.studio.name}</p>
-                )}
+                {slot.studio && <p className="text-sm text-slate-500">{slot.studio.name}</p>}
               </div>
               <p className="text-sm text-slate-600">{slot.description}</p>
               <div className="flex flex-wrap gap-4 text-sm text-slate-600">
@@ -192,19 +228,53 @@ export default function BookingPage() {
             </div>
             <div className="flex items-center justify-between text-sm">
               <span className="text-slate-500">Capacity</span>
-              <span className="font-semibold text-slate-900">
-                {slot.capacity || 0} seats
-              </span>
+              <span className="font-semibold text-slate-900">{slot.capacity || 0} seats</span>
             </div>
 
-            {error && (
+            {user && (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+                <h3 className="text-sm font-semibold text-slate-900">Your details</h3>
+                <p className="text-xs text-slate-500">
+                  Details are used for this booking only and will not update your profile.
+                </p>
+                <div className="grid gap-3">
+                  <input
+                    value={firstName}
+                    onChange={(event) => setFirstName(event.target.value)}
+                    placeholder="First name"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-slate-400"
+                  />
+                  <input
+                    value={lastName}
+                    onChange={(event) => setLastName(event.target.value)}
+                    placeholder="Last name"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-slate-400"
+                  />
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    placeholder="Email"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-slate-400"
+                  />
+                  <input
+                    value={phone}
+                    onChange={(event) => setPhone(event.target.value)}
+                    placeholder="Phone (optional)"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-slate-400"
+                  />
+                </div>
+              </div>
+            )}
+
+            {submitError && (
               <div className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700">
-                {error}
+                {submitError}
               </div>
             )}
             {success && (
               <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-                Booking confirmed. Redirecting…
+                Booking confirmed. Redirecting...
               </div>
             )}
 
@@ -224,7 +294,7 @@ export default function BookingPage() {
               >
                 {submitting ? (
                   <span className="inline-flex items-center gap-2">
-                    <Loader2 size={16} className="animate-spin" /> Booking…
+                    <Loader2 size={16} className="animate-spin" /> Booking...
                   </span>
                 ) : (
                   "Confirm booking"

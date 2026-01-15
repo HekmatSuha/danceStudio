@@ -28,6 +28,7 @@ export default function OwnerStudiosPage() {
         address: formData.get("address") as string,
         latitude: parseOptionalNumber(formData.get("latitude")),
         longitude: parseOptionalNumber(formData.get("longitude")),
+        whatsapp: (formData.get("whatsapp") as string) || null,
       });
       setShowForm(false);
       reload();
@@ -99,6 +100,16 @@ export default function OwnerStudiosPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Longitude</label>
                   <input name="longitude" type="number" step="0.000001" min="-180" max="180" className="w-full border border-gray-300 p-2 rounded-lg" placeholder="e.g. -74.005974" />
                </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">WhatsApp</label>
+              <input
+                name="whatsapp"
+                type="tel"
+                required
+                className="w-full border border-gray-300 p-2 rounded-lg"
+                placeholder="e.g. +77011234567"
+              />
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button>

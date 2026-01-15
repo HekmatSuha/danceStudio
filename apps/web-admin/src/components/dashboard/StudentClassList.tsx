@@ -7,7 +7,6 @@ import {
   MapPin,
   Clock,
   Users,
-  ArrowRight,
   Loader2,
   Clock3,
   Search,
@@ -17,18 +16,16 @@ import { fetchDanceStyles, type DanceStyle } from "../../lib/danceStyles";
 import { useAuthUser } from "../../lib/useAuthUser";
 import {
   cancelBooking,
-  createBooking,
   fetchUserBookings,
   type Booking,
 } from "../../lib/bookings";
-import Link from "next/link";
 
 type ActionState = {
   [classId: string]: boolean;
 };
 
 export function StudentClassList() {
-  const { user, loading: authLoading } = useAuthUser();
+  const { user } = useAuthUser();
   const [classes, setClasses] = useState<ClassEvent[]>([]);
   const [danceStyles, setDanceStyles] = useState<DanceStyle[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -79,27 +76,33 @@ export function StudentClassList() {
     loadBookings();
   }, [user]);
 
-  const filteredClasses = useMemo(() => {
-    return classes.filter((c) => {
-      // Filter by Style (Using title or description for now, ideally c.danceStyleId)
-      if (selectedStyle && !c.title.toLowerCase().includes(selectedStyle.toLowerCase()) && !c.description?.toLowerCase().includes(selectedStyle.toLowerCase())) {
-         return false;
-      }
-      // Filter by Date
-      if (selectedDate && !isSameDay(new Date(c.startAt), new Date(selectedDate))) {
-        return false;
-      }
-      return true;
-    });
-  }, [classes, selectedStyle, selectedDate]);
-
   const bookingMap = useMemo(() => {
     const map: Record<string, Booking> = {};
-    bookings.forEach((b) => {
+    bookings
+      .filter((b) => b.status?.toLowerCase() !== "cancelled")
+      .forEach((b) => {
       map[b.appointment_slot] = b;
     });
     return map;
   }, [bookings]);
+
+  const filteredClasses = useMemo(() => {
+    return classes
+      .filter((c) => Boolean(bookingMap[c.id]))
+      .filter((c) => {
+        if (
+          selectedStyle &&
+          !c.title.toLowerCase().includes(selectedStyle.toLowerCase()) &&
+          !c.description?.toLowerCase().includes(selectedStyle.toLowerCase())
+        ) {
+          return false;
+        }
+        if (selectedDate && !isSameDay(new Date(c.startAt), new Date(selectedDate))) {
+          return false;
+        }
+        return true;
+      });
+  }, [classes, bookingMap, selectedStyle, selectedDate]);
 
   const setBusy = (classId: string, value: boolean) =>
     setActionState((prev) => ({ ...prev, [classId]: value }));
@@ -119,32 +122,6 @@ export function StudentClassList() {
           : c,
       ),
     );
-  };
-
-  const handleBook = async (classId: string) => {
-    setError(null);
-    setBusy(classId, true);
-    try {
-      const result = await createBooking(classId);
-      setBookings((prev) => [
-        ...prev.filter((b) => b.appointment_slot !== classId),
-        {
-          ...result,
-        },
-      ]);
-      if (result.status?.toLowerCase() === "confirmed") {
-        updateClassCounts(classId, { reserved: 1 });
-      } else if (result.status?.toLowerCase() === "waitlisted") {
-        updateClassCounts(classId, { waitlist: 1 });
-      }
-    } catch (err: unknown) {
-      console.error(err);
-      setError(
-        err instanceof Error ? err.message : "Unable to book this class right now.",
-      );
-    } finally {
-      setBusy(classId, false);
-    }
   };
 
   const handleCancel = async (booking: Booking) => {
@@ -176,42 +153,19 @@ export function StudentClassList() {
     const busy = actionState[c.id];
     const seatsTaken = c.reservedCount ?? 0;
     const capacity = c.capacity || 1;
-    const seatsLeft = Math.max(capacity - seatsTaken, 0);
-
-    if (!user && !authLoading) {
-      return (
-        <Link
-          href="/login"
-          className="text-purple-600 font-semibold text-sm hover:text-purple-800 flex items-center gap-1 bg-purple-50 px-3 py-2 rounded-lg hover:bg-purple-100 transition-colors"
-        >
-          Login to book <ArrowRight size={16} />
-        </Link>
-      );
+    if (!booking) {
+      return null;
     }
 
-    if (booking) {
-      const isWaitlisted = booking.status?.toLowerCase() === "waitlisted";
-      return (
-        <button
-          onClick={() => handleCancel(booking)}
-          disabled={busy}
-          className="text-red-500 font-semibold text-sm hover:text-red-700 flex items-center gap-2 bg-red-50 px-3 py-2 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-60"
-        >
-          {busy ? <Loader2 size={16} className="animate-spin" /> : <Clock3 size={16} />}
-          {isWaitlisted ? "Leave waitlist" : "Cancel booking"}
-        </button>
-      );
-    }
-
-    const joiningWaitlist = seatsLeft <= 0;
+    const isWaitlisted = booking.status?.toLowerCase() === "waitlisted";
     return (
       <button
-        onClick={() => handleBook(c.id)}
-        disabled={busy || authLoading}
-        className="text-white font-semibold text-sm flex items-center gap-2 bg-purple-600 px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-70"
+        onClick={() => handleCancel(booking)}
+        disabled={busy}
+        className="text-red-500 font-semibold text-sm hover:text-red-700 flex items-center gap-2 bg-red-50 px-3 py-2 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-60"
       >
-        {busy ? <Loader2 size={16} className="animate-spin" /> : <ArrowRight size={16} />}
-        {joiningWaitlist ? "Join waitlist" : "Book seat"}
+        {busy ? <Loader2 size={16} className="animate-spin" /> : <Clock3 size={16} />}
+        {isWaitlisted ? "Leave waitlist" : "Cancel booking"}
       </button>
     );
   };
@@ -256,15 +210,18 @@ export function StudentClassList() {
       )}
 
       {filteredClasses.length === 0 ? (
-         <div className="text-center py-12 bg-gray-50 rounded-xl border border-dashed border-gray-300">
-           <p className="text-gray-500">No classes found matching your filters.</p>
-           <button 
-             onClick={() => { setSelectedStyle(""); setSelectedDate(""); }}
-             className="mt-2 text-purple-600 font-medium hover:underline"
-           >
-             Clear Filters
-           </button>
-         </div>
+        <div className="text-center py-12 bg-gray-50 rounded-xl border border-dashed border-gray-300">
+          <p className="text-gray-500">No bookings found for the selected filters.</p>
+          <button
+            onClick={() => {
+              setSelectedStyle("");
+              setSelectedDate("");
+            }}
+            className="mt-2 text-purple-600 font-medium hover:underline"
+          >
+            Clear Filters
+          </button>
+        </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {filteredClasses.map((c) => {
@@ -276,12 +233,15 @@ export function StudentClassList() {
               100,
               Math.round((seatsTaken / capacity) * 100),
             );
+            const bookingStatus = booking?.status?.toLowerCase();
             const statusColor =
-              booking?.status?.toLowerCase() === "waitlisted"
+              bookingStatus === "pending"
                 ? "bg-amber-100 text-amber-700"
-                : booking?.status?.toLowerCase() === "confirmed"
+                : bookingStatus === "waitlisted"
+                ? "bg-amber-100 text-amber-700"
+                : bookingStatus === "confirmed"
                 ? "bg-emerald-100 text-emerald-700"
-                : "";
+                : "bg-slate-100 text-slate-600";
 
             return (
               <div
@@ -311,10 +271,14 @@ export function StudentClassList() {
                     )}
                   </div>
                   {booking && (
-                    <span
-                      className={`text-xs font-semibold px-3 py-1 rounded-full ${statusColor}`}
-                    >
-                      {booking.status?.toLowerCase() === "waitlisted" ? "Waitlisted" : "Booked"}
+                    <span className={`text-xs font-semibold px-3 py-1 rounded-full ${statusColor}`}>
+                      {bookingStatus === "pending"
+                        ? "Payment pending"
+                        : bookingStatus === "waitlisted"
+                        ? "Waitlisted"
+                        : bookingStatus === "confirmed"
+                        ? "Confirmed"
+                        : "Booked"}
                     </span>
                   )}
                 </div>

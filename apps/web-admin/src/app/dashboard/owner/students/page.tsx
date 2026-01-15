@@ -26,8 +26,7 @@ export default function OwnerStudentsPage() {
     refreshStudents();
   };
 
-  const refreshStudents = useCallback(async () => {
-    const studioIds = studios.map((studio) => studio.uuid);
+  const refreshStudents = useCallback(async (studioIds: string[]) => {
     setLoading(true);
     if (studioIds.length === 0) {
       setStudents([]);
@@ -76,13 +75,17 @@ export default function OwnerStudentsPage() {
     });
     setStudents(Array.from(unique.values()));
     setLoading(false);
-  }, [studios]);
+  }, []);
 
-  const studioIdsKey = studios.map((studio) => studio.uuid).join(",");
+  const studioIdsKey = useMemo(
+    () => studios.map((studio) => studio.uuid).join(","),
+    [studios],
+  );
 
   useEffect(() => {
     if (!studiosLoading) {
-      refreshStudents();
+      const studioIds = studioIdsKey ? studioIdsKey.split(",") : [];
+      refreshStudents(studioIds);
     }
   }, [studiosLoading, studioIdsKey, refreshStudents]);
 

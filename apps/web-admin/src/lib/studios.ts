@@ -10,6 +10,7 @@ export type Studio = {
   address?: string;
   latitude?: number | null;
   longitude?: number | null;
+  whatsapp?: string | null;
 };
 
 export type Room = {
@@ -49,7 +50,7 @@ export async function listStudios() {
   return withCache("studios:all", 30000, async () => {
     const { data, error } = await supabase
       .from('studios')
-      .select('uuid, name, city, address, latitude, longitude');
+      .select('uuid, name, city, address, latitude, longitude, whatsapp');
 
     if (error) throw error;
     return data as Studio[];
@@ -65,12 +66,12 @@ export async function fetchMyStudios() {
       supabase
         .from('tenant_staff')
         .select(`
-          studio:studios(uuid, name, city, address, latitude, longitude)
+          studio:studios(uuid, name, city, address, latitude, longitude, whatsapp)
         `)
         .eq('user_id', user.id),
       supabase
         .from('studios')
-        .select('uuid, name, city, address, latitude, longitude')
+        .select('uuid, name, city, address, latitude, longitude, whatsapp')
         .eq('owner_id', user.id)
     ]);
 
@@ -93,7 +94,14 @@ export async function fetchMyStudios() {
   });
 }
 
-export async function createStudio(data: { name: string; city: string; address: string; latitude?: number | null; longitude?: number | null }) {
+export async function createStudio(data: {
+  name: string;
+  city: string;
+  address: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  whatsapp?: string | null;
+}) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Not authenticated");
 
@@ -105,6 +113,7 @@ export async function createStudio(data: { name: string; city: string; address: 
       address: data.address,
       latitude: data.latitude ?? null,
       longitude: data.longitude ?? null,
+      whatsapp: data.whatsapp ?? null,
       owner_id: user.id
     })
     .select()
@@ -116,22 +125,25 @@ export async function createStudio(data: { name: string; city: string; address: 
 }
 
 export async function updateStudio(uuid: string, data: Partial<Studio>) {
-  const { data: studio, error } = await supabase
+  const { data: studios, error } = await supabase
     .from('studios')
     .update({
       name: data.name,
       city: data.city,
       address: data.address,
       latitude: data.latitude ?? null,
-      longitude: data.longitude ?? null
+      longitude: data.longitude ?? null,
+      whatsapp: data.whatsapp ?? null
     })
     .eq('uuid', uuid)
-    .select()
-    .single();
+    .select();
 
   if (error) throw error;
   clearCacheByPrefix("studios:");
-  return studio as Studio;
+  if (!studios || studios.length === 0) {
+    throw new Error("No studio was updated. Check your permissions.");
+  }
+  return studios[0] as Studio;
 }
 
 export async function deleteStudio(uuid: string) {

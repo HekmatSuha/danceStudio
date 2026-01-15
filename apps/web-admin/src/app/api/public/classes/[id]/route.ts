@@ -75,7 +75,8 @@ export async function GET(
     return NextResponse.json({ error: "Supabase env missing" }, { status: 500 });
   }
 
-  const { id: slotId } = await params;
+  const { id: rawId } = await params;
+  const slotId = decodeURIComponent(rawId || "");
   if (!slotId) {
     return NextResponse.json({ error: "Class id is required" }, { status: 400 });
   }
@@ -89,41 +90,58 @@ export async function GET(
       })
     : null;
 
+  const baseSelect = `
+    uuid,
+    title,
+    description,
+    start_time,
+    end_time,
+    price,
+    currency,
+    max_participants,
+    image_url,
+    studio:studios(uuid, name, city, address)
+  `;
+
   const { data, error } = await supabase
     .from("slots")
-    .select(
-      `
-      uuid,
-      title,
-      description,
-      start_time,
-      end_time,
-      price,
-      currency,
-      max_participants,
-      image_url,
-      studio:studios(uuid, name, city, address, latitude, longitude, phone, website)
-    `
-    )
+    .select(baseSelect)
     .eq("uuid", slotId)
     .single();
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 404 });
+  if (error && error.code !== "PGRST116") {
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const imageUrl = await resolveImageUrl(admin, data.image_url);
+  let slotData = data;
+  if (!slotData) {
+    const fallback = await supabase
+      .from("slots")
+      .select(baseSelect)
+      .eq("id", slotId)
+      .single();
+    if (fallback.error && fallback.error.code !== "PGRST116") {
+      return NextResponse.json({ error: fallback.error.message }, { status: 500 });
+    }
+    slotData = fallback.data;
+  }
+
+  if (!slotData) {
+    return NextResponse.json({ error: "Class not found" }, { status: 404 });
+  }
+
+  const imageUrl = await resolveImageUrl(admin, slotData.image_url);
   const payload = {
-    id: data.uuid,
-    title: data.title || "Dance class",
-    description: data.description || "",
-    startTime: data.start_time,
-    endTime: data.end_time,
-    price: data.price ?? 0,
-    currency: data.currency || "USD",
-    capacity: data.max_participants ?? 15,
+    id: slotData.uuid,
+    title: slotData.title || "Dance class",
+    description: slotData.description || "",
+    startTime: slotData.start_time,
+    endTime: slotData.end_time,
+    price: slotData.price ?? 0,
+    currency: slotData.currency || "USD",
+    capacity: slotData.max_participants ?? 15,
     imageUrl,
-    studio: data.studio || null,
+    studio: slotData.studio || null,
   };
 
   return NextResponse.json(payload);

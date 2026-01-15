@@ -153,7 +153,8 @@ export async function GET(req: NextRequest) {
       max_participants,
       image_url,
       dance_style:dance_styles(name),
-      studio:studios(uuid, name, city, address)
+      studio:studios(uuid, name, city, address),
+      trainer:profiles(first_name, last_name)
     `)
     .order("start_time", { ascending: true })
     .limit(limit);
@@ -196,6 +197,7 @@ export async function GET(req: NextRequest) {
       image_url?: string | null;
       dance_style?: { name?: string | null } | null;
       studio?: { uuid?: string | null; name?: string | null; city?: string | null; address?: string | null } | null;
+      trainer?: { first_name?: string | null; last_name?: string | null } | null;
     }> | null | undefined) ?? []).map(async (slot, index: number) => {
       const start = slot.start_time ? new Date(slot.start_time) : null;
       const end = slot.end_time ? new Date(slot.end_time) : null;
@@ -217,6 +219,7 @@ export async function GET(req: NextRequest) {
         studioName: slot.studio?.name || null,
         studioCity: slot.studio?.city || null,
         studioAddress: slot.studio?.address || null,
+        trainerName: [slot.trainer?.first_name, slot.trainer?.last_name].filter(Boolean).join(" ") || null,
         startTime: slot.start_time || null,
         endTime: slot.end_time || null,
       };

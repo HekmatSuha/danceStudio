@@ -2,20 +2,16 @@
 
 import React, { useMemo, useState } from "react";
 import useSWR from "swr";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import {
-  Calendar,
-  Clock,
   MapPin,
   Phone,
   Instagram,
   Star,
   ArrowRight,
 } from "lucide-react";
-import { useAuthUser } from "@/lib/useAuthUser";
-import { AuthModal } from "@/components/AuthModal";
 
 type Studio = {
   uuid: string;
@@ -37,6 +33,7 @@ type ClassCard = {
   capacity: number;
   price: number;
   currency: string;
+  level?: string | null;
   studioId?: string | null;
   studioName?: string | null;
   startTime?: string;
@@ -63,18 +60,14 @@ const fetcher = (url: string) =>
 
 export default function StudioDetailPage() {
   const params = useParams();
-  const router = useRouter();
   const studioId = typeof params?.id === "string" ? params.id : "";
-  const { user, loading: authLoading } = useAuthUser();
   const [activeImage, setActiveImage] = useState(0);
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [pendingBookingPath, setPendingBookingPath] = useState<string | null>(null);
 
   const { data: studio, isLoading: studioLoading } = useSWR<Studio>(
     studioId ? `/api/public/studios/${studioId}` : null,
     fetcher
   );
-  const { data: classes, isLoading: classesLoading } = useSWR<ClassCard[]>(
+  const { data: classes } = useSWR<ClassCard[]>(
     studioId ? `/api/public/classes?studioId=${studioId}&limit=50` : null,
     fetcher
   );
@@ -82,7 +75,6 @@ export default function StudioDetailPage() {
     studioId ? `/api/public/studios/${studioId}/reviews` : null,
     fetcher
   );
-
   const images = useMemo(() => {
     const items = (classes || [])
       .map((slot) => slot.imageUrl)
@@ -101,18 +93,6 @@ export default function StudioDetailPage() {
     const sum = list.reduce((acc, item) => acc + (item.rating || 0), 0);
     return { avg: sum / list.length, total: list.length };
   }, [reviews]);
-
-  const formatPrice = (currency: string, amount: number) => {
-    try {
-      return new Intl.NumberFormat(undefined, {
-        style: "currency",
-        currency,
-        maximumFractionDigits: 0,
-      }).format(amount);
-    } catch {
-      return `${currency} ${amount}`;
-    }
-  };
 
   const instagramUrl = useMemo(() => {
     if (!studio?.instagram) return null;
@@ -136,19 +116,6 @@ export default function StudioDetailPage() {
     const lon = Number(studio.longitude);
     return `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=16/${lat}/${lon}`;
   }, [studio]);
-
-  const handleBookNow = (slotId: string) => {
-    if (authLoading) return;
-    const bookingPath = studioId
-      ? `/bookings/${slotId}?studio=${studioId}`
-      : `/bookings/${slotId}`;
-    if (user) {
-      router.push(bookingPath);
-      return;
-    }
-    setPendingBookingPath(bookingPath);
-    setIsAuthModalOpen(true);
-  };
 
   if (studioLoading) {
     return <div className="py-16 text-center text-slate-500">Loading studio...</div>;
@@ -192,12 +159,6 @@ export default function StudioDetailPage() {
             </div>
 
             <div className="grid gap-2">
-              <a
-                href="#classes"
-                className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 sm:w-auto"
-              >
-                Book a class <ArrowRight size={14} />
-              </a>
               {studio.phone && (
                 <a
                   href={`tel:${studio.phone}`}
@@ -259,6 +220,13 @@ export default function StudioDetailPage() {
                 Map preview coming soon.
               </div>
             )}
+
+            <Link
+              href={`/classes?studioId=${studioId}`}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
+            >
+              Book a class <ArrowRight size={14} />
+            </Link>
           </aside>
 
           <div className="space-y-6">
@@ -293,85 +261,6 @@ export default function StudioDetailPage() {
                   </button>
                 ))}
               </div>
-            </div>
-
-            <div id="classes" className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h2 className="text-lg font-semibold text-slate-900">Upcoming classes</h2>
-                  <p className="text-xs text-slate-500">Pick a class and reserve your spot.</p>
-                </div>
-                {classesLoading && (
-                  <div className="text-xs text-slate-400">Loading...</div>
-                )}
-              </div>
-
-              {(classes || []).length === 0 ? (
-                <div className="text-sm text-slate-500">No classes available yet.</div>
-              ) : (
-                <div className="space-y-4">
-                  {(classes || []).map((slot) => {
-                    const start = slot.startTime ? new Date(slot.startTime) : null;
-                    const end = slot.endTime ? new Date(slot.endTime) : null;
-                    const dateLabel = start
-                      ? start.toLocaleDateString(undefined, {
-                          weekday: "short",
-                          month: "short",
-                          day: "numeric",
-                        })
-                      : "Upcoming";
-                    const timeLabel =
-                      start && end
-                        ? `${start.toLocaleTimeString(undefined, {
-                            hour: "numeric",
-                            minute: "2-digit",
-                          })} - ${end.toLocaleTimeString(undefined, {
-                            hour: "numeric",
-                            minute: "2-digit",
-                          })}`
-                        : slot.duration;
-                    return (
-                      <div
-                        key={slot.id}
-                        className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 rounded-xl border border-slate-100 bg-white p-4 transition hover:border-slate-200 hover:shadow-sm"
-                      >
-                        <div className="space-y-1">
-                          <h3 className="text-base font-semibold text-slate-900">{slot.title}</h3>
-                          <p className="text-sm text-slate-500 line-clamp-2">{slot.description}</p>
-                          <div className="flex flex-wrap gap-3 text-xs text-slate-500">
-                            <span className="flex items-center gap-1">
-                              <Calendar size={14} />
-                              {dateLabel}
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <Clock size={14} />
-                              {timeLabel}
-                            </span>
-                            {slot.capacity ? (
-                              <span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] text-slate-600">
-                                {slot.capacity} spots
-                              </span>
-                            ) : null}
-                          </div>
-                        </div>
-                        <div className="flex w-full items-center justify-between gap-3 sm:w-auto sm:justify-start">
-                          <div className="text-sm font-semibold text-slate-900">
-                            {formatPrice(slot.currency, slot.price)}
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => handleBookNow(slot.id)}
-                            className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 sm:w-auto disabled:opacity-70"
-                            disabled={authLoading}
-                          >
-                            Book now <ArrowRight size={14} />
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
             </div>
 
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
@@ -416,19 +305,6 @@ export default function StudioDetailPage() {
           </div>
         </div>
       </section>
-      {!user && (
-        <AuthModal
-          isOpen={isAuthModalOpen}
-          onClose={() => setIsAuthModalOpen(false)}
-          initialMode="signin"
-          onAuthenticated={() => {
-            if (!pendingBookingPath) return;
-            const nextPath = pendingBookingPath;
-            setPendingBookingPath(null);
-            router.push(nextPath);
-          }}
-        />
-      )}
     </div>
   );
 }

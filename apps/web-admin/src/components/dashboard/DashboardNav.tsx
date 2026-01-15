@@ -12,13 +12,13 @@ import {
   Menu,
   X,
   Settings,
-  BookOpen,
   History,
   UserCircle,
   ChevronRight,
   DoorOpen,
   DollarSign,
   Home,
+  Inbox,
 } from "lucide-react";
 import { useAuthUser } from "../../lib/useAuthUser";
 import { signOut, type UserRole } from "../../lib/auth";
@@ -43,7 +43,6 @@ export function DashboardNav({ children }: { children: React.ReactNode }) {
         return [
           { label: "Overview", href: "/dashboard/student", icon: <LayoutDashboard size={20} /> },
           { label: "My Bookings", href: "/dashboard/student/bookings", icon: <CalendarDays size={20} /> },
-          { label: "Explore Classes", href: "/dashboard/student/explore", icon: <BookOpen size={20} /> },
           { label: "History", href: "/dashboard/student/history", icon: <History size={20} /> },
         ];
       case "instructor":
@@ -59,6 +58,7 @@ export function DashboardNav({ children }: { children: React.ReactNode }) {
           { label: "Instructors", href: "/dashboard/owner/instructors", icon: <UserCircle size={20} /> },
           { label: "Rooms", href: "/dashboard/owner/rooms", icon: <DoorOpen size={20} /> },
           { label: "Students", href: "/dashboard/owner/students", icon: <Users size={20} /> },
+          { label: "Requests", href: "/dashboard/owner/requests", icon: <Inbox size={20} /> },
           { label: "Payments", href: "/dashboard/owner/payments", icon: <DollarSign size={20} /> },
         ];
       case "super_admin":
