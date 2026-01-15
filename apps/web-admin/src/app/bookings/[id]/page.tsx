@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, Suspense } from "react";
 import useSWR from "swr";
 import Link from "next/link";
 import Image from "next/image";
@@ -38,7 +38,7 @@ const fetcher = (url: string) =>
     return res.json();
   });
 
-export default function BookingPage() {
+function BookingContent() {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -308,5 +308,13 @@ export default function BookingPage() {
         </div>
       </section>
     </div>
+  );
+}
+
+export default function BookingPage() {
+  return (
+    <Suspense fallback={<div className="py-16 text-center text-slate-500">Loading booking page...</div>}>
+      <BookingContent />
+    </Suspense>
   );
 }

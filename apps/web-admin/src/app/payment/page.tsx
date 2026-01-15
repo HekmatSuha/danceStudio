@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Calendar, Loader2, MessageCircle, ArrowLeft } from "lucide-react";
@@ -30,7 +30,7 @@ type BookingRecord = {
   } | null;
 };
 
-export default function PaymentPage() {
+function PaymentContent() {
   const searchParams = useSearchParams();
   const bookingId = (searchParams.get("bookingId") || "").trim();
   const { user, loading: authLoading } = useAuthUser();
@@ -319,5 +319,13 @@ export default function PaymentPage() {
         </div>
       </section>
     </div>
+  );
+}
+
+export default function PaymentPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-slate-50 py-16 text-center text-slate-500">Loading payment page...</div>}>
+      <PaymentContent />
+    </Suspense>
   );
 }

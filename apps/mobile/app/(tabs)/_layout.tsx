@@ -31,13 +31,6 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="photo-reviews"
-        options={{
-          title: 'Photo reviews',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="photo.fill" color={color} />,
-        }}
-      />
-      <Tabs.Screen
         name="profile/index"
         options={{
           title: 'Profile',
