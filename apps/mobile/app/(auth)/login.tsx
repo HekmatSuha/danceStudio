@@ -41,13 +41,7 @@ export default function LoginScreen() {
             : "Student";
       setInfo(`Signed in as ${roleLabel}.`);
       Alert.alert("Signed in", `Welcome back, ${roleLabel}.`);
-      const nextRoute =
-        role === "owner"
-          ? "/(tabs)/owner-dashboard"
-          : role === "instructor"
-            ? "/(tabs)/schedule"
-            : "/(tabs)";
-      router.replace(nextRoute);
+      router.replace("/(tabs)");
     } catch (err: any) {
       setError(err?.message || "Something went wrong. Please try again.");
     } finally {

@@ -37,10 +37,6 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="person.crop.circle" color={color} />,
         }}
       />
-      <Tabs.Screen name="explore" options={{ href: null }} />
-      <Tabs.Screen name="owner-dashboard" options={{ href: null }} />
-      <Tabs.Screen name="schedule/index" options={{ href: null }} />
-      <Tabs.Screen name="dashboard" options={{ href: null }} />
     </Tabs>
   );
 }

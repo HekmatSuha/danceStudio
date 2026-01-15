@@ -76,13 +76,7 @@ export default function RegisterScreen() {
       // login after registration to capture tokens if backend didn't return them
       const { role: signedInRole } = await login(trimmedEmail, password);
       setInfo("Account created successfully. You're signed in.");
-      const nextRoute =
-        signedInRole === "owner"
-          ? "/(tabs)/owner-dashboard"
-          : signedInRole === "instructor"
-            ? "/(tabs)/schedule"
-            : "/(tabs)";
-      router.replace(nextRoute);
+      router.replace("/(tabs)");
     } catch (err: any) {
       setError(err?.message || "Something went wrong. Please try again.");
     } finally {
