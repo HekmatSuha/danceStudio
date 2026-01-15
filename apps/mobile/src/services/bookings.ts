@@ -20,7 +20,7 @@ export async function createBooking(slotId: string, notes?: string) {
       user_id: user.id,
       appointment_slot: slotId,
       client_notes: notes ?? "",
-      status: 'confirmed', // defaulting to confirmed for now
+      status: 'pending',
       booking_date: new Date().toISOString(), // This should ideally come from the slot, but for now using current time or we need to fetch slot details
     })
     .select()

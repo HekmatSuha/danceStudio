@@ -69,7 +69,9 @@ export default function BookingsScreen() {
           bookings.map((b) => (
             <View key={b.uuid} style={styles.card}>
               <Text style={styles.cardTitle}>{b.appointment_slot}</Text>
-              <Text style={styles.subtle}>Status: {b.status}</Text>
+              <Text style={styles.subtle}>
+                Status: {b.status === "pending" ? "Payment pending" : b.status}
+              </Text>
               <Text style={styles.subtle}>
                 Booked at:{" "}
                 {b.booking_date
