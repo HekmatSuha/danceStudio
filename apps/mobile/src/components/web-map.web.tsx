@@ -16,6 +16,7 @@ type WebMapProps = {
   center: [number, number];
   userLocation?: [number, number] | null;
   onMapReady?: (map: any) => void;
+  onStudioSelect?: (studioId: string) => void;
 };
 
 export default function WebMap({
@@ -24,6 +25,7 @@ export default function WebMap({
   center,
   userLocation,
   onMapReady,
+  onStudioSelect,
 }: WebMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any | null>(null);
@@ -121,6 +123,11 @@ export default function WebMap({
       marker.bindPopup(
         `<strong>${studio.name}</strong><br/>${studio.city || "Almaty"} · ${count} classes`
       );
+      marker.on("click", () => {
+        if (onStudioSelect) {
+          onStudioSelect(studio.uuid);
+        }
+      });
 
       marker.addTo(layer);
     });

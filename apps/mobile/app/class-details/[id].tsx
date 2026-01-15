@@ -56,10 +56,8 @@ export default function ClassDetailsScreen() {
     
     setBooking(true);
     try {
-      await createBooking(slot.uuid);
-      Alert.alert("Success", "You have successfully booked this class!", [
-        { text: "OK", onPress: () => router.back() }
-      ]);
+      const booking = await createBooking(slot.uuid);
+      router.replace(`/payment?bookingId=${booking.uuid}`);
     } catch (err: any) {
       Alert.alert("Booking Failed", err?.message || "Could not complete booking.");
     } finally {

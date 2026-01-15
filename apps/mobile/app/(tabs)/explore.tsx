@@ -302,7 +302,34 @@ export default function ExploreScreen() {
     });
   }, [slots, query]);
 
+  const filteredStudios = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    if (!needle) return studios;
+    const matchedStudioIds = new Set<string>();
+    filteredSlots.forEach((slot) => {
+      if (slot.studio) matchedStudioIds.add(slot.studio);
+    });
+    return studios.filter((studio) => {
+      const name = studio.name?.toLowerCase() || "";
+      const city = studio.city?.toLowerCase() || "";
+      const address = studio.address?.toLowerCase() || "";
+      return (
+        name.includes(needle) ||
+        city.includes(needle) ||
+        address.includes(needle) ||
+        matchedStudioIds.has(studio.uuid)
+      );
+    });
+  }, [studios, filteredSlots, query]);
+
   const recommended = useMemo(() => filteredSlots.slice(0, 8), [filteredSlots]);
+
+  const handleStudioPress = (studioId: string) => {
+    if (!studioId) return;
+    const q = query.trim();
+    const suffix = q ? `?q=${encodeURIComponent(q)}` : "";
+    router.push(`/studio/${studioId}${suffix}`);
+  };
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -337,6 +364,7 @@ export default function ExploreScreen() {
               onMapReady={(mapInstance: any) => {
                 mapRef.current = mapInstance;
               }}
+              onStudioSelect={handleStudioPress}
             />
           ) : (
             mapComponents?.MapView && mapComponents?.Marker ? (
@@ -352,6 +380,7 @@ export default function ExploreScreen() {
                   <mapComponents.Marker
                     key={studio.uuid}
                     coordinate={{ latitude: studio.latitude, longitude: studio.longitude }}
+                    onPress={() => handleStudioPress(studio.uuid)}
                   >
                     <View style={styles.pin}>
                       <Text style={styles.pinText}>{studioCounts[studio.uuid] || 1}</Text>
@@ -423,6 +452,42 @@ export default function ExploreScreen() {
             </View>
           </>
         ) : null}
+
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Studios</Text>
+        </View>
+
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.cardRow}>
+          {loading ? (
+            <View style={styles.loadingRow}>
+              <ActivityIndicator color="#111827" />
+            </View>
+          ) : filteredStudios.length === 0 ? (
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyCardText}>No studios found.</Text>
+            </View>
+          ) : (
+            filteredStudios.map((studio, index) => {
+              const imageUrl = FALLBACK_IMAGES[index % FALLBACK_IMAGES.length];
+              const city = studio.city || "Almaty";
+              const count = studioCounts[studio.uuid] || 0;
+              return (
+                <Pressable
+                  key={studio.uuid}
+                  style={styles.studioCard}
+                  onPress={() => handleStudioPress(studio.uuid)}
+                >
+                  <Image source={{ uri: imageUrl }} style={styles.cardImage} contentFit="cover" />
+                  <View style={styles.cardBody}>
+                    <Text style={styles.cardTitle}>{studio.name}</Text>
+                    <Text style={styles.cardSubtitle}>{city}</Text>
+                    <Text style={styles.cardMeta}>{count} classes</Text>
+                  </View>
+                </Pressable>
+              );
+            })
+          )}
+        </ScrollView>
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Recommended</Text>
@@ -716,11 +781,35 @@ const styles = StyleSheet.create({
     marginTop: 12,
     paddingHorizontal: 12,
   },
+  emptyCard: {
+    width: 220,
+    marginRight: 12,
+    backgroundColor: "white",
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    height: 180,
+  },
+  emptyCardText: {
+    color: "#64748b",
+    fontSize: 12,
+  },
   loadingRow: {
     width: 220,
     height: 180,
     alignItems: "center",
     justifyContent: "center",
+  },
+  studioCard: {
+    width: 220,
+    marginRight: 12,
+    backgroundColor: "white",
+    borderRadius: 18,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
   },
   card: {
     width: 220,

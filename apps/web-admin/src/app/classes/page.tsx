@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, Suspense } from "react";
 import useSWR from "swr";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -37,7 +37,7 @@ const fetcher = (url: string) =>
     return res.json();
   });
 
-export default function ClassesPage() {
+function ClassesContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const studioId = (searchParams.get("studioId") || "").trim();
@@ -202,5 +202,13 @@ export default function ClassesPage() {
         )}
       </section>
     </div>
+  );
+}
+
+export default function ClassesPage() {
+  return (
+    <Suspense fallback={<div className="text-center py-12 text-slate-400">Loading page...</div>}>
+      <ClassesContent />
+    </Suspense>
   );
 }

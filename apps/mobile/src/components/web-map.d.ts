@@ -14,6 +14,7 @@ type WebMapProps = {
   center?: [number, number];
   userLocation?: [number, number] | null;
   onMapReady?: (map: any) => void;
+  onStudioSelect?: (studioId: string) => void;
 };
 
 declare const WebMap: React.FC<WebMapProps>;
