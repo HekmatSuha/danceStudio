@@ -23,7 +23,7 @@ export default function OwnerStudentsPage() {
     setShowForm(false);
     alert("Student created successfully!");
     setSearch("");
-    refreshStudents();
+    refreshStudents(studios.map((s) => s.uuid));
   };
 
   const refreshStudents = useCallback(async (studioIds: string[]) => {
