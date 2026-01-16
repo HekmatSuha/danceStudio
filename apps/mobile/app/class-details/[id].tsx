@@ -8,7 +8,7 @@ import {
   Pressable,
   Alert,
 } from "react-native";
-import { useLocalSearchParams, router } from "expo-router";
+import { useLocalSearchParams, router, Stack } from "expo-router";
 import { listSlots, type Slot } from "../../src/services/slots";
 import { createBooking } from "../../src/services/bookings";
 import { Ionicons } from "@expo/vector-icons";
@@ -90,6 +90,7 @@ export default function ClassDetailsScreen() {
 
   return (
     <View style={styles.container}>
+      <Stack.Screen options={{ headerShown: false }} />
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.headerImage}>
           <Ionicons name="musical-notes" size={64} color="white" style={{ opacity: 0.5 }} />
@@ -118,7 +119,7 @@ export default function ClassDetailsScreen() {
             </View>
             <View style={styles.infoItem}>
               <Text style={styles.infoLabel}>Price</Text>
-              <Text style={styles.infoValue}>${slot.price}</Text>
+              <Text style={styles.infoValue}>{slot.price} ₸</Text>
             </View>
           </View>
 
@@ -154,7 +155,7 @@ export default function ClassDetailsScreen() {
 
       <View style={styles.footer}>
         <View>
-          <Text style={styles.footerPrice}>${slot.price}</Text>
+          <Text style={styles.footerPrice}>{slot.price} ₸</Text>
           <Text style={styles.footerSub}>per person</Text>
         </View>
         <Pressable
