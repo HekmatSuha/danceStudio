@@ -6,11 +6,11 @@ import {
   ScrollView,
   Pressable,
   TextInput,
-  SafeAreaView,
   ActivityIndicator,
   Platform,
   Alert,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import Constants from "expo-constants";

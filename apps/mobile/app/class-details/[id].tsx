@@ -11,8 +11,8 @@ import {
 import { useLocalSearchParams, router } from "expo-router";
 import { listSlots, type Slot } from "../../src/services/slots";
 import { createBooking } from "../../src/services/bookings";
-import { getStoredTokens } from "../../src/lib/api";
 import { Ionicons } from "@expo/vector-icons";
+import { supabase } from "../../src/lib/supabase";
 
 export default function ClassDetailsScreen() {
   const { id } = useLocalSearchParams();
@@ -48,8 +48,8 @@ export default function ClassDetailsScreen() {
 
   const handleBook = async () => {
     if (!slot) return;
-    const tokens = await getStoredTokens();
-    if (!tokens) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
       router.replace("/(auth)/login");
       return;
     }

@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import {
-  SafeAreaView,
   View,
   Text,
   TextInput,
@@ -10,6 +9,7 @@ import {
   Alert,
   ActivityIndicator,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import {
@@ -18,7 +18,7 @@ import {
   updateProfile,
   type AccountProfile,
 } from "../../../src/services/auth";
-import { getStoredTokens } from "../../../src/lib/api";
+import { supabase } from "../../../src/lib/supabase";
 
 type ProfileForm = {
   firstName: string;
@@ -47,8 +47,8 @@ export default function ProfileScreen() {
   const loadProfile = async () => {
     setLoading(true);
     try {
-      const tokens = await getStoredTokens();
-      if (!tokens) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
         setProfile(null);
         return;
       }
