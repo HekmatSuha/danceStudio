@@ -6,9 +6,11 @@ import {
   ScrollView,
   Pressable,
   TextInput,
+  KeyboardAvoidingView,
   ActivityIndicator,
   Platform,
   Alert,
+  Keyboard,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Image } from "expo-image";
@@ -333,7 +335,16 @@ export default function ExploreScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <ScrollView contentContainerStyle={styles.page}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <ScrollView
+          contentContainerStyle={styles.page}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          onScrollBeginDrag={() => Keyboard.dismiss()}
+        >
         <View style={styles.topBar}>
           <Pressable style={styles.locationPill}>
             <Ionicons name="location-outline" size={16} color="#111827" />
@@ -420,6 +431,8 @@ export default function ExploreScreen() {
               style={styles.searchText}
               value={query}
               onChangeText={setQuery}
+              returnKeyType="search"
+              onSubmitEditing={() => Keyboard.dismiss()}
             />
           </View>
           <Pressable style={styles.filterBtn}>
@@ -536,7 +549,8 @@ export default function ExploreScreen() {
             })
           )}
         </ScrollView>
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

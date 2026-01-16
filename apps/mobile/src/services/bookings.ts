@@ -15,6 +15,7 @@ export type Booking = {
     start_time?: string | null;
     end_time?: string | null;
     price?: string | null;
+    currency?: string | null;
     image_url?: string | null;
     studio_details?: { name?: string; city?: string; address?: string };
     trainer_details?: { trainer_details?: { first_name?: string; last_name?: string } };
@@ -72,6 +73,7 @@ export async function listBookings(params?: {
         start_time,
         end_time,
         price,
+        currency,
         image_url,
         studio:studios(name, city, address),
         trainer:profiles(first_name, last_name),
@@ -116,6 +118,7 @@ export async function listBookings(params?: {
           start_time: b.slot.start_time,
           end_time: b.slot.end_time,
           price: b.slot.price?.toString(),
+          currency: b.slot.currency ?? null,
           image_url: b.slot.image_url ?? null,
           studio_details: b.slot.studio ?? undefined,
           trainer_details: b.slot.trainer
@@ -131,8 +134,6 @@ export async function listBookings(params?: {
   );
   if (missingSlotIds.length === 0) return base;
 
-  console.warn("Bookings missing slot details", missingSlotIds);
-
   const { data: slotsData } = await supabase
     .from("slots")
     .select(`
@@ -142,14 +143,13 @@ export async function listBookings(params?: {
       start_time,
       end_time,
       price,
+      currency,
       image_url,
       studio:studios(name, city, address),
       trainer:profiles(first_name, last_name),
       dance_style:dance_styles(name)
     `)
     .in("uuid", missingSlotIds);
-
-  console.warn("Slots lookup result count", slotsData?.length ?? 0);
 
   const slotMap = new Map(
     (slotsData ?? []).map((slot: any) => [
@@ -161,6 +161,7 @@ export async function listBookings(params?: {
         start_time: slot.start_time,
         end_time: slot.end_time,
         price: slot.price?.toString(),
+        currency: slot.currency ?? null,
         image_url: slot.image_url ?? null,
         studio_details: slot.studio ?? undefined,
         trainer_details: slot.trainer ? { trainer_details: slot.trainer } : undefined,

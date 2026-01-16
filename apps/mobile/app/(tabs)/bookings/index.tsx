@@ -19,6 +19,7 @@ export default function BookingsScreen() {
   const [loading, setLoading] = useState(true);
   const [workingId, setWorkingId] = useState<string | null>(null);
   const visibleBookings = bookings.filter((b) => b.status !== "cancelled");
+  const [imageFallbackIds, setImageFallbackIds] = useState<Set<string>>(new Set());
 
   const renderDateLabel = (booking: Booking) => {
     const start = booking.slot?.start_time;
@@ -41,6 +42,24 @@ export default function BookingsScreen() {
     const trainer = booking.slot?.trainer_details?.trainer_details;
     if (!trainer?.first_name) return "Instructor TBA";
     return `${trainer.first_name} ${trainer.last_name || ""}`.trim();
+  };
+
+  const renderPriceLabel = (booking: Booking) => {
+    const currency = booking.slot?.currency || "KZT";
+    const raw = booking.slot?.price ?? booking.price;
+    if (raw == null) return "TBD";
+    const numeric = typeof raw === "string" ? Number(raw) : raw;
+    if (!Number.isFinite(numeric)) return `${currency} ${raw}`;
+    return `${currency} ${numeric.toLocaleString()}`;
+  };
+
+  const markImageFailed = (id: string) => {
+    setImageFallbackIds((prev) => {
+      if (prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
   };
 
   const load = async () => {
@@ -103,8 +122,12 @@ export default function BookingsScreen() {
             <View key={b.uuid} style={styles.card}>
               <View style={styles.mediaRow}>
                 <View style={styles.imageWrap}>
-                  {b.slot?.image_url ? (
-                    <Image source={{ uri: b.slot.image_url }} style={styles.image} />
+                  {b.slot?.image_url && b.slot.image_url.startsWith("http") && !imageFallbackIds.has(b.uuid) ? (
+                    <Image
+                      source={{ uri: b.slot.image_url }}
+                      style={styles.image}
+                      onError={() => markImageFailed(b.uuid)}
+                    />
                   ) : (
                     <View style={styles.imagePlaceholder}>
                       <Text style={styles.imagePlaceholderText}>
@@ -149,9 +172,7 @@ export default function BookingsScreen() {
                 </View>
                 <View style={styles.detailItem}>
                   <Text style={styles.detailLabel}>Price</Text>
-                  <Text style={styles.detailValue}>
-                    {b.slot?.price || b.price ? `$${b.slot?.price ?? b.price}` : "TBD"}
-                  </Text>
+                  <Text style={styles.detailValue}>{renderPriceLabel(b)}</Text>
                 </View>
               </View>
 
