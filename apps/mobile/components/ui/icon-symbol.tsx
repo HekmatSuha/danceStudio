@@ -20,6 +20,7 @@ const MAPPING = {
   'calendar': 'calendar-today',
   'photo.fill': 'photo',
   'person.crop.circle': 'person',
+  'briefcase.fill': 'work',
   'chevron.left.forwardslash.chevron.right': 'code',
   'chevron.right': 'chevron-right',
 } as IconMapping;

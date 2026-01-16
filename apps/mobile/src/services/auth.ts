@@ -5,6 +5,33 @@ export type MobileUserRole = "owner" | "instructor" | "student" | "super_admin";
 
 const ROLE_KEY = "dancecrm.role";
 
+function normalizeRole(raw: unknown): MobileUserRole | null {
+  const value = Array.isArray(raw)
+    ? raw.find((item) => typeof item === "string")
+    : typeof raw === "string"
+      ? raw
+      : null;
+  if (!value) return null;
+  const normalized = value.trim().toLowerCase().replace(/[\s-]+/g, "_");
+  if (
+    normalized === "owner" ||
+    normalized === "studio_owner" ||
+    normalized === "studioowner"
+  ) {
+    return "owner";
+  }
+  if (normalized === "instructor" || normalized === "teacher") {
+    return "instructor";
+  }
+  if (normalized === "super_admin" || normalized === "superadmin" || normalized === "admin") {
+    return "super_admin";
+  }
+  if (normalized === "student" || normalized === "client") {
+    return "student";
+  }
+  return null;
+}
+
 export type AccountProfile = {
   uuid: string;
   username: string;
@@ -66,10 +93,10 @@ export async function login(emailOrUsername: string, password: string) {
   const profile = await fetchProfile();
   // Role is stored in profile or metadata. 
   // We prefer the profile table if it exists, otherwise metadata.
-  const role = (profile.role as MobileUserRole) || "student";
-  await setStoredRole(role);
+  const normalizedRole = normalizeRole(profile.role) ?? "student";
+  await setStoredRole(normalizedRole);
   
-  return { profile, role };
+  return { profile, role: normalizedRole };
 }
 
 export async function fetchProfile(): Promise<AccountProfile> {
@@ -90,6 +117,16 @@ export async function fetchProfile(): Promise<AccountProfile> {
 
   // Fallback to user metadata if profile table entry is missing (e.g. latency)
   const meta = user.user_metadata || {};
+  const appMeta = user.app_metadata || {};
+  const rawRole =
+    profile?.role ??
+    profile?.roles ??
+    meta.role ??
+    meta.roles ??
+    (meta as any).user_role ??
+    appMeta.role ??
+    appMeta.roles ??
+    (appMeta as any).user_role;
   
   const finalProfile: AccountProfile = {
     uuid: user.id,
@@ -99,8 +136,8 @@ export async function fetchProfile(): Promise<AccountProfile> {
     last_name: profile?.last_name || meta.last_name || "",
     phone_number: profile?.phone_number || meta.phone_number,
     gender: profile?.gender || meta.gender,
-    role: profile?.role || meta.role,
-    roles: profile?.role || meta.role, // compatibility
+    role: normalizeRole(rawRole) ?? undefined,
+    roles: rawRole, // compatibility
     dance_level: profile?.dance_level,
     interests: profile?.interests,
   };
@@ -146,15 +183,13 @@ export async function logout() {
 }
 
 export async function setStoredRole(role: MobileUserRole) {
-  await AsyncStorage.setItem(ROLE_KEY, role);
+  const normalized = normalizeRole(role) ?? "student";
+  await AsyncStorage.setItem(ROLE_KEY, normalized);
 }
 
 export async function getStoredRole(): Promise<MobileUserRole | null> {
   const raw = await AsyncStorage.getItem(ROLE_KEY);
-  if (raw === "owner" || raw === "instructor" || raw === "student") {
-    return raw;
-  }
-  return null;
+  return normalizeRole(raw);
 }
 
 export async function clearStoredRole() {
