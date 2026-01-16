@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "mobile",
-    "slug": "mobile",
+    "name": "Tance",
+    "slug": "tance",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "mobile",
+    "scheme": "tance",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
@@ -44,6 +44,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "016d04b9-6d02-48c5-9308-c24d85432618"
+      }
     }
   }
 }

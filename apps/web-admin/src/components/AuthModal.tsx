@@ -269,7 +269,7 @@ export function AuthModal({
             </svg>
           </div>
           <h2 className="mb-2">
-            {mode === "signin" ? "Welcome Back" : "Join Elevate Dance"}
+            {mode === "signin" ? "Welcome Back" : "Join Tance"}
           </h2>
           <p className="text-gray-600">
             {mode === "signin"

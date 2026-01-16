@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { Menu, X, LogOut, UserRound } from 'lucide-react';
 import { AuthModal } from './AuthModal';
 import { useAuthUser } from '../lib/useAuthUser';
@@ -82,21 +83,14 @@ export function Navigation() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-20">
           <a href="#" className="flex items-center space-x-2">
-            <div className="transition-colors text-purple-600">
-              <svg
-                className="w-8 h-8"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-              >
-                <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                <path d="M2 17l10 5 10-5M2 12l10 5 10-5" />
-              </svg>
-            </div>
-            <span className="transition-colors text-slate-900">
-              Elevate Dance Studio
-            </span>
+            <Image
+              src="/tance-logo.png"
+              alt="Tance"
+              width={56}
+              height={56}
+              className="rounded"
+            />
+            <span className="transition-colors text-slate-900">Tance</span>
           </a>
 
           {/* Desktop Navigation */}

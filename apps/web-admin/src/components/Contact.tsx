@@ -167,7 +167,7 @@ export function Contact() {
 
         {/* Footer */}
         <div className="mt-16 pt-8 border-t border-white/20 text-center text-gray-200">
-          <p>© 2025 Elevate Dance Studio. All rights reserved.</p>
+          <p>© 2025 Tance. All rights reserved.</p>
         </div>
       </div>
     </section>

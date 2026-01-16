@@ -9,6 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Link, router } from "expo-router";
@@ -80,8 +81,11 @@ export default function LoginScreen() {
         >
           <View style={styles.header}>
             <View style={styles.logo}>
-              <View style={styles.logoDiamond} />
-              <View style={styles.logoLines} />
+              <Image
+                source={require("../../assets/images/tance-logo.png")}
+                style={styles.logoImage}
+                resizeMode="contain"
+              />
             </View>
             <Text style={styles.title}>Welcome Back</Text>
             <Text style={styles.subtitle}>
@@ -180,13 +184,17 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 18,
-    backgroundColor: "#7c3aed",
+    backgroundColor: "white",
     alignItems: "center",
     justifyContent: "center",
     shadowColor: "#7c3aed",
     shadowOpacity: 0.4,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 6 },
+  },
+  logoImage: {
+    width: 52,
+    height: 52,
   },
   logoDiamond: {
     width: 22,

@@ -8,6 +8,7 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
+  Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Link, router } from "expo-router";
@@ -96,10 +97,13 @@ export default function RegisterScreen() {
         >
           <View style={styles.header}>
             <View style={styles.logo}>
-              <View style={styles.logoDiamond} />
-              <View style={styles.logoLines} />
+              <Image
+                source={require("../../assets/images/tance-logo.png")}
+                style={styles.logoImage}
+                resizeMode="contain"
+              />
             </View>
-            <Text style={styles.title}>Join Elevate Dance</Text>
+            <Text style={styles.title}>Join Tance</Text>
             <Text style={styles.subtitle}>
               Create an account to start your dance journey
             </Text>
@@ -284,13 +288,17 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 18,
-    backgroundColor: "#db2777",
+    backgroundColor: "white",
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#db2777",
+    shadowColor: "#7c3aed",
     shadowOpacity: 0.35,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 6 },
+  },
+  logoImage: {
+    width: 52,
+    height: 52,
   },
   logoDiamond: {
     width: 22,

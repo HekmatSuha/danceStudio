@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
@@ -86,13 +87,14 @@ export function DashboardNav({ children }: { children: React.ReactNode }) {
       {/* Mobile Header */}
       <div className="lg:hidden fixed top-0 left-0 right-0 h-16 bg-white border-b border-gray-200 z-40 flex items-center justify-between px-4">
         <div className="flex items-center gap-2">
-           <div className="text-purple-600">
-              <svg className="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                <path d="M2 17l10 5 10-5M2 12l10 5 10-5" />
-              </svg>
-            </div>
-            <span className="font-bold text-gray-900">Elevate</span>
+          <Image
+            src="/tance-logo.png"
+            alt="Tance"
+            width={40}
+            height={40}
+            className="rounded"
+          />
+          <span className="font-bold text-gray-900">Tance</span>
         </div>
         <button onClick={() => setIsMobileOpen(!isMobileOpen)} className="p-2 text-gray-600">
           {isMobileOpen ? <X size={24} /> : <Menu size={24} />}
@@ -108,13 +110,14 @@ export function DashboardNav({ children }: { children: React.ReactNode }) {
         <div className="h-full flex flex-col">
           {/* Logo Area (Desktop) */}
           <div className="hidden lg:flex items-center gap-2 h-16 px-6 border-b border-gray-100">
-             <div className="text-purple-600">
-              <svg className="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                <path d="M2 17l10 5 10-5M2 12l10 5 10-5" />
-              </svg>
-            </div>
-            <span className="font-bold text-xl text-gray-900 tracking-tight">Elevate</span>
+            <Image
+              src="/tance-logo.png"
+              alt="Tance"
+              width={44}
+              height={44}
+              className="rounded"
+            />
+            <span className="font-bold text-xl text-gray-900 tracking-tight">Tance</span>
           </div>
 
           {/* User Profile Summary */}
