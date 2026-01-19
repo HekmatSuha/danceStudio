@@ -21,6 +21,7 @@ export default function WebMap({
   studios = [], 
   counts = {}, 
   center = [43.238949, 76.889709],
+  onMapReady,
   onStudioSelect 
 }: WebMapProps) {
   const webViewRef = useRef<WebView>(null);
@@ -47,11 +48,11 @@ export default function WebMap({
       <html>
         <head>
           <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-          <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-          <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+          <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+          <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
           <style>
-            body { margin: 0; padding: 0; }
-            #map { height: 100vh; width: 100vw; }
+            html, body { height: 100%; margin: 0; padding: 0; background-color: #e5e7eb; }
+            #map { height: 100%; width: 100%; background-color: #e5e7eb; }
             .leaflet-control-attribution { display: none !important; }
             .leaflet-bar { border: none !important; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1) !important; }
           </style>
@@ -101,10 +102,13 @@ export default function WebMap({
           if (onMapReady) onMapReady(ref);
         }}
         originWhitelist={['*']}
-        source={{ html: htmlContent }}
+        source={{ html: htmlContent, baseUrl: '' }}
         style={styles.map}
         onMessage={onMessage}
         scrollEnabled={false}
+        javaScriptEnabled={true}
+        domStorageEnabled={true}
+        startInLoadingState={true}
       />
     </View>
   );
