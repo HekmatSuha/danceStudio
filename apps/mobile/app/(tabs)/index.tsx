@@ -59,6 +59,11 @@ export default function ExploreScreen() {
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
   const mapRef = useRef<any>(null);
   const isWeb = Platform.OS === "web";
+  const useLeaflet = isWeb || Constants.appOwnership === "expo";
+  const [mapComponents, setMapComponents] = useState<{
+    MapView: React.ComponentType<any>;
+    Marker: React.ComponentType<any>;
+  } | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -78,10 +83,26 @@ export default function ExploreScreen() {
       }
     };
     loadData();
+    if (!useLeaflet && !isWeb) {
+      import("react-native-maps")
+        .then((maps) => {
+          if (!mounted) return;
+          setMapComponents({
+            MapView: maps.default,
+            Marker: maps.Marker,
+          });
+        })
+        .catch(() => {
+          if (!mounted) return;
+          setMapComponents(null);
+        });
+    } else {
+      setMapComponents(null);
+    }
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [isWeb, useLeaflet]);
 
   const studioCounts = useMemo(() => {
     return slots.reduce<Record<string, number>>((acc, slot) => {
@@ -159,9 +180,28 @@ export default function ExploreScreen() {
       return;
     }
 
-    // Handle mobile WebView zoom
-    const type = direction === "in" ? "ZOOM_IN" : "ZOOM_OUT";
-    map.postMessage(JSON.stringify({ type }));
+    if (useLeaflet) {
+      const type = direction === "in" ? "ZOOM_IN" : "ZOOM_OUT";
+      map.postMessage(JSON.stringify({ type }));
+      return;
+    }
+
+    map.getMapBoundaries().then((bounds: any) => {
+      const centerLat = (bounds.northEast.latitude + bounds.southWest.latitude) / 2;
+      const centerLon = (bounds.northEast.longitude + bounds.southWest.longitude) / 2;
+      const latDelta = Math.abs(bounds.northEast.latitude - bounds.southWest.latitude);
+      const lonDelta = Math.abs(bounds.northEast.longitude - bounds.southWest.longitude);
+      const factor = direction === "in" ? 0.7 : 1.4;
+      map.animateToRegion(
+        {
+          latitude: centerLat,
+          longitude: centerLon,
+          latitudeDelta: Math.max(0.01, latDelta * factor),
+          longitudeDelta: Math.max(0.01, lonDelta * factor),
+        },
+        200
+      );
+    });
   };
 
   const handleCenter = () => {
@@ -178,8 +218,12 @@ export default function ExploreScreen() {
       return;
     }
 
-    // Handle mobile WebView center
-    map.postMessage(JSON.stringify({ type: "CENTER" }));
+    if (useLeaflet) {
+      map.postMessage(JSON.stringify({ type: "CENTER" }));
+      return;
+    }
+
+    map.animateToRegion(initialRegion, 250);
   };
 
   const notify = (title: string, message: string) => {
@@ -338,7 +382,7 @@ export default function ExploreScreen() {
             <View style={styles.mapLoading}>
               <ActivityIndicator color="#111827" />
             </View>
-          ) : (
+          ) : useLeaflet ? (
             <WebMap
               studios={mapStudios}
               counts={studioCounts}
@@ -349,6 +393,36 @@ export default function ExploreScreen() {
               }}
               onStudioSelect={handleStudioPress}
             />
+          ) : mapComponents?.MapView && mapComponents?.Marker ? (
+            <mapComponents.MapView
+              ref={mapRef}
+              style={StyleSheet.absoluteFillObject}
+              initialRegion={initialRegion}
+              showsCompass={false}
+              showsPointsOfInterest={false}
+              showsUserLocation
+              collapsable={false}
+            >
+              {mapStudios.map((studio) => (
+                <mapComponents.Marker
+                  key={studio.uuid}
+                  coordinate={{ latitude: studio.latitude, longitude: studio.longitude }}
+                  onPress={() => handleStudioPress(studio.uuid)}
+                >
+                  <View style={styles.pin}>
+                    <Text style={styles.pinText}>{studioCounts[studio.uuid] || 1}</Text>
+                  </View>
+                </mapComponents.Marker>
+              ))}
+            </mapComponents.MapView>
+          ) : (
+            <View style={styles.mapFallback}>
+              <Image source={{ uri: MAP_FALLBACK }} style={styles.mapFallbackImage} contentFit="cover" />
+              <View style={styles.mapFallbackOverlay} />
+              <View style={styles.mapFallbackLabel}>
+                <Text style={styles.mapFallbackText}>Map requires a dev build</Text>
+              </View>
+            </View>
           )}
           <View style={styles.mapControls}>
             <Pressable style={styles.mapControlBtn} onPress={() => handleZoom("in")}>
