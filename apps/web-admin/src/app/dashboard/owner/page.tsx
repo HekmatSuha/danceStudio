@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import {
   Plus,
   Building2,
@@ -13,12 +14,15 @@ import { ClassForm } from "../../../components/dashboard/ClassForm";
 import { ClassList } from "../../../components/dashboard/ClassList";
 import { type ClassEvent } from "../../../lib/classes";
 import { type Booking } from "../../../lib/bookings";
+import { fetchTrainers, type Trainer } from "../../../lib/trainers";
 import { useOwnerStudiosGuard } from "../../../lib/useOwnerStudiosGuard";
 import { useAuthedSWR } from "../../../lib/useAuthedSWR";
 
 export default function OwnerDashboardPage() {
   const [showForm, setShowForm] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [trainers, setTrainers] = useState<Trainer[]>([]);
+  const [trainersLoading, setTrainersLoading] = useState(true);
   const { studios, loading: studiosLoading } = useOwnerStudiosGuard();
   const studioIds = studios.length ? studios.map((studio) => studio.uuid) : null;
   const studioIdsParam = studioIds ? studioIds.join(",") : null;
@@ -44,12 +48,44 @@ export default function OwnerDashboardPage() {
   const bookings = useMemo(() => bookingsData || [], [bookingsData]);
   const [now] = useState(() => Date.now());
 
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      if (!studioIds || studioIds.length === 0) {
+        if (mounted) {
+          setTrainers([]);
+          setTrainersLoading(false);
+        }
+        return;
+      }
+      setTrainersLoading(true);
+      try {
+        const data = await fetchTrainers({ studioIds });
+        if (!mounted) return;
+        setTrainers(data);
+      } catch (err) {
+        console.warn("Failed to load teachers", err);
+      } finally {
+        if (mounted) setTrainersLoading(false);
+      }
+    };
+    load();
+    return () => {
+      mounted = false;
+    };
+  }, [studioIdsParam]);
+
   const handleSuccess = () => {
     setShowForm(false);
     setRefreshTrigger((prev) => prev + 1);
     mutateSlots();
     mutateBookings();
   };
+
+  const highlightedTeachers = useMemo(
+    () => trainers.slice(0, 6),
+    [trainers]
+  );
 
   const stats = useMemo(() => {
     const upcomingCount = slots.filter((s) => s.startAt > now).length;
@@ -198,8 +234,87 @@ export default function OwnerDashboardPage() {
                 instructorId={null}
                 studioIds={studioIds}
               />
+              ) : (
+                <div className="text-center py-10 text-gray-500">Loading schedule...</div>
+              )}
+          </section>
+
+          <section className="mt-12 space-y-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+                  Teaching Staff
+                </p>
+                <h2 className="text-2xl font-bold text-slate-900">Teachers</h2>
+                <p className="text-sm text-slate-500">
+                  Instructors linked to your studios.
+                </p>
+              </div>
+              <Link
+                href="/dashboard/owner/instructors"
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:border-slate-300"
+              >
+                View all instructors
+              </Link>
+            </div>
+
+            {trainersLoading ? (
+              <div className="text-center py-8 text-slate-500">Loading teachers...</div>
+            ) : highlightedTeachers.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-6 text-center text-slate-500">
+                No teachers found yet.
+              </div>
             ) : (
-              <div className="text-center py-10 text-gray-500">Loading schedule...</div>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {highlightedTeachers.map((trainer) => {
+                  const first = trainer.first_name || "";
+                  const last = trainer.last_name || "";
+                  const name = `${first} ${last}`.trim() || "Instructor";
+                  const initials = `${first[0] || ""}${last[0] || ""}`.toUpperCase() || "T";
+                  const isActive = trainer.is_active ?? true;
+                  return (
+                    <div
+                      key={trainer.uuid}
+                      className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm"
+                    >
+                      <div className="flex items-center gap-3">
+                        {trainer.photo ? (
+                          <img
+                            src={trainer.photo}
+                            alt={name}
+                            className="h-12 w-12 rounded-full object-cover"
+                          />
+                        ) : (
+                          <div className="h-12 w-12 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center font-semibold">
+                            {initials}
+                          </div>
+                        )}
+                        <div>
+                          <p className="text-sm font-semibold text-slate-900">{name}</p>
+                          <p className="text-xs text-slate-500">
+                            {trainer.studio_details?.name || "Instructor"}
+                          </p>
+                        </div>
+                      </div>
+                      {trainer.bio ? (
+                        <p className="mt-3 text-sm text-slate-600 line-clamp-2">
+                          {trainer.bio}
+                        </p>
+                      ) : null}
+                      <div className="mt-3 flex items-center gap-2">
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+                          Instructor
+                        </span>
+                        {!isActive && (
+                          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700">
+                            Inactive
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </section>
 

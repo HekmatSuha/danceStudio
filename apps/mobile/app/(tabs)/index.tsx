@@ -20,6 +20,7 @@ import { router } from "expo-router";
 import WebMap from "../../src/components/web-map";
 import { listStudios, type Studio } from "../../src/services/studios";
 import { listSlots, type Slot } from "../../src/services/slots";
+import { fetchTrainers, type Trainer } from "../../src/services/trainers";
 
 type Region = {
   latitude: number;
@@ -54,6 +55,7 @@ const FALLBACK_IMAGES = [
 export default function ExploreScreen() {
   const [studios, setStudios] = useState<Studio[]>([]);
   const [slots, setSlots] = useState<Slot[]>([]);
+  const [trainers, setTrainers] = useState<Trainer[]>([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
@@ -69,13 +71,15 @@ export default function ExploreScreen() {
     let mounted = true;
     const loadData = async () => {
       try {
-        const [studiosData, slotsData] = await Promise.all([
+        const [studiosData, slotsData, trainersData] = await Promise.all([
           listStudios(),
           listSlots({ available_only: true }),
+          fetchTrainers(),
         ]);
         if (!mounted) return;
         setStudios(studiosData);
         setSlots(slotsData);
+        setTrainers(trainersData);
       } catch (err) {
         console.warn("Failed to load explore data", err);
       } finally {
@@ -339,6 +343,17 @@ export default function ExploreScreen() {
     });
   }, [studios, filteredSlots, query]);
 
+  const filteredTrainers = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    if (!needle) return trainers;
+    return trainers.filter((trainer) => {
+      const first = trainer.first_name?.toLowerCase() || "";
+      const last = trainer.last_name?.toLowerCase() || "";
+      const full = `${first} ${last}`.trim();
+      return first.includes(needle) || last.includes(needle) || full.includes(needle);
+    });
+  }, [trainers, query]);
+
   const recommended = useMemo(() => filteredSlots.slice(0, 8), [filteredSlots]);
 
   const handleStudioPress = (studioId: string) => {
@@ -512,6 +527,36 @@ export default function ExploreScreen() {
                     <Text style={styles.cardMeta}>{count} classes</Text>
                   </View>
                 </Pressable>
+              );
+            })
+          )}
+        </ScrollView>
+
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Teachers</Text>
+        </View>
+
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.cardRow}>
+          {loading ? (
+            <View style={styles.loadingRow}>
+              <ActivityIndicator color="#111827" />
+            </View>
+          ) : filteredTrainers.length === 0 ? (
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyCardText}>No teachers found.</Text>
+            </View>
+          ) : (
+            filteredTrainers.map((trainer, index) => {
+              const imageUrl = trainer.photo || FALLBACK_IMAGES[index % FALLBACK_IMAGES.length];
+              const name = `${trainer.first_name || ""} ${trainer.last_name || ""}`.trim() || "Instructor";
+              return (
+                <View key={trainer.uuid} style={styles.teacherCard}>
+                  <Image source={{ uri: imageUrl }} style={styles.teacherImage} contentFit="cover" />
+                  <View style={styles.cardBody}>
+                    <Text style={styles.cardTitle}>{name}</Text>
+                    <Text style={styles.teacherSub}>Professional Instructor</Text>
+                  </View>
+                </View>
               );
             })
           )}
@@ -851,9 +896,24 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
   },
+  teacherCard: {
+    width: 200,
+    marginRight: 12,
+    backgroundColor: "white",
+    borderRadius: 18,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+  },
   cardImage: {
     width: "100%",
     height: 140,
+  },
+  teacherImage: {
+    width: "100%",
+    height: 160,
   },
   cardBadge: {
     position: "absolute",
@@ -889,6 +949,11 @@ const styles = StyleSheet.create({
     color: "#111827",
   },
   cardSubtitle: {
+    marginTop: 4,
+    fontSize: 12,
+    color: "#6b7280",
+  },
+  teacherSub: {
     marginTop: 4,
     fontSize: 12,
     color: "#6b7280",
