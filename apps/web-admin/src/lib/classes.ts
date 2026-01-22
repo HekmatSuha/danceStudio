@@ -26,6 +26,7 @@ export type ClassEvent = {
   roomId?: string;
   imageUrl?: string | null;
   isLocked?: boolean;
+  duration: number;
 };
 
 type SlotRow = {
@@ -93,6 +94,7 @@ function mapSlotToClass(slot: SlotRow): ClassEvent {
     roomId: slot.room_id || undefined,
     imageUrl: slot.image_url || null,
     isLocked: slot.is_locked ?? false,
+    duration: Math.round((new Date(slot.end_time).getTime() - new Date(slot.start_time).getTime()) / 60000),
   };
 }
 

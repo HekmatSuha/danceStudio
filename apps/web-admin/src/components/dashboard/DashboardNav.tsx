@@ -20,6 +20,9 @@ import {
   DollarSign,
   Home,
   Inbox,
+  Bell,
+  Megaphone,
+  MessageCircle,
 } from "lucide-react";
 import { useAuthUser } from "../../lib/useAuthUser";
 import { signOut, type UserRole } from "../../lib/auth";
@@ -61,6 +64,9 @@ export function DashboardNav({ children }: { children: React.ReactNode }) {
           { label: "Students", href: "/dashboard/owner/students", icon: <Users size={20} /> },
           { label: "Requests", href: "/dashboard/owner/requests", icon: <Inbox size={20} /> },
           { label: "Payments", href: "/dashboard/owner/payments", icon: <DollarSign size={20} /> },
+          { label: "Notifications", href: "/dashboard/owner/notifications", icon: <Bell size={20} /> },
+          { label: "Advertisements", href: "/dashboard/owner/advertisements", icon: <Megaphone size={20} /> },
+          { label: "Messages", href: "/dashboard/owner/chat", icon: <MessageCircle size={20} /> },
         ];
       case "super_admin":
         return [

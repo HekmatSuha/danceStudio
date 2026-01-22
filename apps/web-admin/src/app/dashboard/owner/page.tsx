@@ -1,324 +1,437 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import Link from "next/link";
 import {
-  Plus,
-  Building2,
-  Users,
-  CalendarClock,
-  ShieldCheck,
   TrendingUp,
+  Users,
+  CalendarCheck,
+  CreditCard,
+  Plus,
+  Bell,
+  Megaphone,
+  Briefcase,
+  ClipboardList,
+  Wallet,
+  ChevronDown,
+  Calendar as CalendarIcon,
 } from "lucide-react";
-import { ClassForm } from "../../../components/dashboard/ClassForm";
-import { ClassList } from "../../../components/dashboard/ClassList";
-import { type ClassEvent } from "../../../lib/classes";
-import { type Booking } from "../../../lib/bookings";
-import { fetchTrainers, type Trainer } from "../../../lib/trainers";
 import { useOwnerStudiosGuard } from "../../../lib/useOwnerStudiosGuard";
-import { useAuthedSWR } from "../../../lib/useAuthedSWR";
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "../../../components/ui/dropdown-menu";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "../../../components/ui/popover";
+import { Calendar } from "../../../components/ui/calendar";
+import { addDays, format } from "date-fns";
+import { DateRange } from "react-day-picker";
+import { cn } from "../../../components/ui/utils";
+
+// Mock data for the chart
+const REVENUE_DATA = [
+  { name: "Jan", revenue: 4000 },
+  { name: "Feb", revenue: 3000 },
+  { name: "Mar", revenue: 5000 },
+  { name: "Apr", revenue: 4500 },
+  { name: "May", revenue: 6000 },
+  { name: "Jun", revenue: 7500 },
+];
 
 export default function OwnerDashboardPage() {
-  const [showForm, setShowForm] = useState(false);
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
-  const [trainers, setTrainers] = useState<Trainer[]>([]);
-  const [trainersLoading, setTrainersLoading] = useState(true);
-  const { studios, loading: studiosLoading } = useOwnerStudiosGuard();
-  const studioIds = studios.length ? studios.map((studio) => studio.uuid) : null;
-  const studioIdsParam = studioIds ? studioIds.join(",") : null;
-  const {
-    data: slotsData,
-    isLoading: slotsLoading,
-    mutate: mutateSlots,
-  } = useAuthedSWR<ClassEvent[]>(
-    studioIdsParam
-      ? `/api/owner/classes?studioIds=${studioIdsParam}&limit=100`
-      : null
-  );
-  const {
-    data: bookingsData,
-    isLoading: bookingsLoading,
-    mutate: mutateBookings,
-  } = useAuthedSWR<Booking[]>(
-    studioIdsParam
-      ? `/api/owner/bookings?studioIds=${studioIdsParam}&select=uuid,status,attended,appointment_slot`
-      : null
-  );
-  const slots = useMemo(() => slotsData || [], [slotsData]);
-  const bookings = useMemo(() => bookingsData || [], [bookingsData]);
-  const [now] = useState(() => Date.now());
+  const { studios, loading, role } = useOwnerStudiosGuard();
+  const [filter, setFilter] = useState("today");
+  const [date, setDate] = useState<DateRange | undefined>({
+    from: new Date(),
+    to: addDays(new Date(), 7),
+  });
 
-  useEffect(() => {
-    let mounted = true;
-    const load = async () => {
-      if (!studioIds || studioIds.length === 0) {
-        if (mounted) {
-          setTrainers([]);
-          setTrainersLoading(false);
-        }
-        return;
-      }
-      setTrainersLoading(true);
-      try {
-        const data = await fetchTrainers({ studioIds });
-        if (!mounted) return;
-        setTrainers(data);
-      } catch (err) {
-        console.warn("Failed to load teachers", err);
-      } finally {
-        if (mounted) setTrainersLoading(false);
-      }
-    };
-    load();
-    return () => {
-      mounted = false;
-    };
-  }, [studioIdsParam]);
+  const filterLabel = useMemo(() => {
+    switch(filter) {
+        case "today": return "Today";
+        case "yesterday": return "Yesterday";
+        case "week": return "Since start of week";
+        case "month": return "Since start of month";
+        case "this_month": return "For August"; // Mock month
+        case "year": return "Since start of year";
+        case "custom": return "For a period";
+        default: return filter;
+    }
+  }, [filter]);
 
-  const handleSuccess = () => {
-    setShowForm(false);
-    setRefreshTrigger((prev) => prev + 1);
-    mutateSlots();
-    mutateBookings();
-  };
-
-  const highlightedTeachers = useMemo(
-    () => trainers.slice(0, 6),
-    [trainers]
-  );
-
+  // Mock stats based on the reference image design
   const stats = useMemo(() => {
-    const upcomingCount = slots.filter((s) => s.startAt > now).length;
-    const totalCapacity = slots.reduce((sum, s) => sum + (s.capacity || 0), 0);
-    const totalReserved = slots.reduce(
-      (sum, s) => sum + (s.reservedCount ?? 0),
-      0,
+    // Base values for "Today"
+    let income = 480811;
+    let expenses = 27776;
+    let memberships = 12;
+    let lessons = 21;
+    let attendees = 6;
+
+    // Adjust values based on filter to demonstrate functionality
+    if (filter === "yesterday") {
+        income = 450200;
+        expenses = 25000;
+        memberships = 8;
+        lessons = 20;
+        attendees = 15;
+    } else if (filter === "week") {
+        income = 2100500;
+        expenses = 120000;
+        memberships = 45;
+        lessons = 98;
+        attendees = 230;
+    } else if (filter === "month") {
+        income = 8500000;
+        expenses = 450000;
+        memberships = 150;
+        lessons = 340;
+        attendees = 980;
+    } else if (filter === "year") {
+        income = 45000000;
+        expenses = 2100000;
+        memberships = 1200;
+        lessons = 4500;
+        attendees = 12500;
+    } else if (filter === "custom") {
+        // Randomize slightly for custom range feel
+        income = 3200000;
+        expenses = 180000;
+        memberships = 85;
+        lessons = 150;
+        attendees = 420;
+    }
+
+    return [
+      {
+        label: "Income",
+        value: income.toLocaleString(),
+        subtext: "Income",
+        icon: <Wallet className="text-blue-500" size={32} />,
+        bg: "bg-blue-100",
+        text: "text-blue-900",
+        iconBg: "bg-blue-200",
+      },
+      {
+        label: "Expenses",
+        value: expenses.toLocaleString(),
+        subtext: "Expenses",
+        icon: <CreditCard className="text-orange-500" size={32} />,
+        bg: "bg-orange-100",
+        text: "text-orange-900",
+        iconBg: "bg-orange-200",
+      },
+      {
+        label: "New memberships",
+        value: memberships.toLocaleString(),
+        subtext: "New memberships",
+        icon: <Users className="text-green-600" size={32} />,
+        bg: "bg-lime-100", // Using lime/green mix for that fresh green look
+        text: "text-green-900",
+        iconBg: "bg-green-200",
+      },
+      {
+        label: "Lessons conducted",
+        value: lessons.toLocaleString(),
+        subtext: "Lessons conducted",
+        icon: <Briefcase className="text-purple-500" size={32} />,
+        bg: "bg-purple-100",
+        text: "text-purple-900",
+        iconBg: "bg-purple-200",
+      },
+      {
+        label: "Attending students",
+        value: attendees.toLocaleString(),
+        subtext: "Attending students",
+        icon: <ClipboardList className="text-yellow-600" size={32} />,
+        bg: "bg-yellow-100",
+        text: "text-yellow-900",
+        iconBg: "bg-yellow-200",
+      },
+    ];
+  }, [filter]);
+
+  if (loading) {
+    return <div className="min-h-screen flex items-center justify-center text-slate-400">Loading dashboard...</div>;
+  }
+  if (role === "owner" && studios.length === 0) {
+    return (
+      <div className="p-8 text-center text-slate-500">
+        You don't have any studios connected yet.
+      </div>
     );
-    const occupancy =
-      totalCapacity > 0 ? Math.round((totalReserved / totalCapacity) * 100) : 0;
-    const revenue = bookings.length * 20; // Mock average price
-    return {
-      studios: studios.length,
-      instructors: "Team access",
-      upcoming: upcomingCount,
-      occupancy,
-      bookings: bookings.length,
-      revenue: `$${revenue.toLocaleString()}`,
-    };
-  }, [slots, studios, bookings, now]);
+  }
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-purple-50">
-      <div className="relative isolate overflow-hidden">
-        <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_20%_20%,rgba(120,85,255,0.12),transparent_35%),radial-gradient(circle_at_80%_0%,rgba(14,165,233,0.12),transparent_28%)]" />
-
-        <div className="max-w-7xl mx-auto px-6 py-10 lg:py-14">
-          <header className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <p className="text-xs font-semibold tracking-[0.25em] text-purple-600 uppercase">
-                Studio Command
-              </p>
-              <h1 className="text-4xl lg:text-5xl font-black text-slate-900 leading-tight">
-                Owner Dashboard
+    <main className="min-h-screen bg-slate-50/50 p-6 lg:p-10 space-y-8">
+      {/* Header */}
+      <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
+          <p className="text-sm font-semibold text-slate-500 mb-1">
+            {new Date().toLocaleDateString(undefined, {
+              weekday: "long",
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+            })}
+          </p>
+          <div className="flex flex-wrap items-center gap-4">
+              <h1 className="text-3xl font-bold text-slate-900">
+                Statistics
               </h1>
-              <p className="text-lg text-slate-600 mt-3 max-w-2xl">
-                Keep your studios, instructors, and classes in sync with a single command center.
-              </p>
-            </div>
-
-            <div className="flex flex-wrap gap-3">
-              {!showForm && (
-                <button
-                  onClick={() => setShowForm(true)}
-                  className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 px-5 py-3 text-white font-semibold shadow-lg shadow-purple-500/20 hover:translate-y-[-1px] transition-all"
-                >
-                  <Plus size={18} />
-                  Create Class / Event
-                </button>
-              )}
-              <button className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-700 hover:border-slate-300 shadow-sm">
-                <ShieldCheck size={18} />
-                Manage Access
-              </button>
-            </div>
-          </header>
-
-          <section className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-            {[
-              {
-                icon: <Building2 size={20} />,
-                label: "Studios",
-                value: `${stats.studios} active`,
-                tone: "from-blue-500/10 to-sky-500/5",
-              },
-              {
-                icon: <Users size={20} />,
-                label: "Bookings",
-                value: `${stats.bookings} total`,
-                tone: "from-emerald-500/10 to-lime-500/5",
-              },
-              {
-                icon: <CalendarClock size={20} />,
-                label: "Upcoming classes",
-                value: `${stats.upcoming} scheduled`,
-                tone: "from-purple-500/10 to-indigo-500/5",
-              },
-              {
-                icon: <TrendingUp size={20} />,
-                label: "Occupancy",
-                value: `${stats.occupancy}% filled`,
-                tone: "from-amber-500/10 to-orange-500/5",
-              },
-              {
-                icon: <TrendingUp size={20} />, // Reusing icon for now
-                label: "Est. Revenue",
-                value: stats.revenue,
-                tone: "from-pink-500/10 to-rose-500/5",
-              },
-            ].map((item) => (
-              <div
-                key={item.label}
-                className="relative overflow-hidden rounded-2xl border border-slate-100 bg-white/80 p-5 shadow-sm backdrop-blur-sm"
-              >
-                <div className={`absolute inset-0 bg-gradient-to-br ${item.tone}`} />
-                <div className="relative flex items-center gap-3">
-                  <div className="rounded-xl bg-white text-slate-700 p-2.5 shadow-sm border border-slate-100">
-                    {item.icon}
-                  </div>
-                  <div>
-                    <p className="text-xs uppercase tracking-wide text-slate-500">{item.label}</p>
-                    <p className="text-lg font-semibold text-slate-900">{item.value}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </section>
-
-          <section className="mt-12 space-y-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
-                  Master Schedule
-                </p>
-                <h2 className="text-2xl font-bold text-slate-900">Classes & events</h2>
-                <p className="text-sm text-slate-500">
-                  See everything across instructors and locations.
-                </p>
-              </div>
-              {!showForm && (
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setShowForm(true)}
-                    className="inline-flex items-center gap-2 rounded-xl bg-purple-600 px-4 py-2.5 text-white text-sm font-semibold shadow-md hover:bg-purple-700 transition-colors"
-                  >
-                    <Plus size={16} />
-                    Add to schedule
-                  </button>
-                  <button className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:border-slate-300">
-                    <CalendarClock size={16} />
-                    Export
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {showForm && (
-              <div className="mb-4 rounded-2xl border border-purple-100 bg-white shadow-sm p-4">
-                <ClassForm onSuccess={handleSuccess} onCancel={() => setShowForm(false)} />
-              </div>
-            )}
-
-            {studioIds && !studiosLoading && !slotsLoading && !bookingsLoading ? (
-              <ClassList
-                refreshTrigger={refreshTrigger}
-                instructorId={null}
-                studioIds={studioIds}
-              />
-              ) : (
-                <div className="text-center py-10 text-gray-500">Loading schedule...</div>
-              )}
-          </section>
-
-          <section className="mt-12 space-y-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
-                  Teaching Staff
-                </p>
-                <h2 className="text-2xl font-bold text-slate-900">Teachers</h2>
-                <p className="text-sm text-slate-500">
-                  Instructors linked to your studios.
-                </p>
-              </div>
-              <Link
-                href="/dashboard/owner/instructors"
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:border-slate-300"
-              >
-                View all instructors
-              </Link>
-            </div>
-
-            {trainersLoading ? (
-              <div className="text-center py-8 text-slate-500">Loading teachers...</div>
-            ) : highlightedTeachers.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-6 text-center text-slate-500">
-                No teachers found yet.
-              </div>
-            ) : (
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {highlightedTeachers.map((trainer) => {
-                  const first = trainer.first_name || "";
-                  const last = trainer.last_name || "";
-                  const name = `${first} ${last}`.trim() || "Instructor";
-                  const initials = `${first[0] || ""}${last[0] || ""}`.toUpperCase() || "T";
-                  const isActive = trainer.is_active ?? true;
-                  return (
-                    <div
-                      key={trainer.uuid}
-                      className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm"
+              
+              <DropdownMenu>
+                <DropdownMenuTrigger className="flex items-center gap-1 text-3xl font-bold text-slate-900 hover:text-slate-700 outline-none transition-colors">
+                   <span className="capitalize">{filterLabel.toLowerCase()}</span>
+                   <ChevronDown size={28} className="text-slate-400" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-[240px] p-2 bg-white rounded-xl shadow-xl border border-slate-100">
+                    <DropdownMenuItem 
+                        onClick={() => setFilter("today")}
+                        className="rounded-lg hover:bg-slate-50 cursor-pointer py-2 px-3 text-slate-600 font-medium focus:bg-slate-50 focus:text-slate-900"
                     >
-                      <div className="flex items-center gap-3">
-                        {trainer.photo ? (
-                          <img
-                            src={trainer.photo}
-                            alt={name}
-                            className="h-12 w-12 rounded-full object-cover"
-                          />
-                        ) : (
-                          <div className="h-12 w-12 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center font-semibold">
-                            {initials}
-                          </div>
-                        )}
-                        <div>
-                          <p className="text-sm font-semibold text-slate-900">{name}</p>
-                          <p className="text-xs text-slate-500">
-                            {trainer.studio_details?.name || "Instructor"}
-                          </p>
-                        </div>
-                      </div>
-                      {trainer.bio ? (
-                        <p className="mt-3 text-sm text-slate-600 line-clamp-2">
-                          {trainer.bio}
-                        </p>
-                      ) : null}
-                      <div className="mt-3 flex items-center gap-2">
-                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
-                          Instructor
-                        </span>
-                        {!isActive && (
-                          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700">
-                            Inactive
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </section>
+                        Today
+                    </DropdownMenuItem>
+                    <DropdownMenuItem 
+                        onClick={() => setFilter("yesterday")}
+                        className="rounded-lg hover:bg-slate-50 cursor-pointer py-2 px-3 text-slate-600 font-medium focus:bg-slate-50 focus:text-slate-900"
+                    >
+                        Yesterday
+                    </DropdownMenuItem>
+                    <DropdownMenuItem 
+                        onClick={() => setFilter("week")}
+                        className="rounded-lg hover:bg-slate-50 cursor-pointer py-2 px-3 text-slate-600 font-medium focus:bg-slate-50 focus:text-slate-900"
+                    >
+                        Since start of week
+                    </DropdownMenuItem>
+                    <DropdownMenuItem 
+                        onClick={() => setFilter("month")}
+                        className="rounded-lg hover:bg-slate-50 cursor-pointer py-2 px-3 text-slate-600 font-medium focus:bg-slate-50 focus:text-slate-900"
+                    >
+                        Since start of month
+                    </DropdownMenuItem>
+                    <DropdownMenuItem 
+                        onClick={() => setFilter("year")}
+                        className="rounded-lg hover:bg-slate-50 cursor-pointer py-2 px-3 text-slate-600 font-medium focus:bg-slate-50 focus:text-slate-900"
+                    >
+                        Since start of year
+                    </DropdownMenuItem>
+                    
+                    <DropdownMenuItem
+                        onClick={() => setFilter("custom")}
+                        className="rounded-lg hover:bg-slate-50 cursor-pointer py-2 px-3 text-slate-600 font-medium focus:bg-slate-50 focus:text-slate-900"
+                    >
+                        For a period
+                    </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
 
+              {filter === "custom" && (
+                <Popover>
+                    <PopoverTrigger asChild>
+                        <button
+                            id="date"
+                            className={cn(
+                                "flex items-center gap-2 justify-start outline-none font-normal px-4 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 transition-colors shadow-sm text-sm text-slate-700",
+                                !date && "text-muted-foreground"
+                            )}
+                        >
+                            <CalendarIcon size={16} className="text-slate-400" />
+                            {date?.from ? (
+                                date.to ? (
+                                    <>
+                                        {format(date.from, "yyyy-MM-dd")} <span className="text-slate-400 mx-1">→</span> {format(date.to, "yyyy-MM-dd")}
+                                    </>
+                                ) : (
+                                    format(date.from, "yyyy-MM-dd")
+                                )
+                            ) : (
+                                <span>Pick a date</span>
+                            )}
+                        </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0 bg-white rounded-xl shadow-xl border border-slate-100" align="start">
+                        <Calendar
+                            initialFocus
+                            mode="range"
+                            defaultMonth={date?.from}
+                            selected={date}
+                            onSelect={setDate}
+                            numberOfMonths={2}
+                            className="p-3"
+                        />
+                    </PopoverContent>
+                </Popover>
+              )}
+          </div>
         </div>
+        
+        {/* Quick Action Button (Primary) */}
+        <Link
+          href="/dashboard/owner/classes"
+          className="inline-flex items-center gap-2 bg-slate-900 text-white px-5 py-3 rounded-xl hover:bg-slate-800 transition-colors shadow-sm font-medium"
+        >
+          <Plus size={18} />
+          Create New Class
+        </Link>
+      </header>
+
+      {/* Metrics Grid - Colorful Cards */}
+      <section className="grid gap-6 sm:grid-cols-2 lg:grid-cols-5">
+        {stats.map((stat) => (
+          <div
+            key={stat.label}
+            className={`p-6 rounded-2xl ${stat.bg} shadow-sm transition-all hover:scale-[1.02] cursor-default min-h-[160px] flex flex-col justify-between`}
+          >
+             <div className="flex justify-between items-start">
+               <div className={`p-3 rounded-full bg-white/60 mb-4`}>
+                 {stat.icon}
+               </div>
+             </div>
+             
+             <div>
+                <h2 className={`text-4xl font-black ${stat.text} leading-none`}>
+                  {stat.value}
+                </h2>
+                <p className={`mt-2 font-medium ${stat.text} opacity-80 text-sm`}>
+                  {stat.subtext}
+                </p>
+             </div>
+          </div>
+        ))}
+      </section>
+
+      {/* New Records Section - Pinkish card from reference */}
+      <section className="bg-red-50 p-6 rounded-2xl border border-red-100 flex items-center gap-6 shadow-sm">
+         <div className="h-14 w-14 rounded-full bg-red-200 flex items-center justify-center text-red-500">
+            <ClipboardList size={28} />
+         </div>
+         <div>
+            <h2 className="text-3xl font-bold text-slate-900">
+                {filter === "today" ? 13 : filter === "yesterday" ? 5 : filter === "week" ? 42 : filter === "custom" ? 9 : 150}
+            </h2>
+            <p className="text-slate-600 font-medium">New records {filterLabel.toLowerCase()}</p>
+         </div>
+      </section>
+
+      {/* Main Content Area: Chart + Quick Actions */}
+      <div className="grid gap-8 lg:grid-cols-3">
+        {/* Chart Section - Takes up 2/3 columns */}
+        <section className="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-lg font-bold text-slate-900">Revenue Trends</h2>
+            <select className="bg-slate-50 border-none text-sm font-medium text-slate-600 rounded-lg px-3 py-1.5 cursor-pointer outline-none hover:bg-slate-100">
+              <option>Last 6 months</option>
+              <option>Last year</option>
+            </select>
+          </div>
+          <div className="h-[300px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart
+                data={REVENUE_DATA}
+                margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+              >
+                <defs>
+                  <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.2} />
+                    <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis 
+                  dataKey="name" 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fill: "#64748b", fontSize: 12 }} 
+                  dy={10}
+                />
+                <YAxis 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fill: "#64748b", fontSize: 12 }} 
+                  tickFormatter={(value) => `$${value}`}
+                />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: '#fff', 
+                    borderRadius: '12px', 
+                    border: '1px solid #e2e8f0',
+                    boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
+                  }}
+                  itemStyle={{ color: '#1e293b', fontWeight: 600 }}
+                  formatter={(value: number) => [`$${value}`, "Revenue"]}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="revenue"
+                  stroke="#8b5cf6"
+                  strokeWidth={3}
+                  fillOpacity={1}
+                  fill="url(#colorRevenue)"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </section>
+
+        {/* Quick Actions - Takes up 1/3 columns */}
+        <section className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+          <h2 className="text-lg font-bold text-slate-900 mb-6">Quick Actions</h2>
+          <div className="grid gap-4">
+            <Link
+              href="/dashboard/owner/notifications"
+              className="group flex items-center gap-4 p-4 rounded-xl border border-slate-100 hover:border-purple-200 hover:bg-purple-50 transition-all"
+            >
+              <div className="h-10 w-10 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center transition-colors group-hover:bg-purple-200">
+                <Bell size={20} />
+              </div>
+              <div>
+                <h3 className="font-semibold text-slate-900 group-hover:text-purple-700">Send Notification</h3>
+                <p className="text-xs text-slate-500">Reach all students instantly</p>
+              </div>
+            </Link>
+
+            <Link
+              href="/dashboard/owner/advertisements"
+              className="group flex items-center gap-4 p-4 rounded-xl border border-slate-100 hover:border-pink-200 hover:bg-pink-50 transition-all"
+            >
+              <div className="h-10 w-10 rounded-full bg-pink-100 text-pink-600 flex items-center justify-center transition-colors group-hover:bg-pink-200">
+                <Megaphone size={20} />
+              </div>
+              <div>
+                <h3 className="font-semibold text-slate-900 group-hover:text-pink-700">New Advertisement</h3>
+                <p className="text-xs text-slate-500">Promote a new event</p>
+              </div>
+            </Link>
+
+            <Link
+              href="/dashboard/owner/students"
+              className="group flex items-center gap-4 p-4 rounded-xl border border-slate-100 hover:border-blue-200 hover:bg-blue-50 transition-all"
+            >
+              <div className="h-10 w-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center transition-colors group-hover:bg-blue-200">
+                <Plus size={20} />
+              </div>
+              <div>
+                <h3 className="font-semibold text-slate-900 group-hover:text-blue-700">Add Student</h3>
+                <p className="text-xs text-slate-500">Register a new profile</p>
+              </div>
+            </Link>
+          </div>
+        </section>
       </div>
     </main>
   );
