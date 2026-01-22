@@ -80,7 +80,7 @@ export async function fetchConversations(userId: string) {
     })
   );
 
-  return conversationsWithLastMessage as Conversation[];
+  return conversationsWithLastMessage as unknown as Conversation[];
 }
 
 export async function fetchMessages(conversationId: string) {
@@ -117,9 +117,6 @@ export async function sendMessage(conversationId: string, senderId: string, cont
 }
 
 export async function createConversation(userIds: string[]) {
-  // This is a simplified creation logic. 
-  // In a real app, you'd check if a conversation between these exact users already exists.
-  
   const { data: conversation, error: convError } = await supabase
     .from("conversations")
     .insert({})
@@ -140,4 +137,38 @@ export async function createConversation(userIds: string[]) {
   if (partError) throw partError;
 
   return conversation;
+}
+
+export async function getOrCreateConversation(currentUserId: string, targetUserId: string) {
+  // 1. Find conversations where current user is a participant
+  const { data: myConversations, error: myError } = await supabase
+    .from("conversation_participants")
+    .select("conversation_id")
+    .eq("user_id", currentUserId);
+
+  if (myError) throw myError;
+
+  const conversationIds = myConversations.map(c => c.conversation_id);
+
+  if (conversationIds.length > 0) {
+    // 2. Check if target user is also a participant in any of these conversations
+    // We assume 1-on-1 chats for now, or just return the first match
+    const { data: existing, error: matchError } = await supabase
+      .from("conversation_participants")
+      .select("conversation_id")
+      .eq("user_id", targetUserId)
+      .in("conversation_id", conversationIds)
+      .limit(1)
+      .maybeSingle();
+
+    if (matchError) throw matchError;
+
+    if (existing) {
+      return existing.conversation_id;
+    }
+  }
+
+  // 3. Create new if not found
+  const newConv = await createConversation([currentUserId, targetUserId]);
+  return newConv.id;
 }

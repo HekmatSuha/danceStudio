@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, Suspense } from "react";
 import { Search, Send, MoreVertical, Phone, Video } from "lucide-react";
 import { useAuthUser } from "../../../../lib/useAuthUser";
 import { 
@@ -10,18 +10,27 @@ import {
   type Conversation, 
   type Message 
 } from "../../../../lib/chat";
-import { supabase } from "../../../../lib/supabase";
+import { supabase } from "../../../../lib/supabase";import { useSearchParams } from "next/navigation";
 
-export default function ChatPage() {
+function ChatContent() {
   const { user } = useAuthUser();
+  const searchParams = useSearchParams();
+  const urlChatId = searchParams.get("id");
+  
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [selectedChatId, setSelectedChatId] = useState<string | null>(null);  const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Sync URL param with selected chat
+  useEffect(() => {
+    if (urlChatId) {
+      setSelectedChatId(urlChatId);
+    }
+  }, [urlChatId]);
 
   // Load conversations
   useEffect(() => {
@@ -253,5 +262,13 @@ export default function ChatPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function ChatPage() {
+  return (
+    <Suspense fallback={<div className="p-8">Loading chat...</div>}>
+      <ChatContent />
+    </Suspense>
   );
 }

@@ -23,6 +23,9 @@ import {
 } from "../../../../../components/ui/dialog";
 import { supabase } from "../../../../../lib/supabase";
 import { markAttendance } from "../../../../../lib/bookings";
+import { getOrCreateConversation } from "../../../../../lib/chat";
+import { useAuthUser } from "../../../../../lib/useAuthUser";
+import { useRouter } from "next/navigation";
 
 type TabKey = "classes" | "season" | "payments" | "visits" | "history";
 
@@ -75,6 +78,19 @@ export default function OwnerStudentDetailPage() {
   const [bookings, setBookings] = useState<BookingRow[]>([]);
   const [slotMap, setSlotMap] = useState<Map<string, SlotRow>>(new Map());
   const [visitsStatus, setVisitsStatus] = useState<Record<string, string>>({});
+
+  const { user } = useAuthUser();
+  const router = useRouter();
+
+  const handleMessage = async () => {
+    if (!user || !studentId) return;
+    try {
+      const conversationId = await getOrCreateConversation(user.uuid, studentId);
+      router.push(`/dashboard/owner/chat?id=${conversationId}`);
+    } catch (error) {
+      console.error("Failed to start chat", error);
+    }
+  };
 
   useEffect(() => {
     if (!studentId) return;
@@ -232,7 +248,9 @@ export default function OwnerStudentDetailPage() {
             </h1>
             <div className="flex items-center gap-2 text-slate-500">
               <Info size={18} className="text-indigo-500" />
-              <MessageCircle size={18} className="text-emerald-500" />
+              <button onClick={handleMessage} className="hover:bg-slate-100 p-1 rounded-full transition-colors">
+                <MessageCircle size={18} className="text-emerald-500" />
+              </button>
             </div>
             <div className="flex items-center gap-3 text-sm text-slate-600">
               <span>Balance:</span>
