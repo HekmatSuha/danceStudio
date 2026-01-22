@@ -2,9 +2,33 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
-import { Calendar, MapPin, Clock, Users, Trash2, Repeat } from "lucide-react";
+import {
+  Calendar,
+  ChevronDown,
+  MapPin,
+  Plus,
+  Repeat,
+  Users,
+} from "lucide-react";
 import { fetchClasses, deleteClass, type ClassEvent } from "../../lib/classes";
 import { useAuthUser } from "../../lib/useAuthUser";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "../ui/sheet";
+import { Switch } from "../ui/switch";
+
+const FILTER_CHIPS = [
+  { id: "teacher", label: "Select a teacher" },
+  { id: "room", label: "All rooms" },
+  { id: "type", label: "Type" },
+  { id: "format", label: "Format" },
+];
+
+const ACCENT_COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444"];
 
 type ClassListProps = {
   refreshTrigger: number;
@@ -32,6 +56,8 @@ export function ClassList({
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [visibleCount, setVisibleCount] = useState(pageSize);
+  const [showArchived, setShowArchived] = useState(false);
+  const [selectedClass, setSelectedClass] = useState<ClassEvent | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -63,12 +89,14 @@ export function ClassList({
     setVisibleCount(pageSize);
   }, [pageSize, filter, searchTerm, sortBy]);
 
+  const effectiveFilter = showArchived ? "all" : filter;
+
   const filteredClasses = useMemo(() => {
     const now = Date.now();
-    if (filter === "upcoming") return classes.filter((c) => c.startAt >= now);
-    if (filter === "past") return classes.filter((c) => c.startAt < now);
+    if (effectiveFilter === "upcoming") return classes.filter((c) => c.startAt >= now);
+    if (effectiveFilter === "past") return classes.filter((c) => c.startAt < now);
     return classes;
-  }, [classes, filter]);
+  }, [classes, effectiveFilter]);
 
   const searchedClasses = useMemo(() => {
     const query = (searchTerm || "").trim().toLowerCase();
@@ -96,6 +124,52 @@ export function ClassList({
     [sortedClasses, visibleCount]
   );
 
+  const scheduleGroups = useMemo(() => {
+    const grouped = new Map<
+      string,
+      {
+        dateKey: string;
+        dateLabel: string;
+        timeSlots: Map<
+          string,
+          { timeLabel: string; startAt: number; classes: ClassEvent[] }
+        >;
+      }
+    >();
+
+    displayClasses.forEach((item) => {
+      const dateKey = format(new Date(item.startAt), "yyyy-MM-dd");
+      const dateLabel = format(new Date(item.startAt), "dd.MM.yyyy, EEEE");
+      if (!grouped.has(dateKey)) {
+        grouped.set(dateKey, { dateKey, dateLabel, timeSlots: new Map() });
+      }
+      const group = grouped.get(dateKey);
+      if (!group) return;
+      const timeLabel = `${format(new Date(item.startAt), "HH:mm")} - ${format(
+        new Date(item.endAt),
+        "HH:mm",
+      )}`;
+      if (!group.timeSlots.has(timeLabel)) {
+        group.timeSlots.set(timeLabel, {
+          timeLabel,
+          startAt: item.startAt,
+          classes: [],
+        });
+      }
+      const slot = group.timeSlots.get(timeLabel);
+      if (slot) {
+        slot.classes.push(item);
+      }
+    });
+
+    return Array.from(grouped.values()).map((group) => ({
+      ...group,
+      timeSlots: Array.from(group.timeSlots.values()).sort(
+        (a, b) => a.startAt - b.startAt
+      ),
+    }));
+  }, [displayClasses]);
+
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure you want to delete this class?")) return;
     setDeletingId(id);
@@ -114,122 +188,147 @@ export function ClassList({
     return <div className="text-center py-10 text-gray-500">Loading schedule...</div>;
   }
 
-  if (sortedClasses.length === 0) {
-    return (
-      <div className="text-center py-12 bg-gray-50 rounded-xl border border-dashed border-gray-300">
-        <p className="text-gray-500">
-          {filter === "past"
-            ? "No past classes yet."
-            : filter === "upcoming"
-            ? "No upcoming classes scheduled."
-            : "No classes scheduled yet."}
-        </p>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {displayClasses.map((c) => (
-        <div
-          key={c.id}
-          className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow relative group"
-        >
-          <div className="flex justify-between items-start mb-3">
-            <div>
-              <span
-                className={`inline-block px-2 py-1 rounded text-xs font-semibold uppercase tracking-wider mb-2 ${
-                  c.level === "beginner"
-                    ? "bg-green-100 text-green-700"
-                    : c.level === "intermediate"
-                    ? "bg-yellow-100 text-yellow-700"
-                    : c.level === "advanced"
-                    ? "bg-red-100 text-red-700"
-                    : "bg-blue-100 text-blue-700"
-                }`}
-              >
-                {c.level}
-              </span>
-              <h4 className="text-lg font-bold text-gray-900 leading-tight">{c.title}</h4>
-              {c.teacherName && (
-                <p className="text-xs text-gray-500 mt-1">Instructor: {c.teacherName}</p>
-              )}
-            </div>
-            {c.recurringRule && (
-              <div
-                title={`Repeats ${c.recurringRule}`}
-                className="text-purple-600 bg-purple-50 p-1.5 rounded-full"
-              >
-                <Repeat size={14} />
-              </div>
-            )}
-          </div>
-
-          <div className="space-y-2 text-sm text-gray-600 mb-4">
-            <div className="flex items-center gap-2">
-              <Calendar size={16} className="text-gray-400" />
-              <span>{format(new Date(c.startAt), "EEE, MMM d, yyyy")}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Clock size={16} className="text-gray-400" />
-              <span>
-                {format(new Date(c.startAt), "h:mm a")} - {format(new Date(c.endAt), "h:mm a")}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <MapPin size={16} className="text-gray-400" />
-              <span>{c.locationName}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Users size={16} className="text-gray-400" />
-              <span>
-                {c.reservedCount ?? 0}/{c.capacity} booked
-                {c.waitlistCount ? ` - ${c.waitlistCount} waitlist` : ""}
-              </span>
-            </div>
-          </div>
-
-          {(() => {
-            const reserved = c.reservedCount ?? 0;
-            const capacity = c.capacity || 1;
-            const percent = Math.min(100, Math.round((reserved / capacity) * 100));
-            const barColor =
-              percent > 90 ? "bg-red-400" : percent > 70 ? "bg-amber-400" : "bg-emerald-400";
-            return (
-              <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden mb-3">
-                <div className={`h-full ${barColor}`} style={{ width: `${percent}%` }} />
-              </div>
-            );
-          })()}
-
-          <div className="flex justify-between items-center pt-3 border-t border-gray-50 mt-auto">
-            <span className="font-bold text-gray-900">
-              {c.currency || "USD"} {c.price}
-            </span>
-            <div className="flex gap-2">
-              {onViewRoster && (
-                <button
-                  onClick={() => onViewRoster(c.id)}
-                  className="text-indigo-500 hover:text-indigo-700 p-2 rounded-full hover:bg-indigo-50 transition-colors"
-                  title="View Roster"
-                >
-                  <Users size={18} />
-                </button>
-              )}
-              <button
-                onClick={() => handleDelete(c.id)}
-                disabled={!!deletingId}
-                className="text-red-400 hover:text-red-600 p-2 rounded-full hover:bg-red-50 transition-colors"
-                title="Delete Class"
-              >
-                {deletingId === c.id ? "..." : <Trash2 size={18} />}
-              </button>
-            </div>
-          </div>
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-slate-900">Schedule</h1>
+          <p className="text-sm text-slate-500">
+            {sortedClasses.length} classes scheduled
+          </p>
         </div>
-        ))}
+        <button className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700">
+          <Plus size={18} />
+          Add
+        </button>
       </div>
+
+      <div className="flex flex-wrap items-center gap-3">
+        {FILTER_CHIPS.map((chip) => (
+          <button
+            key={chip.id}
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:border-slate-300"
+          >
+            {chip.label}
+            <ChevronDown size={14} className="text-slate-400" />
+          </button>
+        ))}
+        <button className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:border-slate-300">
+          List
+          <ChevronDown size={14} className="text-slate-400" />
+        </button>
+      </div>
+
+      <div className="flex items-center gap-3 text-sm text-slate-600">
+        <Switch
+          checked={showArchived}
+          onCheckedChange={(value) => setShowArchived(Boolean(value))}
+          className="data-[state=checked]:bg-indigo-600"
+        />
+        Show archived
+      </div>
+
+      {sortedClasses.length === 0 ? (
+        <div className="text-center py-12 bg-gray-50 rounded-xl border border-dashed border-gray-300">
+          <p className="text-gray-500">
+            {effectiveFilter === "past"
+              ? "No past classes yet."
+              : effectiveFilter === "upcoming"
+              ? "No upcoming classes scheduled."
+              : "No classes scheduled yet."}
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {scheduleGroups.map((group) => (
+            <div
+              key={group.dateKey}
+              className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="text-base font-semibold text-indigo-600 underline">
+                  {group.dateLabel}
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1">
+                    <button className="rounded-lg bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm">
+                      Time
+                    </button>
+                    <button className="rounded-lg px-3 py-1 text-xs font-semibold text-slate-500">
+                      Rooms
+                    </button>
+                  </div>
+                  <button className="rounded-xl border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
+                    Prev
+                  </button>
+                  <button className="rounded-xl border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
+                    Today
+                  </button>
+                  <button className="rounded-xl border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
+                    Next
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-4 divide-y divide-slate-100">
+                {group.timeSlots.map((slot, slotIndex) => (
+                  <div
+                    key={`${group.dateKey}-${slot.timeLabel}`}
+                    className="grid gap-4 py-4 md:grid-cols-[140px_1fr]"
+                  >
+                    <div className="text-sm font-semibold text-slate-500">
+                      {slot.timeLabel}
+                    </div>
+                    <div className="space-y-3">
+                      {slot.classes.map((item, itemIndex) => {
+                        const accent =
+                          ACCENT_COLORS[
+                            (slotIndex + itemIndex) % ACCENT_COLORS.length
+                          ];
+                        const reserved = item.reservedCount ?? 0;
+                        const capacity = item.capacity || 1;
+                        const room = item.locationName || "Studio";
+                        const teacher = item.teacherName || "Instructor";
+                        return (
+                          <button
+                            key={item.id}
+                            onClick={() => setSelectedClass(item)}
+                            className="group flex w-full items-center gap-3 rounded-xl border border-transparent bg-slate-50 px-4 py-3 text-left transition hover:border-slate-200 hover:bg-slate-100"
+                          >
+                            <span
+                              className="h-10 w-1.5 rounded-full"
+                              style={{ backgroundColor: accent }}
+                            />
+                            <div className="flex-1">
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="text-sm font-semibold text-slate-900">
+                                  {item.title}
+                                </div>
+                                <div className="text-xs text-slate-500">
+                                  {reserved}/{capacity} students
+                                </div>
+                              </div>
+                              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                                <span className="inline-flex items-center gap-1">
+                                  <MapPin size={12} />
+                                  {room}
+                                </span>
+                                <span className="text-slate-300">·</span>
+                                <span>With {teacher}</span>
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {sortedClasses.length > displayClasses.length && (
         <div className="flex justify-center">
           <button
@@ -241,6 +340,91 @@ export function ClassList({
           </button>
         </div>
       )}
+
+      <Sheet open={!!selectedClass} onOpenChange={(open) => !open && setSelectedClass(null)}>
+        <SheetContent className="sm:max-w-md">
+          <SheetHeader className="border-b border-slate-100 px-6 pb-4">
+            <SheetTitle className="text-lg font-semibold text-slate-900">
+              Lesson details
+            </SheetTitle>
+            <SheetDescription className="text-sm text-slate-500">
+              Review the class information.
+            </SheetDescription>
+          </SheetHeader>
+          {selectedClass ? (
+            <div className="flex flex-col gap-5 px-6 py-4 text-sm text-slate-600">
+              <div className="flex items-center justify-between gap-6">
+                <span className="text-xs uppercase tracking-wide text-slate-400">Class</span>
+                <span className="font-semibold text-slate-900">{selectedClass.title}</span>
+              </div>
+              <div className="flex items-center justify-between gap-6">
+                <span className="text-xs uppercase tracking-wide text-slate-400">Room</span>
+                <span className="font-semibold text-slate-900">
+                  {selectedClass.locationName || "Studio"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-6">
+                <span className="text-xs uppercase tracking-wide text-slate-400">Date</span>
+                <span className="font-semibold text-slate-900">
+                  {format(new Date(selectedClass.startAt), "EEE, MMM d, yyyy")}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-6">
+                <span className="text-xs uppercase tracking-wide text-slate-400">Time</span>
+                <span className="font-semibold text-slate-900">
+                  {format(new Date(selectedClass.startAt), "h:mm a")} -{" "}
+                  {format(new Date(selectedClass.endAt), "h:mm a")}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-6">
+                <span className="text-xs uppercase tracking-wide text-slate-400">Teacher</span>
+                <span className="font-semibold text-slate-900">
+                  {selectedClass.teacherName || "Instructor"}
+                </span>
+              </div>
+              <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+                <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                  <Users size={16} />
+                  {selectedClass.reservedCount ?? 0}/{selectedClass.capacity} students
+                </div>
+                {selectedClass.waitlistCount ? (
+                  <p className="mt-1 text-xs text-slate-500">
+                    {selectedClass.waitlistCount} on the waitlist
+                  </p>
+                ) : null}
+              </div>
+              {selectedClass.recurringRule ? (
+                <div className="flex items-center gap-2 text-xs text-slate-500">
+                  <Repeat size={14} />
+                  Repeats {selectedClass.recurringRule}
+                </div>
+              ) : null}
+              <div className="flex items-center justify-between border-t border-slate-100 pt-4">
+                {onViewRoster ? (
+                  <button
+                    onClick={() => onViewRoster(selectedClass.id)}
+                    className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    View roster
+                  </button>
+                ) : (
+                  <span className="inline-flex items-center gap-2 text-sm font-semibold text-slate-700">
+                    <Calendar size={16} />
+                    {selectedClass.currency || "USD"} {selectedClass.price}
+                  </span>
+                )}
+                <button
+                  onClick={() => handleDelete(selectedClass.id)}
+                  disabled={!!deletingId}
+                  className="rounded-lg border border-red-100 bg-red-50 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-100"
+                >
+                  {deletingId === selectedClass.id ? "Deleting..." : "Delete class"}
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
