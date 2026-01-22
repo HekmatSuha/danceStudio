@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { useParams } from "next/navigation";
 import {
   Calendar,
   ChevronDown,
@@ -20,6 +21,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../../../../../components/ui/dialog";
+import { supabase } from "../../../../../lib/supabase";
+import { markAttendance } from "../../../../../lib/bookings";
 
 type TabKey = "classes" | "season" | "payments" | "visits" | "history";
 
@@ -31,88 +34,190 @@ const TABS: Array<{ key: TabKey; label: string }> = [
   { key: "history", label: "History" },
 ];
 
-const SEASON_TICKETS = [
-  {
-    id: "1",
-    title: "Robotics Tue, Thu, 5:00 PM",
-    remaining: "11/11",
-    price: "13515",
-    status: "Active",
-    start: "22.01.2026",
-    end: "21.02.2026",
-  },
-  {
-    id: "2",
-    title: "Finance",
-    remaining: "10/10",
-    price: "10000",
-    status: "Active",
-    start: "22.01.2026",
-    end: "21.02.2026",
-  },
-  {
-    id: "3",
-    title: "Chemistry",
-    remaining: "8/8",
-    price: "20000",
-    status: "Active",
-    start: "21.01.2026",
-    end: "20.02.2026",
-  },
-];
+type StudentProfile = {
+  id: string;
+  first_name?: string | null;
+  last_name?: string | null;
+  email?: string | null;
+  phone_number?: string | null;
+  gender?: string | null;
+  created_at?: string | null;
+  avatar_url?: string | null;
+};
 
-const PAYMENTS = [
-  {
-    id: "1",
-    type: "Kaspi QR",
-    sum: "16 645 T",
-    date: "22.01.2026",
-    description: "Demo Admission [DEMO]",
-  },
-  {
-    id: "2",
-    type: "Payment by card through the terminal",
-    sum: "13 515 T",
-    date: "22.01.2026",
-    description: "Subscription payment (demo) [DEMO]",
-  },
-  {
-    id: "3",
-    type: "Payment by card through the terminal",
-    sum: "10 000 T",
-    date: "22.01.2026",
-    description: "Subscription payment (demo) [DEMO]",
-  },
-];
+type SlotRow = {
+  uuid: string;
+  title?: string | null;
+  start_time?: string | null;
+  end_time?: string | null;
+  price?: number | string | null;
+  max_participants?: number | null;
+  trainer?: { first_name?: string | null; last_name?: string | null } | null;
+  studio?: { name?: string | null; address?: string | null; city?: string | null } | null;
+};
 
-const VISITS = [
-  {
-    id: "1",
-    title: "English Mon, Wed, Fri 11:00",
-    status: "Visited",
-    payment: "Paid",
-    date: "22.01.2026",
-  },
-  {
-    id: "2",
-    title: "Finance",
-    status: "Missed",
-    payment: "Paid",
-    date: "22.01.2026",
-  },
-  {
-    id: "3",
-    title: "Robotics Tue, Thu, 5:00 PM",
-    status: "I was sick",
-    payment: "Paid",
-    date: "22.01.2026",
-  },
-];
+type BookingRow = {
+  uuid: string;
+  appointment_slot: string;
+  status: string;
+  attended?: boolean | null;
+  booking_date?: string | null;
+};
 
 export default function OwnerStudentDetailPage() {
+  const params = useParams();
+  const studentId = typeof params?.id === "string" ? params.id : "";
   const [activeTab, setActiveTab] = useState<TabKey>("classes");
   const [showSeasonForm, setShowSeasonForm] = useState(false);
   const [showPaymentForm, setShowPaymentForm] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [student, setStudent] = useState<StudentProfile | null>(null);
+  const [bookings, setBookings] = useState<BookingRow[]>([]);
+  const [slotMap, setSlotMap] = useState<Map<string, SlotRow>>(new Map());
+  const [visitsStatus, setVisitsStatus] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (!studentId) return;
+    let active = true;
+    const load = async () => {
+      setLoading(true);
+      try {
+        const { data: profileData, error: profileError } = await supabase
+          .from("profiles")
+          .select("id, first_name, last_name, email, phone_number, gender, created_at, avatar_url")
+          .eq("id", studentId)
+          .single();
+        if (profileError) throw profileError;
+
+        const { data: bookingRows, error: bookingError } = await supabase
+          .from("bookings")
+          .select("uuid, appointment_slot, status, attended, booking_date")
+          .eq("user_id", studentId)
+          .order("booking_date", { ascending: false });
+        if (bookingError) throw bookingError;
+
+        const slotIds = (bookingRows || [])
+          .map((row) => row.appointment_slot)
+          .filter(Boolean);
+
+        let slots: SlotRow[] = [];
+        if (slotIds.length > 0) {
+          const { data: slotRows, error: slotError } = await supabase
+            .from("slots")
+            .select(`
+              uuid,
+              title,
+              start_time,
+              end_time,
+              price,
+              max_participants,
+              trainer:profiles(first_name, last_name),
+              studio:studios(name, address, city)
+            `)
+            .in("uuid", slotIds);
+          if (slotError) throw slotError;
+          slots = (slotRows as SlotRow[]) || [];
+        }
+
+        if (!active) return;
+        setStudent(profileData as StudentProfile);
+        setBookings((bookingRows as BookingRow[]) || []);
+        setSlotMap(new Map(slots.map((slot) => [slot.uuid, slot])));
+        setVisitsStatus(
+          (bookingRows as BookingRow[] | undefined)?.reduce((acc, row) => {
+            const key = row.uuid;
+            if (row.attended) {
+              acc[key] = "Visited";
+            } else if (row.status === "cancelled") {
+              acc[key] = "Missed";
+            } else {
+              acc[key] = "Pending";
+            }
+            return acc;
+          }, {} as Record<string, string>) || {},
+        );
+      } catch (err) {
+        console.error(err);
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+    load();
+    return () => {
+      active = false;
+    };
+  }, [studentId]);
+
+  const studentName = `${student?.first_name || ""} ${student?.last_name || ""}`.trim() || "Student";
+  const totalPaid = useMemo(() => {
+    return bookings.reduce((sum, booking) => {
+      const slot = slotMap.get(booking.appointment_slot);
+      const price = Number(slot?.price || 0);
+      if (!Number.isFinite(price)) return sum;
+      if (booking.status === "cancelled") return sum;
+      return sum + price;
+    }, 0);
+  }, [bookings, slotMap]);
+
+  const paymentsRows = useMemo(() => {
+    return bookings.map((booking, index) => {
+      const slot = slotMap.get(booking.appointment_slot);
+      const price = Number(slot?.price || 0);
+      const date = booking.booking_date
+        ? new Date(booking.booking_date).toLocaleDateString()
+        : "-";
+      return {
+        id: booking.uuid,
+        type: "Class booking",
+        sum: `${price.toLocaleString()} T`,
+        date,
+        description: slot?.title || "Class booking",
+        index: index + 1,
+      };
+    });
+  }, [bookings, slotMap]);
+
+  const seasonTickets = useMemo(() => {
+    return bookings.map((booking, index) => {
+      const slot = slotMap.get(booking.appointment_slot);
+      const start = slot?.start_time ? new Date(slot.start_time).toLocaleDateString() : "-";
+      const end = slot?.end_time ? new Date(slot.end_time).toLocaleDateString() : "-";
+      return {
+        id: booking.uuid,
+        title: slot?.title || "Class",
+        remaining: "1/1",
+        price: `${Number(slot?.price || 0).toLocaleString()}`,
+        status: booking.status === "cancelled" ? "Inactive" : "Active",
+        start,
+        end,
+        index: index + 1,
+      };
+    });
+  }, [bookings, slotMap]);
+
+  const visitsRows = useMemo(() => {
+    return bookings.map((booking, index) => {
+      const slot = slotMap.get(booking.appointment_slot);
+      const date = slot?.start_time ? new Date(slot.start_time).toLocaleDateString() : "-";
+      return {
+        id: booking.uuid,
+        title: slot?.title || "Class",
+        payment: booking.status === "cancelled" ? "Unpaid" : "Paid",
+        date,
+        index: index + 1,
+      };
+    });
+  }, [bookings, slotMap]);
+
+  const handleVisitStatusChange = async (bookingId: string, value: string) => {
+    setVisitsStatus((prev) => ({ ...prev, [bookingId]: value }));
+    const attended = value === "Visited" || value === "Visited (by car)";
+    try {
+      await markAttendance(bookingId, attended);
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-10 space-y-8">
@@ -122,7 +227,9 @@ export default function OwnerStudentDetailPage() {
         </div>
         <div className="flex-1 flex flex-col gap-3">
           <div className="flex flex-wrap items-center gap-4">
-            <h1 className="text-xl font-semibold text-slate-900">student 1</h1>
+            <h1 className="text-xl font-semibold text-slate-900">
+              {loading ? "Loading..." : studentName}
+            </h1>
             <div className="flex items-center gap-2 text-slate-500">
               <Info size={18} className="text-indigo-500" />
               <MessageCircle size={18} className="text-emerald-500" />
@@ -130,7 +237,7 @@ export default function OwnerStudentDetailPage() {
             <div className="flex items-center gap-3 text-sm text-slate-600">
               <span>Balance:</span>
               <span className="text-indigo-600 font-semibold border-b border-dashed border-indigo-400 pb-0.5">
-                5 000 T
+                {totalPaid.toLocaleString()} T
               </span>
               <button className="text-indigo-500 font-medium hover:underline">
                 Reconciliation
@@ -142,7 +249,10 @@ export default function OwnerStudentDetailPage() {
               <Users size={16} className="text-indigo-500" /> Group classes
             </span>
             <span className="inline-flex items-center gap-2">
-              <Calendar size={16} className="text-indigo-500" /> Joined Jan 2026
+              <Calendar size={16} className="text-indigo-500" /> Joined{" "}
+              {student?.created_at
+                ? new Date(student.created_at).toLocaleDateString()
+                : "-"}
             </span>
           </div>
         </div>
@@ -169,12 +279,14 @@ export default function OwnerStudentDetailPage() {
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-6">
             <div>
               <h2 className="text-lg font-semibold text-slate-900">
-                Finance - Coach Phillip
+                {seasonTickets[0]?.title || "Class"}
               </h2>
               <p className="text-sm text-slate-400 mt-1">Group classes</p>
             </div>
             <div className="flex items-center gap-4">
-              <div className="text-7xl font-semibold text-slate-900">6</div>
+              <div className="text-7xl font-semibold text-slate-900">
+                {bookings.length}
+              </div>
               <div className="h-12 w-12 rounded-full bg-indigo-500 text-white flex items-center justify-center">
                 <Users size={22} />
               </div>
@@ -255,9 +367,9 @@ export default function OwnerStudentDetailPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {SEASON_TICKETS.map((ticket, index) => (
+                  {seasonTickets.map((ticket) => (
                     <tr key={ticket.id}>
-                      <td className="px-6 py-4 text-slate-500">{index + 1}</td>
+                      <td className="px-6 py-4 text-slate-500">{ticket.index}</td>
                       <td className="px-6 py-4">{ticket.title}</td>
                       <td className="px-6 py-4">{ticket.remaining}</td>
                       <td className="px-6 py-4">{ticket.price}</td>
@@ -294,11 +406,11 @@ export default function OwnerStudentDetailPage() {
         <section className="space-y-6">
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 grid gap-4 lg:grid-cols-5 text-sm">
             {[
-              { id: "total-income", label: "Total income", value: "77 073 T" },
-              { id: "total-purchases", label: "Total purchases", value: "77 073 T" },
+              { id: "total-income", label: "Total income", value: `${totalPaid.toLocaleString()} T` },
+              { id: "total-purchases", label: "Total purchases", value: `${totalPaid.toLocaleString()} T` },
               { id: "returns", label: "Returns", value: "0 T" },
-              { id: "average-bill", label: "Average bill", value: "15 415 T" },
-              { id: "purchase-count", label: "Total purchases", value: "5" },
+              { id: "average-bill", label: "Average bill", value: bookings.length ? `${Math.round(totalPaid / bookings.length).toLocaleString()} T` : "0 T" },
+              { id: "purchase-count", label: "Total purchases", value: `${bookings.length}` },
             ].map((item) => (
               <div key={item.id} className="flex flex-col gap-1">
                 <span className="text-slate-400">{item.label}</span>
@@ -363,9 +475,9 @@ export default function OwnerStudentDetailPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {PAYMENTS.map((payment, index) => (
+                  {paymentsRows.map((payment) => (
                     <tr key={payment.id}>
-                      <td className="px-6 py-4 text-slate-500">{index + 1}</td>
+                      <td className="px-6 py-4 text-slate-500">{payment.index}</td>
                       <td className="px-6 py-4">{payment.type}</td>
                       <td className="px-6 py-4">{payment.sum}</td>
                       <td className="px-6 py-4">{payment.date}</td>
@@ -432,18 +544,25 @@ export default function OwnerStudentDetailPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {VISITS.map((visit, index) => (
+                  {visitsRows.map((visit) => (
                     <tr key={visit.id}>
-                      <td className="px-6 py-4 text-slate-500">{index + 1}</td>
+                      <td className="px-6 py-4 text-slate-500">{visit.index}</td>
                       <td className="px-6 py-4">{visit.title}</td>
                       <td className="px-6 py-4">
-                        <select className="border border-slate-200 rounded-full px-3 py-1 text-sm text-emerald-600 bg-emerald-50">
+                        <select
+                          className="border border-slate-200 rounded-full px-3 py-1 text-sm text-emerald-600 bg-emerald-50"
+                          value={visitsStatus[visit.id] || "Pending"}
+                          onChange={(event) =>
+                            handleVisitStatusChange(visit.id, event.target.value)
+                          }
+                        >
                           <option>Visited</option>
                           <option>Missed</option>
                           <option>I was sick</option>
                           <option>Vacation</option>
                           <option>Visited (by car)</option>
                           <option>One-time lesson</option>
+                          <option>Pending</option>
                         </select>
                       </td>
                       <td className="px-6 py-4">{visit.payment}</td>
