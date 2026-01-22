@@ -31,6 +31,27 @@ export async function createBooking(slotId: string) {
   return data as Booking;
 }
 
+export async function createBookingForStudent(
+  slotId: string,
+  userId: string,
+  status = "confirmed"
+) {
+  const { data, error } = await supabase
+    .from('bookings')
+    .insert({
+      user_id: userId,
+      appointment_slot: slotId,
+      status,
+      booking_date: new Date().toISOString(),
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  clearCacheByPrefix("bookings:");
+  return data as Booking;
+}
+
 export async function cancelBooking(bookingId: string) {
   const { error } = await supabase
     .from('bookings')
@@ -108,6 +129,7 @@ export type BookingWithUser = {
     first_name: string;
     last_name: string;
     email?: string | null;
+    phone_number?: string | null;
   } | null;
 };
 
@@ -117,6 +139,7 @@ type BookingWithUserRow = Omit<BookingWithUser, "user"> & {
     first_name: string;
     last_name: string;
     email?: string | null;
+    phone_number?: string | null;
   }[] | null;
 };
 
@@ -128,7 +151,7 @@ export async function fetchSlotBookings(slotId: string) {
       status,
       attended,
       booking_date,
-      user:profiles(id, first_name, last_name, email)
+      user:profiles(id, first_name, last_name, email, phone_number)
     `)
     .eq('appointment_slot', slotId);
 

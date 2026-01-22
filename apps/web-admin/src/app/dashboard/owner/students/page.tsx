@@ -1,11 +1,22 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Plus, UserCheck, UserX, Pencil, Trash2 } from "lucide-react";
+import {
+  Plus,
+  UserCheck,
+  UserX,
+  Pencil,
+  Trash2,
+  Search,
+  Filter,
+  Download,
+  Eye,
+} from "lucide-react";
 import { CreateUserForm } from "../../../../components/dashboard/CreateUserForm";
 import { supabase } from "../../../../lib/supabase";
 import { type AccountProfile } from "../../../../lib/auth";
 import { useOwnerStudiosGuard } from "../../../../lib/useOwnerStudiosGuard";
+import { useRouter } from "next/navigation";
 
 type StudentRow = AccountProfile & { id?: string; created_at?: string; is_active?: boolean | null };
 type BookingRow = { user?: StudentRow | null };
@@ -14,15 +25,22 @@ export default function OwnerStudentsPage() {
   const [showForm, setShowForm] = useState(false);
   const [students, setStudents] = useState<StudentRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
+  const [nameSearch, setNameSearch] = useState("");
+  const [phoneSearch, setPhoneSearch] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [genderFilter, setGenderFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [editingStudent, setEditingStudent] = useState<StudentRow | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const { studios, loading: studiosLoading, role } = useOwnerStudiosGuard();
+  const router = useRouter();
 
   const handleSuccess = () => {
     setShowForm(false);
     alert("Student created successfully!");
-    setSearch("");
+    setNameSearch("");
+    setPhoneSearch("");
     refreshStudents(studios.map((s) => s.uuid));
   };
 
@@ -90,13 +108,41 @@ export default function OwnerStudentsPage() {
   }, [studiosLoading, studioIdsKey, refreshStudents]);
 
   const filteredStudents = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    return students.filter((s) =>
-      s.email?.toLowerCase().includes(query) ||
-      s.first_name?.toLowerCase().includes(query) ||
-      s.last_name?.toLowerCase().includes(query)
-    );
-  }, [students, search]);
+    const nameQuery = nameSearch.trim().toLowerCase();
+    const phoneQuery = phoneSearch.trim().toLowerCase();
+    const fromDate = dateFrom ? new Date(dateFrom).getTime() : null;
+    const toDate = dateTo ? new Date(dateTo).getTime() : null;
+
+    return students.filter((s) => {
+      const fullName = `${s.first_name || ""} ${s.last_name || ""}`.trim().toLowerCase();
+      const email = s.email?.toLowerCase() || "";
+      const phone = s.phone_number?.toLowerCase() || "";
+      if (nameQuery && !fullName.includes(nameQuery) && !email.includes(nameQuery)) {
+        return false;
+      }
+      if (phoneQuery && !phone.includes(phoneQuery)) {
+        return false;
+      }
+      if (fromDate || toDate) {
+        const created = s.created_at ? new Date(s.created_at).getTime() : null;
+        if (created == null) return false;
+        if (fromDate && created < fromDate) return false;
+        if (toDate && created > toDate) return false;
+      }
+      if (genderFilter !== "all") {
+        const gender = (s.gender || "").toLowerCase();
+        if (genderFilter === "male" && gender !== "male") return false;
+        if (genderFilter === "female" && gender !== "female") return false;
+        if (genderFilter === "other" && gender && gender !== "other") return false;
+      }
+      if (statusFilter !== "all") {
+        const isActive = s.is_active ?? true;
+        if (statusFilter === "active" && !isActive) return false;
+        if (statusFilter === "inactive" && isActive) return false;
+      }
+      return true;
+    });
+  }, [students, nameSearch, phoneSearch, dateFrom, dateTo, genderFilter, statusFilter]);
 
   if (studiosLoading) {
     return <div className="p-6 text-slate-500">Loading students...</div>;
@@ -104,6 +150,12 @@ export default function OwnerStudentsPage() {
   if (role === "owner" && studios.length === 0) {
     return null;
   }
+
+  const handleStudentClick = (student: StudentRow) => {
+    const id = student.id || student.uuid;
+    if (!id) return;
+    router.push(`/dashboard/owner/students/${id}`);
+  };
 
   const handleEditSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -195,19 +247,27 @@ export default function OwnerStudentsPage() {
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-10">
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-6">
         <div>
           <h1 className="text-3xl font-bold text-slate-900">Students</h1>
           <p className="text-slate-600 mt-1">Manage your student base.</p>
         </div>
         {!showForm && (
-          <button
-            onClick={() => setShowForm(true)}
-            className="flex items-center gap-2 bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors shadow-sm font-medium"
-          >
-            <Plus size={18} />
-            Add Student
-          </button>
+          <div className="flex items-center gap-3">
+            <button className="h-11 w-11 rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50">
+              <Filter size={18} className="mx-auto" />
+            </button>
+            <button className="h-11 w-11 rounded-xl bg-indigo-100 text-indigo-600 hover:bg-indigo-200">
+              <Download size={18} className="mx-auto" />
+            </button>
+            <button
+              onClick={() => setShowForm(true)}
+              className="flex items-center gap-2 bg-indigo-600 text-white px-5 py-2.5 rounded-xl hover:bg-indigo-700 transition-colors shadow-sm font-medium"
+            >
+              <Plus size={18} />
+              Add
+            </button>
+          </div>
         )}
       </div>
 
@@ -251,14 +311,62 @@ export default function OwnerStudentsPage() {
         </div>
       )}
 
-      <div className="mb-6">
-        <input
-          type="text"
-          placeholder="Search students by name or email..."
-          className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-purple-500 outline-none"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+      <div className="mb-6 space-y-4">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <div className="relative">
+            <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-indigo-500" />
+            <input
+              type="text"
+              placeholder="Search by name"
+              className="w-full border border-slate-200 rounded-xl pl-11 pr-4 py-3 focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+              value={nameSearch}
+              onChange={(e) => setNameSearch(e.target.value)}
+            />
+          </div>
+          <div className="relative">
+            <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-indigo-500" />
+            <input
+              type="text"
+              placeholder="Search by phone"
+              className="w-full border border-slate-200 rounded-xl pl-11 pr-4 py-3 focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+              value={phoneSearch}
+              onChange={(e) => setPhoneSearch(e.target.value)}
+            />
+          </div>
+          <input
+            type="date"
+            className="w-full border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+          />
+          <input
+            type="date"
+            className="w-full border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+          />
+        </div>
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <select
+            className="w-full border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+            value={genderFilter}
+            onChange={(e) => setGenderFilter(e.target.value)}
+          >
+            <option value="all">Gender</option>
+            <option value="female">Female</option>
+            <option value="male">Male</option>
+            <option value="other">Other</option>
+          </select>
+          <select
+            className="w-full border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+          >
+            <option value="all">Status</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
+        </div>
       </div>
 
       {loading ? (
@@ -268,25 +376,45 @@ export default function OwnerStudentsPage() {
           <p className="text-slate-500">No students found. Add one to get started.</p>
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="flex justify-end px-6 py-4 text-sm text-slate-500">
+            Total: {filteredStudents.length}
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm text-slate-600">
               <thead className="bg-slate-50 border-b border-slate-200 text-xs uppercase font-semibold text-slate-500">
                 <tr>
+                  <th className="px-6 py-4">#</th>
+                  <th className="px-6 py-4">Photo</th>
                   <th className="px-6 py-4">Student</th>
-                  <th className="px-6 py-4">Email</th>
+                  <th className="px-6 py-4">Phone</th>
                   <th className="px-6 py-4">Joined</th>
+                  <th className="px-6 py-4">Classes</th>
+                  <th className="px-6 py-4">Balance</th>
+                  <th className="px-6 py-4">Gender</th>
+                  <th className="px-6 py-4">Status</th>
                   <th className="px-6 py-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredStudents.map((student) => (
-                  <tr key={student.id || student.uuid} className="hover:bg-slate-50 transition-colors">
+                {filteredStudents.map((student, index) => {
+                  const studentId = student.id || student.uuid;
+                  const initials = `${student.first_name?.[0] || ""}${student.last_name?.[0] || ""}`.trim() || "S";
+                  const isActive = student.is_active ?? true;
+                  return (
+                  <tr
+                    key={studentId}
+                    className="hover:bg-slate-50 transition-colors cursor-pointer"
+                    onClick={() => handleStudentClick(student)}
+                  >
+                    <td className="px-6 py-4 text-slate-500">{filteredStudents.length - index}</td>
+                    <td className="px-6 py-4">
+                      <div className="h-10 w-10 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center font-semibold">
+                        {initials}
+                      </div>
+                    </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center font-bold">
-                          {student.first_name?.[0]}{student.last_name?.[0]}
-                        </div>
                         <div>
                           <div className="font-semibold text-slate-900">
                             {student.first_name} {student.last_name}
@@ -297,46 +425,55 @@ export default function OwnerStudentsPage() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4">{student.email}</td>
+                    <td className="px-6 py-4">{student.phone_number || "-"}</td>
                     <td className="px-6 py-4">
                       {student.created_at ? new Date(student.created_at).toLocaleDateString() : "-"}
+                    </td>
+                    <td className="px-6 py-4 text-slate-500">-</td>
+                    <td className="px-6 py-4 font-semibold text-slate-700">0</td>
+                    <td className="px-6 py-4 capitalize">{student.gender || "-"}</td>
+                    <td className="px-6 py-4">
+                      <span
+                        className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
+                          isActive
+                            ? "bg-emerald-50 text-emerald-700"
+                            : "bg-rose-50 text-rose-600"
+                        }`}
+                      >
+                        {isActive ? "Active" : "Inactive"}
+                      </span>
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex justify-end gap-2">
                         <button
                           type="button"
-                          onClick={() => setEditingStudent(student)}
-                          className="p-2 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleStudentClick(student);
+                          }}
+                          className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                          title="View student"
+                        >
+                          <Eye size={16} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingStudent(student);
+                          }}
+                          className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
                           title="Edit student"
                         >
                           <Pencil size={16} />
                         </button>
-                        <a
-                          href={student.phone_number ? `https://wa.me/${student.phone_number.replace(/\D/g, "")}` : "#"}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className={`p-2 rounded-lg transition-colors ${
-                            student.phone_number
-                              ? "text-gray-400 hover:text-green-600 hover:bg-green-50"
-                              : "text-gray-200 cursor-not-allowed"
-                          }`}
-                          title={student.phone_number ? "Chat on WhatsApp" : "No phone number"}
-                          onClick={(e) => !student.phone_number && e.preventDefault()}
-                        >
-                          <svg
-                            viewBox="0 0 24 24"
-                            width="16"
-                            height="16"
-                            fill="currentColor"
-                            className="w-4 h-4"
-                          >
-                            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
-                          </svg>
-                        </a>
                         <button
                           type="button"
-                          onClick={() => handleToggleActive(student)}
-                          className="p-2 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleActive(student);
+                          }}
+                          className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
                           title={(student.is_active ?? true) ? "Deactivate" : "Activate"}
                           disabled={submitting}
                         >
@@ -344,8 +481,11 @@ export default function OwnerStudentsPage() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleDeleteStudent(student)}
-                          className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteStudent(student);
+                          }}
+                          className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                           title="Delete student"
                           disabled={submitting}
                         >
@@ -354,7 +494,7 @@ export default function OwnerStudentsPage() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                )})}
               </tbody>
             </table>
           </div>

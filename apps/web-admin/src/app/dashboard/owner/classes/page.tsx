@@ -28,22 +28,16 @@ import {
 } from "../../../../components/ui/select";
 import { Switch } from "../../../../components/ui/switch";
 import { useOwnerStudiosGuard } from "../../../../lib/useOwnerStudiosGuard";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "../../../../components/ui/sheet";
+import { useRouter } from "next/navigation";
 
 export default function OwnerClassesPage() {
   // State
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showForm, setShowForm] = useState(false);
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
-  const [selectedClass, setSelectedClass] = useState<ClassEvent | null>(null);
   const [allClasses, setAllClasses] = useState<ClassEvent[]>([]);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const router = useRouter();
 
   // Filters
   const [teacherFilter, setTeacherFilter] = useState("all");
@@ -115,7 +109,6 @@ export default function OwnerClassesPage() {
   };
 
   const handleViewRoster = async (classId: string) => {
-    setSelectedClass(null);
     setSelectedClassId(classId);
     setLoadingRoster(true);
     try {
@@ -314,7 +307,7 @@ export default function OwnerClassesPage() {
 
                                 {/* Class Card */}
                                 <div 
-                                    onClick={() => setSelectedClass(cls)}
+                                    onClick={() => router.push(`/dashboard/owner/classes/${cls.id}`)}
                                     className="flex-1 cursor-pointer transition-transform hover:scale-[1.01]"
                                 >
                                     <div className="flex items-start gap-4">
@@ -399,74 +392,6 @@ export default function OwnerClassesPage() {
             </div>
         </DialogContent>
       </Dialog>
-
-      <Sheet open={!!selectedClass} onOpenChange={(open) => !open && setSelectedClass(null)}>
-        <SheetContent className="sm:max-w-md">
-          <SheetHeader className="border-b border-slate-100 px-6 pb-4">
-            <SheetTitle className="text-lg font-semibold text-slate-900">
-              Lesson details
-            </SheetTitle>
-            <SheetDescription className="text-sm text-slate-500">
-              Review the class information.
-            </SheetDescription>
-          </SheetHeader>
-          {selectedClass ? (
-            <div className="flex flex-col gap-5 px-6 py-4 text-sm text-slate-600">
-              <div className="flex items-center justify-between gap-6">
-                <span className="text-xs uppercase tracking-wide text-slate-400">Class</span>
-                <span className="font-semibold text-slate-900">{selectedClass.title}</span>
-              </div>
-              <div className="flex items-center justify-between gap-6">
-                <span className="text-xs uppercase tracking-wide text-slate-400">Room</span>
-                <span className="font-semibold text-slate-900">
-                  {selectedClass.locationName || "Studio"}
-                </span>
-              </div>
-              <div className="flex items-center justify-between gap-6">
-                <span className="text-xs uppercase tracking-wide text-slate-400">Date</span>
-                <span className="font-semibold text-slate-900">
-                  {format(new Date(selectedClass.startAt), "EEE, MMM d, yyyy")}
-                </span>
-              </div>
-              <div className="flex items-center justify-between gap-6">
-                <span className="text-xs uppercase tracking-wide text-slate-400">Time</span>
-                <span className="font-semibold text-slate-900">
-                  {format(new Date(selectedClass.startAt), "h:mm a")} -{" "}
-                  {format(new Date(selectedClass.endAt), "h:mm a")}
-                </span>
-              </div>
-              <div className="flex items-center justify-between gap-6">
-                <span className="text-xs uppercase tracking-wide text-slate-400">Teacher</span>
-                <span className="font-semibold text-slate-900">
-                  {selectedClass.teacherName || "Instructor"}
-                </span>
-              </div>
-              <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
-                <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                  <Users size={16} />
-                  {selectedClass.reservedCount ?? 0}/{selectedClass.capacity} students
-                </div>
-                {selectedClass.waitlistCount ? (
-                  <p className="mt-1 text-xs text-slate-500">
-                    {selectedClass.waitlistCount} on the waitlist
-                  </p>
-                ) : null}
-              </div>
-              <div className="flex items-center justify-between border-t border-slate-100 pt-4">
-                <button
-                  onClick={() => handleViewRoster(selectedClass.id)}
-                  className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                >
-                  View roster
-                </button>
-                <span className="text-sm font-semibold text-slate-700">
-                  {selectedClass.currency || "USD"} {selectedClass.price}
-                </span>
-              </div>
-            </div>
-          ) : null}
-        </SheetContent>
-      </Sheet>
 
       {/* Create Modal (Reused) */}
       <Dialog open={showForm} onOpenChange={setShowForm}>
