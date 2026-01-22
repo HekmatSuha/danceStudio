@@ -2,8 +2,9 @@
 
 import React, { useState } from "react";
 import { Loader2, Plus, X } from "lucide-react";
-import { registerUser, type UserRole } from "../../lib/auth";
+import { type UserRole } from "../../lib/auth";
 import { getErrorMessage } from "../../lib/errors";
+import { createStudentAction } from "../../app/actions/create-student";
 
 interface CreateUserFormProps {
   initialRole: UserRole;
@@ -20,7 +21,6 @@ export function CreateUserForm({ initialRole, onSuccess, onCancel }: CreateUserF
     lastName: "",
     email: "",
     phone: "",
-    password: "",
     gender: "F",
     role: initialRole,
   });
@@ -31,15 +31,20 @@ export function CreateUserForm({ initialRole, onSuccess, onCancel }: CreateUserF
     setLoading(true);
 
     try {
-      await registerUser({
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        email: formData.email,
-        phone: formData.phone,
-        password: formData.password,
-        role: formData.role,
-        gender: formData.gender,
-      });
+      if (formData.role !== "student") {
+        throw new Error("This form currently supports creating students only.");
+      }
+      const payload = new FormData();
+      payload.set("firstName", formData.firstName);
+      payload.set("lastName", formData.lastName);
+      payload.set("email", formData.email);
+      payload.set("phone", formData.phone);
+      payload.set("gender", formData.gender);
+
+      const result = await createStudentAction(payload);
+      if (!result.success) {
+        throw new Error(result.message || "Failed to create student.");
+      }
       onSuccess();
     } catch (err: unknown) {
       console.error("User Creation Error:", err);
@@ -161,17 +166,8 @@ export function CreateUserForm({ initialRole, onSuccess, onCancel }: CreateUserF
           </select>
         </div>
 
-        <div className="space-y-1">
-          <label className="text-sm font-medium text-gray-700">Initial Password *</label>
-          <input
-            type="password"
-            required
-            minLength={8}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none"
-            value={formData.password}
-            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-            placeholder="Min 8 chars"
-          />
+        <div className="space-y-1 md:col-span-2 text-sm text-gray-500">
+          An invite email will be sent so the student can set their password.
         </div>
       </div>
 

@@ -13,7 +13,6 @@ export async function createInstructorAction(formData: FormData): Promise<Create
   const firstName = formData.get("firstName") as string;
   const lastName = formData.get("lastName") as string;
   const email = formData.get("email") as string;
-  const password = formData.get("password") as string;
   let studioId = formData.get("studioId") as string;
   const ownerUserId = formData.get("ownerUserId") as string;
   const bio = formData.get("bio") as string;
@@ -41,17 +40,17 @@ export async function createInstructorAction(formData: FormData): Promise<Create
   }
 
   try {
-    // 1. Create Auth User
-    const { data: userData, error: userError } = await supabaseAdmin.auth.admin.createUser({
-      email: email,
-      password: password,
-      email_confirm: true,
-      user_metadata: {
-        first_name: firstName,
-        last_name: lastName,
-        role: 'instructor'
+    // 1. Invite Auth User (sends email to set password)
+    const { data: userData, error: userError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
+      email,
+      {
+        data: {
+          first_name: firstName,
+          last_name: lastName,
+          role: 'instructor',
+        },
       }
-    });
+    );
 
     if (userError) return { success: false, message: userError.message };
     if (!userData.user) return { success: false, message: "Failed to create user." };
@@ -74,17 +73,19 @@ export async function createInstructorAction(formData: FormData): Promise<Create
     }
 
     // 3. Update Profile Bio (Optional)
-    if (bio) {
-        await supabaseAdmin
-            .from('profiles')
-            .update({ bio: bio, is_active: true }) // bio column needs to exist in profiles!
-            .eq('id', userId);
-    } else {
-        await supabaseAdmin
-            .from('profiles')
-            .update({ is_active: true })
-            .eq('id', userId);
-    }
+    const profilePayload = {
+      id: userId,
+      first_name: firstName,
+      last_name: lastName,
+      email,
+      username: email,
+      role: "instructor",
+      is_active: true,
+      bio: bio || null,
+    };
+    await supabaseAdmin
+      .from('profiles')
+      .upsert(profilePayload, { onConflict: "id" });
 
     return { success: true, message: "Instructor created successfully.", userId };
 

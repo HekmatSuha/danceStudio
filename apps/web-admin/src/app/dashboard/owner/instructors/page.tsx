@@ -359,9 +359,8 @@ export default function OwnerInstructorsPage() {
                     </div>
                 </div>
                 
-                <div className="space-y-1">
-                    <label className="text-sm font-medium text-slate-700">Password *</label>
-                    <input type="password" name="password" required minLength={8} className="w-full border border-slate-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-purple-500" placeholder="Min 8 characters" />
+                <div className="text-sm text-slate-500">
+                    An invite email will be sent so the instructor can set their password.
                 </div>
 
                 {studios.length > 1 ? (
