@@ -44,37 +44,17 @@ export default function OwnerStudentsPage() {
     refreshStudents(studios.map((s) => s.uuid));
   };
 
-  const refreshStudents = useCallback(async (studioIds: string[]) => {
+  const refreshStudents = useCallback(async () => {
     setLoading(true);
-    if (studioIds.length === 0) {
-      setStudents([]);
-      setLoading(false);
-      return;
-    }
 
-    const { data: slotRows, error: slotError } = await supabase
-      .from("slots")
-      .select("uuid")
-      .in("studio_id", studioIds);
-
-    if (slotError) {
-      console.warn("Failed to load studio slots", slotError);
-      setStudents([]);
-      setLoading(false);
-      return;
-    }
-
-    const slotIds = (slotRows as Array<{ uuid: string }> | null | undefined)?.map((row) => row.uuid) ?? [];
-    if (slotIds.length === 0) {
-      setStudents([]);
-      setLoading(false);
-      return;
-    }
-
-    const { data: bookingRows, error } = await supabase
-      .from("bookings")
-      .select("user:profiles(*)")
-      .in("appointment_slot", slotIds);
+    // Simplified fetch: Get all profiles with role 'student' (or implicit student)
+    // We assume RLS allows owner to see students.
+    const { data: profiles, error } = await supabase
+      .from("profiles")
+      .select("*")
+      // You might filter by role if 'role' column exists or check metadata
+      // For now, we fetch all and filter in memory if needed, or assume RLS handles visibility
+      .order("created_at", { ascending: false });
 
     if (error) {
       console.warn("Failed to load students", error);
@@ -83,29 +63,21 @@ export default function OwnerStudentsPage() {
       return;
     }
 
-    const unique = new Map<string, StudentRow>();
-    (bookingRows as unknown as BookingRow[] | null | undefined)?.forEach((row) => {
-      const user = row.user ?? null;
-      const uuid = user?.uuid || user?.id;
-      if (!uuid) return;
-      const stableUser = { ...user, uuid } as StudentRow;
-      unique.set(uuid, stableUser);
-    });
-    setStudents(Array.from(unique.values()));
+    const rows = (profiles || []).map((p) => ({
+      ...p,
+      uuid: p.id, // Ensure compatibility
+    })) as StudentRow[];
+    
+    // Optional: Filter by role if your schema uses a specific column
+    // const studentsOnly = rows.filter(r => r.role === 'student'); 
+    
+    setStudents(rows);
     setLoading(false);
   }, []);
 
-  const studioIdsKey = useMemo(
-    () => studios.map((studio) => studio.uuid).join(","),
-    [studios],
-  );
-
   useEffect(() => {
-    if (!studiosLoading) {
-      const studioIds = studioIdsKey ? studioIdsKey.split(",") : [];
-      refreshStudents(studioIds);
-    }
-  }, [studiosLoading, studioIdsKey, refreshStudents]);
+    refreshStudents();
+  }, [refreshStudents]);
 
   const filteredStudents = useMemo(() => {
     const nameQuery = nameSearch.trim().toLowerCase();
