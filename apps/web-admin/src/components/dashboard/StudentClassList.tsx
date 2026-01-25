@@ -277,7 +277,7 @@ export function StudentClassList() {
                         : bookingStatus === "waitlisted"
                         ? "Waitlisted"
                         : bookingStatus === "confirmed"
-                        ? "Confirmed"
+                        ? "Paid"
                         : "Booked"}
                     </span>
                   )}

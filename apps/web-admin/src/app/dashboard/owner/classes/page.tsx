@@ -58,20 +58,25 @@ export default function OwnerClassesPage() {
   useEffect(() => {
     const load = async () => {
       try {
-        // Fetching "upcoming" + "past" roughly by asking for a large limit and valid range logic if supported
-        // For now fetching a batch and filtering client-side
+        const start = startOfDay(subDays(selectedDate, 30)).toISOString();
+        const end = endOfDay(addDays(selectedDate, 30)).toISOString();
+
         const data = await fetchClasses({
           studioIds,
-          limit: 100, // Fetch enough to show some history/future
+          start_date: start,
+          end_date: end,
           orderBy: "start_time",
+          orderAsc: true,
         });
         setAllClasses(data);
       } catch (err) {
         console.error(err);
       }
     };
-    load();
-  }, [studioIds, refreshTrigger]);
+    if (studioIds && studioIds.length > 0) {
+      load();
+    }
+  }, [studioIds, refreshTrigger, selectedDate]); // Add selectedDate dependency
 
   // Derived Data
   const filteredAndGroupedClasses = useMemo(() => {

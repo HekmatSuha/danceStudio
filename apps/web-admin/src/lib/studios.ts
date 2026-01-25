@@ -58,7 +58,9 @@ export async function listStudios() {
 }
 
 export async function fetchMyStudios() {
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { session } } = await supabase.auth.getSession();
+  const user = session?.user;
+  
   if (!user) throw new Error("Not authenticated");
 
   return withCache(`studios:mine:${user.id}`, 20000, async () => {

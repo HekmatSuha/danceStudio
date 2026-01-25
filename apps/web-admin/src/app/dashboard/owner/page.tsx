@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   TrendingUp,
@@ -38,9 +38,19 @@ import {
   PopoverTrigger,
 } from "../../../components/ui/popover";
 import { Calendar } from "../../../components/ui/calendar";
-import { addDays, format } from "date-fns";
+import {
+  addDays,
+  endOfDay,
+  format,
+  startOfDay,
+  startOfMonth,
+  startOfWeek,
+  startOfYear,
+  subDays,
+} from "date-fns";
 import { DateRange } from "react-day-picker";
 import { cn } from "../../../components/ui/utils";
+import { supabase } from "../../../lib/supabase";
 
 // Mock data for the chart
 const REVENUE_DATA = [
@@ -59,6 +69,15 @@ export default function OwnerDashboardPage() {
     from: new Date(),
     to: addDays(new Date(), 7),
   });
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [statsError, setStatsError] = useState<string | null>(null);
+  const [statsValues, setStatsValues] = useState({
+    income: 0,
+    expenses: 0,
+    memberships: 0,
+    lessons: 0,
+    attendees: 0,
+  });
 
   const filterLabel = useMemo(() => {
     switch(filter) {
@@ -73,53 +92,11 @@ export default function OwnerDashboardPage() {
     }
   }, [filter]);
 
-  // Mock stats based on the reference image design
   const stats = useMemo(() => {
-    // Base values for "Today"
-    let income = 480811;
-    let expenses = 27776;
-    let memberships = 12;
-    let lessons = 21;
-    let attendees = 6;
-
-    // Adjust values based on filter to demonstrate functionality
-    if (filter === "yesterday") {
-        income = 450200;
-        expenses = 25000;
-        memberships = 8;
-        lessons = 20;
-        attendees = 15;
-    } else if (filter === "week") {
-        income = 2100500;
-        expenses = 120000;
-        memberships = 45;
-        lessons = 98;
-        attendees = 230;
-    } else if (filter === "month") {
-        income = 8500000;
-        expenses = 450000;
-        memberships = 150;
-        lessons = 340;
-        attendees = 980;
-    } else if (filter === "year") {
-        income = 45000000;
-        expenses = 2100000;
-        memberships = 1200;
-        lessons = 4500;
-        attendees = 12500;
-    } else if (filter === "custom") {
-        // Randomize slightly for custom range feel
-        income = 3200000;
-        expenses = 180000;
-        memberships = 85;
-        lessons = 150;
-        attendees = 420;
-    }
-
     return [
       {
         label: "Income",
-        value: income.toLocaleString(),
+        value: statsValues.income.toLocaleString(),
         subtext: "Income",
         icon: <Wallet className="text-blue-500" size={32} />,
         bg: "bg-blue-100",
@@ -128,7 +105,7 @@ export default function OwnerDashboardPage() {
       },
       {
         label: "Expenses",
-        value: expenses.toLocaleString(),
+        value: statsValues.expenses.toLocaleString(),
         subtext: "Expenses",
         icon: <CreditCard className="text-orange-500" size={32} />,
         bg: "bg-orange-100",
@@ -137,16 +114,16 @@ export default function OwnerDashboardPage() {
       },
       {
         label: "New memberships",
-        value: memberships.toLocaleString(),
+        value: statsValues.memberships.toLocaleString(),
         subtext: "New memberships",
         icon: <Users className="text-green-600" size={32} />,
-        bg: "bg-lime-100", // Using lime/green mix for that fresh green look
+        bg: "bg-lime-100",
         text: "text-green-900",
         iconBg: "bg-green-200",
       },
       {
         label: "Lessons conducted",
-        value: lessons.toLocaleString(),
+        value: statsValues.lessons.toLocaleString(),
         subtext: "Lessons conducted",
         icon: <Briefcase className="text-purple-500" size={32} />,
         bg: "bg-purple-100",
@@ -155,7 +132,7 @@ export default function OwnerDashboardPage() {
       },
       {
         label: "Attending students",
-        value: attendees.toLocaleString(),
+        value: statsValues.attendees.toLocaleString(),
         subtext: "Attending students",
         icon: <ClipboardList className="text-yellow-600" size={32} />,
         bg: "bg-yellow-100",
@@ -163,7 +140,103 @@ export default function OwnerDashboardPage() {
         iconBg: "bg-yellow-200",
       },
     ];
-  }, [filter]);
+  }, [statsValues]);
+
+  const dateRange = useMemo(() => {
+    const now = new Date();
+    if (filter === "yesterday") {
+      const start = startOfDay(subDays(now, 1));
+      const end = endOfDay(subDays(now, 1));
+      return { start, end };
+    }
+    if (filter === "week") {
+      return { start: startOfWeek(now, { weekStartsOn: 1 }), end: endOfDay(now) };
+    }
+    if (filter === "month") {
+      return { start: startOfMonth(now), end: endOfDay(now) };
+    }
+    if (filter === "year") {
+      return { start: startOfYear(now), end: endOfDay(now) };
+    }
+    if (filter === "custom") {
+      const start = date?.from ? startOfDay(date.from) : startOfDay(now);
+      const end = date?.to ? endOfDay(date.to) : endOfDay(start);
+      return { start, end };
+    }
+    return { start: startOfDay(now), end: endOfDay(now) };
+  }, [filter, date]);
+
+  useEffect(() => {
+    if (loading || studios.length === 0) return;
+    const studioIds = studios.map((studio) => studio.uuid);
+    const loadStats = async () => {
+      setStatsLoading(true);
+      setStatsError(null);
+      try {
+        const startIso = dateRange.start.toISOString();
+        const endIso = dateRange.end.toISOString();
+        const startDate = format(dateRange.start, "yyyy-MM-dd");
+        const endDate = format(dateRange.end, "yyyy-MM-dd");
+
+        const { data: financeRows, error: financeError } = await supabase
+          .from("finance_entries")
+          .select("entry_type, amount")
+          .in("studio_id", studioIds)
+          .gte("payment_date", startDate)
+          .lte("payment_date", endDate);
+
+        if (financeError) throw financeError;
+
+        const income = (financeRows || [])
+          .filter((row) => row.entry_type === "income")
+          .reduce((sum, row) => sum + Number(row.amount || 0), 0);
+        const expenses = (financeRows || [])
+          .filter((row) => row.entry_type === "expense")
+          .reduce((sum, row) => sum + Number(row.amount || 0), 0);
+
+        const { data: slotRows, error: slotError } = await supabase
+          .from("slots")
+          .select("uuid")
+          .in("studio_id", studioIds)
+          .gte("start_time", startIso)
+          .lte("start_time", endIso);
+
+        if (slotError) throw slotError;
+        const slotIds = (slotRows || []).map((row) => row.uuid);
+        const lessons = slotIds.length;
+
+        let memberships = 0;
+        let attendees = 0;
+        if (slotIds.length > 0) {
+          const { data: bookingRows, error: bookingError } = await supabase
+            .from("bookings")
+            .select("status, attended")
+            .in("appointment_slot", slotIds)
+            .gte("booking_date", startIso)
+            .lte("booking_date", endIso);
+
+          if (bookingError) throw bookingError;
+          memberships = (bookingRows || []).filter((row) => row.status === "confirmed").length;
+          attendees = (bookingRows || []).filter((row) => row.attended).length;
+        }
+
+        setStatsValues({
+          income,
+          expenses,
+          memberships,
+          lessons,
+          attendees,
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Unable to load stats.";
+        setStatsError(message);
+      } finally {
+        setStatsLoading(false);
+      }
+    };
+
+    loadStats();
+  }, [loading, studios, dateRange]);
 
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center text-slate-400">Loading dashboard...</div>;
@@ -314,6 +387,11 @@ export default function OwnerDashboardPage() {
           </div>
         ))}
       </section>
+      {statsLoading ? (
+        <div className="text-sm text-slate-400">Loading overview stats...</div>
+      ) : statsError ? (
+        <div className="text-sm text-rose-500">{statsError}</div>
+      ) : null}
 
       {/* New Records Section - Pinkish card from reference */}
       <section className="bg-red-50 p-6 rounded-2xl border border-red-100 flex items-center gap-6 shadow-sm">

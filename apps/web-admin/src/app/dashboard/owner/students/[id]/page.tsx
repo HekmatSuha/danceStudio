@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   Calendar,
   ChevronDown,
@@ -25,7 +25,9 @@ import { supabase } from "../../../../../lib/supabase";
 import { markAttendance } from "../../../../../lib/bookings";
 import { getOrCreateConversation } from "../../../../../lib/chat";
 import { useAuthUser } from "../../../../../lib/useAuthUser";
-import { useRouter } from "next/navigation";
+import { useOwnerStudiosGuard } from "../../../../../lib/useOwnerStudiosGuard";
+const incomeSources = ["Cash", "Card", "Kaspi QR", "Bank transfer"];
+const incomeCategories = ["Membership", "Class booking", "Merch", "Other"];
 
 type TabKey = "classes" | "season" | "payments" | "visits" | "history";
 
@@ -50,13 +52,14 @@ type StudentProfile = {
 
 type SlotRow = {
   uuid: string;
+  studio_id?: string | null;
   title?: string | null;
   start_time?: string | null;
   end_time?: string | null;
   price?: number | string | null;
   max_participants?: number | null;
   trainer?: { first_name?: string | null; last_name?: string | null } | null;
-  studio?: { name?: string | null; address?: string | null; city?: string | null } | null;
+  studio?: { uuid?: string | null; name?: string | null; address?: string | null; city?: string | null } | null;
 };
 
 type BookingRow = {
@@ -65,6 +68,17 @@ type BookingRow = {
   status: string;
   attended?: boolean | null;
   booking_date?: string | null;
+};
+
+type FinanceEntryRow = {
+  id: string;
+  entry_type: "income" | "expense";
+  amount: number;
+  currency: string;
+  payment_date: string;
+  payment_source?: string | null;
+  category?: string | null;
+  description?: string | null;
 };
 
 export default function OwnerStudentDetailPage() {
@@ -78,9 +92,42 @@ export default function OwnerStudentDetailPage() {
   const [bookings, setBookings] = useState<BookingRow[]>([]);
   const [slotMap, setSlotMap] = useState<Map<string, SlotRow>>(new Map());
   const [visitsStatus, setVisitsStatus] = useState<Record<string, string>>({});
+  const [paymentSaving, setPaymentSaving] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [paymentBookingId, setPaymentBookingId] = useState<string | null>(null);
+  const [paymentStudioId, setPaymentStudioId] = useState<string | null>(null);
+  const [paymentCurrency, setPaymentCurrency] = useState("KZT");
+  const [financeEntries, setFinanceEntries] = useState<FinanceEntryRow[]>([]);
+  const [financeLoading, setFinanceLoading] = useState(false);
+  const [financeError, setFinanceError] = useState<string | null>(null);
+  const [paymentForm, setPaymentForm] = useState({
+    date: "",
+    amount: "0",
+    source: "",
+    category: "",
+    description: "",
+  });
+  const [seasonSaving, setSeasonSaving] = useState(false);
+  const [seasonError, setSeasonError] = useState<string | null>(null);
+  const [seasonStudioId, setSeasonStudioId] = useState<string | null>(null);
+  const [seasonClasses, setSeasonClasses] = useState<Array<{ id: string; title: string }>>([]);
+  const [seasonClassesLoading, setSeasonClassesLoading] = useState(false);
+  const [seasonClassesError, setSeasonClassesError] = useState<string | null>(null);
+  const [seasonForm, setSeasonForm] = useState({
+    subscriptionType: "multiple",
+    classId: "",
+    issueDate: "",
+    cost: "0",
+    classCount: "",
+    startDate: "",
+    endDate: "",
+    description: "",
+  });
 
   const { user } = useAuthUser();
+  const { studios } = useOwnerStudiosGuard({ redirectTo: null });
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const handleMessage = async () => {
     if (!user || !studentId) return;
@@ -121,6 +168,7 @@ export default function OwnerStudentDetailPage() {
           const { data: slotRows, error: slotError } = await supabase
             .from("slots")
             .select(`
+              studio_id,
               uuid,
               title,
               start_time,
@@ -128,7 +176,7 @@ export default function OwnerStudentDetailPage() {
               price,
               max_participants,
               trainer:profiles(first_name, last_name),
-              studio:studios(name, address, city)
+              studio:studios(uuid, name, address, city)
             `)
             .in("uuid", slotIds);
           if (slotError) throw slotError;
@@ -164,52 +212,148 @@ export default function OwnerStudentDetailPage() {
     };
   }, [studentId]);
 
+  useEffect(() => {
+    if (!studentId) return;
+    let active = true;
+    const loadFinance = async () => {
+      setFinanceLoading(true);
+      setFinanceError(null);
+      try {
+        const { data, error } = await supabase
+          .from("finance_entries")
+          .select("id, entry_type, amount, currency, payment_date, payment_source, category, description")
+          .eq("student_id", studentId)
+          .order("payment_date", { ascending: false });
+
+        if (error) throw error;
+        if (!active) return;
+        setFinanceEntries((data as FinanceEntryRow[]) || []);
+      } catch (err) {
+        if (!active) return;
+        setFinanceError(err instanceof Error ? err.message : "Failed to load payments.");
+      } finally {
+        if (active) setFinanceLoading(false);
+      }
+    };
+
+    loadFinance();
+    return () => {
+      active = false;
+    };
+  }, [studentId]);
+
+  useEffect(() => {
+    const tabParam = searchParams.get("tab");
+    if (tabParam === "payments") {
+      setActiveTab("payments");
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    const openPayment = searchParams.get("openPayment") === "1";
+    if (!openPayment) return;
+    const bookingId = searchParams.get("bookingId");
+    const amountParam = searchParams.get("amount");
+    const studioIdParam = searchParams.get("studioId");
+    const currencyParam = searchParams.get("currency");
+    const descriptionParam = searchParams.get("description");
+
+    setActiveTab("payments");
+    setShowPaymentForm(true);
+    setPaymentBookingId(bookingId);
+    setPaymentStudioId(studioIdParam);
+    setPaymentCurrency(currencyParam || "KZT");
+    setPaymentForm((prev) => ({
+      ...prev,
+      date: prev.date || new Date().toISOString().slice(0, 10),
+      amount: amountParam || prev.amount || "0",
+      source: prev.source,
+      category: prev.category || "Class booking",
+      description: descriptionParam || prev.description,
+    }));
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (seasonStudioId || studios.length !== 1) return;
+    setSeasonStudioId(studios[0].uuid);
+  }, [seasonStudioId, studios]);
+
+  useEffect(() => {
+    if (!seasonStudioId) {
+      setSeasonClasses([]);
+      return;
+    }
+    let active = true;
+    const loadClasses = async () => {
+      setSeasonClassesLoading(true);
+      setSeasonClassesError(null);
+      try {
+        const { data, error } = await supabase
+          .from("slots")
+          .select("uuid, title")
+          .eq("studio_id", seasonStudioId)
+          .order("start_time", { ascending: false })
+          .limit(200);
+        if (error) throw error;
+        if (!active) return;
+        setSeasonClasses(
+          (data || []).map((row) => ({
+            id: row.uuid,
+            title: row.title || "Class",
+          }))
+        );
+      } catch (err) {
+        if (!active) return;
+        setSeasonClassesError(err instanceof Error ? err.message : "Failed to load classes.");
+      } finally {
+        if (active) setSeasonClassesLoading(false);
+      }
+    };
+
+    loadClasses();
+    return () => {
+      active = false;
+    };
+  }, [seasonStudioId]);
+
   const studentName = `${student?.first_name || ""} ${student?.last_name || ""}`.trim() || "Student";
   const totalPaid = useMemo(() => {
-    return bookings.reduce((sum, booking) => {
-      const slot = slotMap.get(booking.appointment_slot);
-      const price = Number(slot?.price || 0);
-      if (!Number.isFinite(price)) return sum;
-      if (booking.status === "cancelled") return sum;
-      return sum + price;
-    }, 0);
-  }, [bookings, slotMap]);
+    return financeEntries
+      .filter((entry) => entry.entry_type === "income")
+      .reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+  }, [financeEntries]);
 
   const paymentsRows = useMemo(() => {
-    return bookings.map((booking, index) => {
-      const slot = slotMap.get(booking.appointment_slot);
-      const price = Number(slot?.price || 0);
-      const date = booking.booking_date
-        ? new Date(booking.booking_date).toLocaleDateString()
-        : "-";
+    return financeEntries
+      .filter((entry) => entry.entry_type === "income")
+      .map((entry, index) => {
       return {
-        id: booking.uuid,
-        type: "Class booking",
-        sum: `${price.toLocaleString()} T`,
-        date,
-        description: slot?.title || "Class booking",
+        id: entry.id,
+        type: entry.category || "Income",
+        sum: `${Number(entry.amount || 0).toLocaleString()} ${entry.currency || "KZT"}`,
+        date: entry.payment_date ? new Date(entry.payment_date).toLocaleDateString() : "-",
+        description: entry.description || entry.payment_source || "Payment",
         index: index + 1,
       };
     });
-  }, [bookings, slotMap]);
+  }, [financeEntries]);
 
   const seasonTickets = useMemo(() => {
-    return bookings.map((booking, index) => {
-      const slot = slotMap.get(booking.appointment_slot);
-      const start = slot?.start_time ? new Date(slot.start_time).toLocaleDateString() : "-";
-      const end = slot?.end_time ? new Date(slot.end_time).toLocaleDateString() : "-";
+    return financeEntries
+      .filter((entry) => entry.entry_type === "income" && entry.category === "Membership")
+      .map((entry, index) => {
       return {
-        id: booking.uuid,
-        title: slot?.title || "Class",
+        id: entry.id,
+        title: "Membership",
         remaining: "1/1",
-        price: `${Number(slot?.price || 0).toLocaleString()}`,
-        status: booking.status === "cancelled" ? "Inactive" : "Active",
-        start,
-        end,
+        price: `${Number(entry.amount || 0).toLocaleString()} ${entry.currency || "KZT"}`,
+        status: "Active",
+        start: entry.payment_date ? new Date(entry.payment_date).toLocaleDateString() : "-",
+        end: "-",
         index: index + 1,
       };
     });
-  }, [bookings, slotMap]);
+  }, [financeEntries]);
 
   const visitsRows = useMemo(() => {
     return bookings.map((booking, index) => {
@@ -232,6 +376,150 @@ export default function OwnerStudentDetailPage() {
       await markAttendance(bookingId, attended);
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const handlePaymentSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!paymentForm.date || !paymentForm.amount) return;
+    const amount = Number(paymentForm.amount);
+    if (!Number.isFinite(amount) || amount <= 0) return;
+
+    const booking = paymentBookingId
+      ? bookings.find((item) => item.uuid === paymentBookingId)
+      : null;
+    const slotId = booking?.appointment_slot || null;
+    const slot = slotId ? slotMap.get(slotId) : null;
+    const finalStudioId = paymentStudioId || slot?.studio_id || slot?.studio?.uuid || null;
+    if (!finalStudioId) {
+      setPaymentError("Studio is required to record payment.");
+      return;
+    }
+
+    setPaymentSaving(true);
+    setPaymentError(null);
+    try {
+      const payerName = studentName;
+      const { error } = await supabase.from("finance_entries").insert({
+        studio_id: finalStudioId,
+        student_id: studentId,
+        entry_type: "income",
+        amount,
+        currency: paymentCurrency || "KZT",
+        payment_date: paymentForm.date,
+        payer_name: payerName || null,
+        payment_source: paymentForm.source || null,
+        category: paymentForm.category || null,
+        description: paymentForm.description || null,
+      });
+
+      if (error) throw error;
+
+      if (paymentBookingId) {
+        await supabase
+          .from("bookings")
+          .update({ status: "confirmed" })
+          .eq("uuid", paymentBookingId);
+      }
+
+      setShowPaymentForm(false);
+      setPaymentForm({ date: "", amount: "0", source: "", category: "", description: "" });
+      setPaymentBookingId(null);
+      setPaymentStudioId(null);
+      setPaymentCurrency("KZT");
+      setFinanceEntries((prev) => [
+        {
+          id: `entry-${Date.now()}`,
+          entry_type: "income",
+          amount,
+          currency: paymentCurrency || "KZT",
+          payment_date: paymentForm.date,
+          payment_source: paymentForm.source || null,
+          category: paymentForm.category || null,
+          description: paymentForm.description || null,
+        },
+        ...prev,
+      ]);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to save payment.";
+      setPaymentError(message);
+    } finally {
+      setPaymentSaving(false);
+    }
+  };
+
+  const handleSeasonSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!seasonForm.issueDate || !seasonForm.cost) return;
+    const amount = Number(seasonForm.cost);
+    if (!Number.isFinite(amount) || amount <= 0) return;
+
+    const fallbackSlotId = bookings[0]?.appointment_slot || null;
+    const fallbackSlot = fallbackSlotId ? slotMap.get(fallbackSlotId) : null;
+    const fallbackStudioId =
+      seasonStudioId || fallbackSlot?.studio_id || fallbackSlot?.studio?.uuid || null;
+    if (!fallbackStudioId) {
+      setSeasonError("Studio is required to record a subscription.");
+      return;
+    }
+
+    setSeasonSaving(true);
+    setSeasonError(null);
+    try {
+      const selectedClass = seasonClasses.find((item) => item.id === seasonForm.classId);
+      const seasonDescriptionParts = [
+        seasonForm.description?.trim(),
+        selectedClass?.title ? `Class: ${selectedClass.title}` : "",
+        seasonForm.classCount ? `Classes: ${seasonForm.classCount}` : "",
+        seasonForm.startDate && seasonForm.endDate
+          ? `Period: ${seasonForm.startDate} to ${seasonForm.endDate}`
+          : "",
+      ].filter(Boolean);
+
+      const { error } = await supabase.from("finance_entries").insert({
+        studio_id: fallbackStudioId,
+        student_id: studentId,
+        entry_type: "income",
+        amount,
+        currency: "KZT",
+        payment_date: seasonForm.issueDate,
+        payer_name: studentName || null,
+        category: "Membership",
+        description: seasonDescriptionParts.join(" | ") || "Season ticket",
+      });
+
+      if (error) throw error;
+
+      setSeasonForm({
+        subscriptionType: "multiple",
+        classId: "",
+        issueDate: "",
+        cost: "0",
+        classCount: "",
+        startDate: "",
+        endDate: "",
+        description: "",
+      });
+      setSeasonStudioId(null);
+      setShowSeasonForm(false);
+      setFinanceEntries((prev) => [
+        {
+          id: `entry-${Date.now()}`,
+          entry_type: "income",
+          amount,
+          currency: "KZT",
+          payment_date: seasonForm.issueDate,
+          payment_source: null,
+          category: "Membership",
+          description: seasonDescriptionParts.join(" | ") || "Season ticket",
+        },
+        ...prev,
+      ]);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to save season ticket.";
+      setSeasonError(message);
+    } finally {
+      setSeasonSaving(false);
     }
   };
 
@@ -361,7 +649,14 @@ export default function OwnerStudentDetailPage() {
               </div>
             </div>
             <button
-              onClick={() => setShowSeasonForm(true)}
+              onClick={() => {
+                setSeasonError(null);
+                setSeasonForm((prev) => ({
+                  ...prev,
+                  issueDate: prev.issueDate || new Date().toISOString().slice(0, 10),
+                }));
+                setShowSeasonForm(true);
+              }}
               className="flex items-center gap-2 bg-indigo-600 text-white px-6 py-3 rounded-2xl shadow-sm hover:bg-indigo-700"
             >
               <Plus size={18} />
@@ -370,6 +665,9 @@ export default function OwnerStudentDetailPage() {
           </div>
 
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+            {financeError && (
+              <div className="px-6 py-4 text-sm text-rose-500">{financeError}</div>
+            )}
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm text-slate-600">
                 <thead className="bg-slate-50 border-b border-slate-100 text-xs uppercase font-semibold text-slate-500">
@@ -427,8 +725,14 @@ export default function OwnerStudentDetailPage() {
               { id: "total-income", label: "Total income", value: `${totalPaid.toLocaleString()} T` },
               { id: "total-purchases", label: "Total purchases", value: `${totalPaid.toLocaleString()} T` },
               { id: "returns", label: "Returns", value: "0 T" },
-              { id: "average-bill", label: "Average bill", value: bookings.length ? `${Math.round(totalPaid / bookings.length).toLocaleString()} T` : "0 T" },
-              { id: "purchase-count", label: "Total purchases", value: `${bookings.length}` },
+              {
+                id: "average-bill",
+                label: "Average bill",
+                value: paymentsRows.length
+                  ? `${Math.round(totalPaid / paymentsRows.length).toLocaleString()} T`
+                  : "0 T",
+              },
+              { id: "purchase-count", label: "Total purchases", value: `${paymentsRows.length}` },
             ].map((item) => (
               <div key={item.id} className="flex flex-col gap-1">
                 <span className="text-slate-400">{item.label}</span>
@@ -471,7 +775,15 @@ export default function OwnerStudentDetailPage() {
               </div>
             </div>
             <button
-              onClick={() => setShowPaymentForm(true)}
+              onClick={() => {
+                setPaymentBookingId(null);
+                const slotId = bookings[0]?.appointment_slot || null;
+                const slot = slotId ? slotMap.get(slotId) : null;
+                const fallbackStudioId = slot?.studio_id || slot?.studio?.uuid || null;
+                setPaymentStudioId(fallbackStudioId);
+                setPaymentCurrency("KZT");
+                setShowPaymentForm(true);
+              }}
               className="flex items-center gap-2 bg-indigo-600 text-white px-6 py-3 rounded-2xl shadow-sm hover:bg-indigo-700"
             >
               <Plus size={18} />
@@ -493,25 +805,39 @@ export default function OwnerStudentDetailPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {paymentsRows.map((payment) => (
-                    <tr key={payment.id}>
-                      <td className="px-6 py-4 text-slate-500">{payment.index}</td>
-                      <td className="px-6 py-4">{payment.type}</td>
-                      <td className="px-6 py-4">{payment.sum}</td>
-                      <td className="px-6 py-4">{payment.date}</td>
-                      <td className="px-6 py-4">{payment.description}</td>
-                      <td className="px-6 py-4 text-right">
-                        <div className="inline-flex items-center gap-2">
-                          <button className="p-2 text-indigo-500 hover:bg-indigo-50 rounded-lg">
-                            <Info size={16} />
-                          </button>
-                          <button className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg">
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
+                  {financeLoading ? (
+                    <tr>
+                      <td className="px-6 py-6 text-center text-slate-400" colSpan={6}>
+                        Loading payments...
                       </td>
                     </tr>
-                  ))}
+                  ) : paymentsRows.length === 0 ? (
+                    <tr>
+                      <td className="px-6 py-6 text-center text-slate-400" colSpan={6}>
+                        No payments yet.
+                      </td>
+                    </tr>
+                  ) : (
+                    paymentsRows.map((payment) => (
+                      <tr key={payment.id}>
+                        <td className="px-6 py-4 text-slate-500">{payment.index}</td>
+                        <td className="px-6 py-4">{payment.type}</td>
+                        <td className="px-6 py-4">{payment.sum}</td>
+                        <td className="px-6 py-4">{payment.date}</td>
+                        <td className="px-6 py-4">{payment.description}</td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="inline-flex items-center gap-2">
+                            <button className="p-2 text-indigo-500 hover:bg-indigo-50 rounded-lg">
+                              <Info size={16} />
+                            </button>
+                            <button className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg">
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -607,8 +933,69 @@ export default function OwnerStudentDetailPage() {
             </select>
             <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400" />
           </div>
-          <div className="bg-white rounded-2xl border border-dashed border-slate-200 py-16 text-center text-slate-400">
-            There are no activities yet
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm text-slate-600">
+                <thead className="bg-slate-50 border-b border-slate-100 text-xs uppercase font-semibold text-slate-500">
+                  <tr>
+                    <th className="px-6 py-4">#</th>
+                    <th className="px-6 py-4">Type</th>
+                    <th className="px-6 py-4">Date</th>
+                    <th className="px-6 py-4">Description</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {financeLoading ? (
+                    <tr>
+                      <td className="px-6 py-6 text-center text-slate-400" colSpan={4}>
+                        Loading history...
+                      </td>
+                    </tr>
+                  ) : (() => {
+                    const items = [
+                      ...financeEntries.map((entry) => ({
+                        id: entry.id,
+                        type: entry.entry_type === "income" ? "Payment" : "Expense",
+                        date: entry.payment_date,
+                        description: entry.description || entry.category || "Finance entry",
+                      })),
+                      ...bookings.map((booking) => ({
+                        id: booking.uuid,
+                        type: "Booking",
+                        date: booking.booking_date || "",
+                        description:
+                          slotMap.get(booking.appointment_slot)?.title || "Class booking",
+                      })),
+                    ]
+                      .filter((item) => item.date)
+                      .sort(
+                        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+                      );
+
+                    if (items.length === 0) {
+                      return (
+                        <tr>
+                          <td className="px-6 py-6 text-center text-slate-400" colSpan={4}>
+                            There are no activities yet.
+                          </td>
+                        </tr>
+                      );
+                    }
+
+                    return items.map((item, index) => (
+                      <tr key={item.id}>
+                        <td className="px-6 py-4 text-slate-500">{index + 1}</td>
+                        <td className="px-6 py-4">{item.type}</td>
+                        <td className="px-6 py-4">
+                          {new Date(item.date).toLocaleDateString()}
+                        </td>
+                        <td className="px-6 py-4">{item.description}</td>
+                      </tr>
+                    ));
+                  })()}
+                </tbody>
+              </table>
+            </div>
           </div>
         </section>
       ) : null}
@@ -621,22 +1008,65 @@ export default function OwnerStudentDetailPage() {
               Fill in the subscription details for this student.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4">
+          <form onSubmit={handleSeasonSubmit} className="grid gap-4">
+            {seasonError && (
+              <div className="rounded-lg border border-rose-100 bg-rose-50 px-4 py-2 text-sm text-rose-600">
+                {seasonError}
+              </div>
+            )}
             <div className="grid gap-4 sm:grid-cols-[1fr_1.4fr] items-center">
               <label className="text-sm font-medium text-slate-600">
                 Subscription *
               </label>
-              <button className="w-full border border-slate-200 rounded-xl px-4 py-3 text-left text-sm text-slate-600 flex items-center justify-between">
-                For multiple classes
-                <ChevronDown size={16} className="text-slate-400" />
-              </button>
+              <select
+                className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-600"
+                value={seasonForm.subscriptionType}
+                onChange={(event) =>
+                  setSeasonForm((prev) => ({ ...prev, subscriptionType: event.target.value }))
+                }
+              >
+                <option value="multiple">For multiple classes</option>
+                <option value="single">Single class</option>
+              </select>
             </div>
+            {studios.length > 1 ? (
+              <div className="grid gap-4 sm:grid-cols-[1fr_1.4fr] items-center">
+                <label className="text-sm font-medium text-slate-600">
+                  Studio *
+                </label>
+                <select
+                  className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-600"
+                  value={seasonStudioId || ""}
+                  onChange={(event) => setSeasonStudioId(event.target.value || null)}
+                >
+                  <option value="">Select studio</option>
+                  {studios.map((studio) => (
+                    <option key={studio.uuid} value={studio.uuid}>
+                      {studio.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
             <div className="grid gap-4 sm:grid-cols-[1fr_1.4fr] items-center">
               <label className="text-sm font-medium text-slate-600">Class</label>
-              <button className="w-full border border-slate-200 rounded-xl px-4 py-3 text-left text-sm text-slate-600 flex items-center justify-between">
-                Finance
-                <ChevronDown size={16} className="text-slate-400" />
-              </button>
+              <select
+                className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-600"
+                value={seasonForm.classId}
+                onChange={(event) =>
+                  setSeasonForm((prev) => ({ ...prev, classId: event.target.value }))
+                }
+                disabled={seasonClassesLoading || !seasonStudioId}
+              >
+                <option value="">
+                  {seasonClassesLoading ? "Loading classes..." : "Select class"}
+                </option>
+                {seasonClasses.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.title}
+                  </option>
+                ))}
+              </select>
             </div>
             <div className="grid gap-4 sm:grid-cols-[1fr_1.4fr] items-center">
               <label className="text-sm font-medium text-slate-600">
@@ -644,9 +1074,13 @@ export default function OwnerStudentDetailPage() {
               </label>
               <div className="relative">
                 <input
-                  type="text"
+                  type="date"
                   placeholder="Select date"
                   className="w-full border border-slate-200 rounded-xl px-4 py-3 pr-10 text-sm"
+                  value={seasonForm.issueDate}
+                  onChange={(event) =>
+                    setSeasonForm((prev) => ({ ...prev, issueDate: event.target.value }))
+                  }
                 />
                 <Calendar size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-indigo-500" />
               </div>
@@ -656,9 +1090,14 @@ export default function OwnerStudentDetailPage() {
                 Subscription cost *
               </label>
               <input
-                type="text"
+                type="number"
+                min="0"
                 placeholder="10 000"
                 className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm"
+                value={seasonForm.cost}
+                onChange={(event) =>
+                  setSeasonForm((prev) => ({ ...prev, cost: event.target.value }))
+                }
               />
             </div>
             <div className="grid gap-4 sm:grid-cols-[1fr_1.4fr] items-center">
@@ -686,34 +1125,57 @@ export default function OwnerStudentDetailPage() {
                 type="text"
                 placeholder="Number of classes"
                 className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm"
+                value={seasonForm.classCount}
+                onChange={(event) =>
+                  setSeasonForm((prev) => ({ ...prev, classCount: event.target.value }))
+                }
               />
               <div className="relative">
                 <input
-                  type="text"
+                  type="date"
                   placeholder="Subscription start"
                   className="w-full border border-slate-200 rounded-xl px-4 py-3 pr-10 text-sm"
+                  value={seasonForm.startDate}
+                  onChange={(event) =>
+                    setSeasonForm((prev) => ({ ...prev, startDate: event.target.value }))
+                  }
                 />
                 <Calendar size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-indigo-500" />
               </div>
               <div className="relative">
                 <input
-                  type="text"
+                  type="date"
                   placeholder="Subscription expiration"
                   className="w-full border border-slate-200 rounded-xl px-4 py-3 pr-10 text-sm"
+                  value={seasonForm.endDate}
+                  onChange={(event) =>
+                    setSeasonForm((prev) => ({ ...prev, endDate: event.target.value }))
+                  }
                 />
                 <Calendar size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-indigo-500" />
               </div>
             </div>
+            {seasonClassesError && (
+              <div className="text-sm text-rose-500">{seasonClassesError}</div>
+            )}
             <textarea
               placeholder="Add a comment"
               className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm min-h-[120px]"
+              value={seasonForm.description}
+              onChange={(event) =>
+                setSeasonForm((prev) => ({ ...prev, description: event.target.value }))
+              }
             />
             <div className="flex justify-center pt-2">
-              <button className="rounded-2xl bg-emerald-500 px-8 py-3 text-white font-semibold">
-                Save
+              <button
+                type="submit"
+                disabled={seasonSaving}
+                className="rounded-2xl bg-emerald-500 px-8 py-3 text-white font-semibold disabled:opacity-70"
+              >
+                {seasonSaving ? "Saving..." : "Save"}
               </button>
             </div>
-          </div>
+          </form>
         </DialogContent>
       </Dialog>
 
@@ -725,14 +1187,22 @@ export default function OwnerStudentDetailPage() {
               Record a new income entry for this student.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4">
+          <form onSubmit={handlePaymentSubmit} className="grid gap-4">
+            {paymentError && (
+              <div className="rounded-lg border border-rose-100 bg-rose-50 px-4 py-2 text-sm text-rose-600">
+                {paymentError}
+              </div>
+            )}
             <div className="grid gap-4 sm:grid-cols-[1fr_1.6fr] items-center">
               <label className="text-sm font-medium text-slate-600">Date *</label>
               <div className="relative">
                 <input
-                  type="text"
-                  placeholder="Select date"
+                  type="date"
                   className="w-full border border-slate-200 rounded-xl px-4 py-3 pr-10 text-sm"
+                  value={paymentForm.date}
+                  onChange={(event) =>
+                    setPaymentForm((prev) => ({ ...prev, date: event.target.value }))
+                  }
                 />
                 <Calendar size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400" />
               </div>
@@ -740,38 +1210,69 @@ export default function OwnerStudentDetailPage() {
             <div className="grid gap-4 sm:grid-cols-[1fr_1.6fr] items-center">
               <label className="text-sm font-medium text-slate-600">Sum *</label>
               <input
-                type="text"
-                placeholder="0"
+                type="number"
+                min="0"
                 className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm"
+                value={paymentForm.amount}
+                onChange={(event) =>
+                  setPaymentForm((prev) => ({ ...prev, amount: event.target.value }))
+                }
               />
             </div>
             <div className="grid gap-4 sm:grid-cols-[1fr_1.6fr] items-center">
               <label className="text-sm font-medium text-slate-600">Payment source *</label>
-              <button className="w-full border border-slate-200 rounded-xl px-4 py-3 text-left text-sm text-slate-600 flex items-center justify-between">
-                Cashless transfer
-                <ChevronDown size={16} className="text-slate-400" />
-              </button>
+              <select
+                className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-600"
+                value={paymentForm.source}
+                onChange={(event) =>
+                  setPaymentForm((prev) => ({ ...prev, source: event.target.value }))
+                }
+              >
+                <option value="">Select source</option>
+                {incomeSources.map((source) => (
+                  <option key={source} value={source}>
+                    {source}
+                  </option>
+                ))}
+              </select>
             </div>
             <div className="grid gap-4 sm:grid-cols-[1fr_1.6fr] items-center">
               <label className="text-sm font-medium text-slate-600">Income item *</label>
-              <button className="w-full border border-slate-200 rounded-xl px-4 py-3 text-left text-sm text-slate-600 flex items-center justify-between">
-                Purchasing a season ticket
-                <ChevronDown size={16} className="text-slate-400" />
-              </button>
+              <select
+                className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-600"
+                value={paymentForm.category}
+                onChange={(event) =>
+                  setPaymentForm((prev) => ({ ...prev, category: event.target.value }))
+                }
+              >
+                <option value="">Select category</option>
+                {incomeCategories.map((category) => (
+                  <option key={category} value={category}>
+                    {category}
+                  </option>
+                ))}
+              </select>
             </div>
             <div className="grid gap-4 sm:grid-cols-[1fr_1.6fr] items-start">
               <label className="text-sm font-medium text-slate-600">Description</label>
               <textarea
-                placeholder=""
                 className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm min-h-[120px]"
+                value={paymentForm.description}
+                onChange={(event) =>
+                  setPaymentForm((prev) => ({ ...prev, description: event.target.value }))
+                }
               />
             </div>
             <div className="flex justify-center pt-2">
-              <button className="rounded-2xl bg-lime-500 px-8 py-3 text-white font-semibold">
-                Add
+              <button
+                type="submit"
+                disabled={paymentSaving}
+                className="rounded-2xl bg-lime-500 px-8 py-3 text-white font-semibold disabled:opacity-70"
+              >
+                {paymentSaving ? "Saving..." : "Add"}
               </button>
             </div>
-          </div>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

@@ -2,9 +2,9 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { type Studio } from "./studios";
+import useSWR from "swr";
+import { type Studio, fetchMyStudios } from "./studios";
 import { useAuthUser } from "./useAuthUser";
-import { useAuthedSWR } from "./useAuthedSWR";
 
 type UseOwnerStudiosGuardOptions = {
   redirectTo?: string;
@@ -12,12 +12,20 @@ type UseOwnerStudiosGuardOptions = {
 
 export function useOwnerStudiosGuard(options: UseOwnerStudiosGuardOptions = {}) {
   const router = useRouter();
-  const { role, loading: authLoading } = useAuthUser();
-  const { data, isLoading, mutate } = useAuthedSWR<Studio[]>(
-    authLoading ? null : "/api/owner/studios"
+  const { role, user, loading: authLoading } = useAuthUser();
+  
+  const shouldFetch = !authLoading && !!user && (role === "owner" || role === "super_admin");
+  
+  const { data, isLoading, mutate } = useSWR<Studio[]>(
+    shouldFetch ? ["studios", user.uuid] : null,
+    async () => fetchMyStudios(),
+    {
+      revalidateOnFocus: false,
+    }
   );
+
   const studios = data || [];
-  const loading = isLoading;
+  const loading = isLoading || authLoading;
 
   useEffect(() => {
     if (authLoading) return;
@@ -27,10 +35,11 @@ export function useOwnerStudiosGuard(options: UseOwnerStudiosGuardOptions = {}) 
       router.replace(redirectTo);
       return;
     }
-    if (!isLoading && role === "owner" && studios.length === 0) {
-      router.replace(redirectTo);
+    if (!loading && role === "owner" && studios.length === 0) {
+      // Allow them to stay if they are creating a studio, but generally warn or redirect
+      // router.replace(redirectTo);
     }
-  }, [authLoading, role, router, options.redirectTo, isLoading, studios.length]);
+  }, [authLoading, role, router, options.redirectTo, loading, studios.length]);
 
   return {
     studios,

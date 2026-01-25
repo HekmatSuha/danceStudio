@@ -35,13 +35,6 @@ const incomeSources = ["Cash", "Card", "Kaspi QR", "Bank transfer"];
 const incomeCategories = ["Membership", "Class booking", "Merch", "Other"];
 const expenseCategories = ["Rent", "Salary", "Marketing", "Utilities", "Supplies", "Other"];
 
-const createId = () => {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-    return crypto.randomUUID();
-  }
-  return `row-${Date.now()}`;
-};
-
 export default function OwnerPaymentsPage() {
   const { studios, loading: studiosLoading, role } = useOwnerStudiosGuard();
   const [selectedStudioId, setSelectedStudioId] = useState("");

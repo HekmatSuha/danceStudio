@@ -5,6 +5,7 @@ import { Calendar, CheckCircle2, Clock, Mail, MapPin, Phone, XCircle } from "luc
 import { useOwnerStudiosGuard } from "../../../../lib/useOwnerStudiosGuard";
 import { useAuthedSWR } from "../../../../lib/useAuthedSWR";
 import { supabase } from "../../../../lib/supabase";
+import { useRouter } from "next/navigation";
 
 type BookingRequest = {
   id: string;
@@ -75,6 +76,7 @@ export default function OwnerRequestsPage() {
   const { studios, loading: studiosLoading, role } = useOwnerStudiosGuard();
   const [actionState, setActionState] = useState<ActionState>({});
   const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
 
   const studioIdsParam = useMemo(
     () => studios.map((studio) => studio.uuid).join(","),
@@ -130,6 +132,27 @@ export default function OwnerRequestsPage() {
     } finally {
       setBusy(id, false);
     }
+  };
+
+  const handleConfirmPayment = (req: BookingRequest) => {
+    if (!req.student?.id) return;
+    const params = new URLSearchParams();
+    params.set("tab", "payments");
+    params.set("openPayment", "1");
+    params.set("bookingId", req.id);
+    if (req.slot?.price !== undefined && req.slot?.price !== null) {
+      params.set("amount", String(req.slot.price));
+    }
+    if (req.slot?.studio_id) {
+      params.set("studioId", req.slot.studio_id);
+    }
+    if (req.slot?.currency) {
+      params.set("currency", req.slot.currency);
+    }
+    if (req.slot?.title) {
+      params.set("description", `Class booking: ${req.slot.title}`);
+    }
+    router.push(`/dashboard/owner/students/${req.student.id}?${params.toString()}`);
   };
 
   if (studiosLoading) {
@@ -238,7 +261,7 @@ export default function OwnerRequestsPage() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => updateBookingStatus(req.id, "confirmed")}
+                        onClick={() => handleConfirmPayment(req)}
                         disabled={busy}
                         className="inline-flex items-center gap-2 rounded-full bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
                       >
