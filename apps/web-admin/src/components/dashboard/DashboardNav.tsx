@@ -48,12 +48,14 @@ export function DashboardNav({ children }: { children: React.ReactNode }) {
           { label: "Overview", href: "/dashboard/student", icon: <LayoutDashboard size={20} /> },
           { label: "My Bookings", href: "/dashboard/student/bookings", icon: <CalendarDays size={20} /> },
           { label: "History", href: "/dashboard/student/history", icon: <History size={20} /> },
+          { label: "Messages", href: "/dashboard/student/chat", icon: <MessageCircle size={20} /> },
         ];
       case "instructor":
         return [
           { label: "Overview", href: "/dashboard/instructor", icon: <LayoutDashboard size={20} /> },
           { label: "My Schedule", href: "/dashboard/instructor/schedule", icon: <CalendarDays size={20} /> },
           { label: "Students", href: "/dashboard/instructor/students", icon: <Users size={20} /> },
+          { label: "Messages", href: "/dashboard/instructor/chat", icon: <MessageCircle size={20} /> },
         ];
       case "owner":
         return [
@@ -63,7 +65,7 @@ export function DashboardNav({ children }: { children: React.ReactNode }) {
           { label: "Rooms", href: "/dashboard/owner/rooms", icon: <DoorOpen size={20} /> },
           { label: "Students", href: "/dashboard/owner/students", icon: <Users size={20} /> },
           { label: "Requests", href: "/dashboard/owner/requests", icon: <Inbox size={20} /> },
-          { label: "Payments", href: "/dashboard/owner/payments", icon: <DollarSign size={20} /> },
+          { label: "Finance", href: "/dashboard/owner/payments", icon: <DollarSign size={20} /> },
           { label: "Notifications", href: "/dashboard/owner/notifications", icon: <Bell size={20} /> },
           { label: "Advertisements", href: "/dashboard/owner/advertisements", icon: <Megaphone size={20} /> },
           { label: "Messages", href: "/dashboard/owner/chat", icon: <MessageCircle size={20} /> },
@@ -73,6 +75,7 @@ export function DashboardNav({ children }: { children: React.ReactNode }) {
           { label: "Overview", href: "/dashboard/super-admin", icon: <LayoutDashboard size={20} /> },
           { label: "Manage Studios", href: "/dashboard/super-admin/studios", icon: <Building2 size={20} /> },
           { label: "System Users", href: "/dashboard/super-admin/users", icon: <Users size={20} /> },
+          { label: "Messages", href: "/dashboard/super-admin/chat", icon: <MessageCircle size={20} /> },
         ];
       default:
         return [];

@@ -48,3 +48,57 @@ create policy "Users can insert messages in their conversations"
     auth.uid() = sender_id and
     public.is_conversation_participant(conversation_id)
   );
+
+-- Conversations: Allow authenticated users to create new conversations
+drop policy if exists "Users can create conversations" on conversations;
+create policy "Users can create conversations"
+  on conversations for insert
+  to authenticated
+  with check (auth.uid() is not null);
+
+-- Participants: Allow creators to add themselves and then others
+drop policy if exists "Users can add conversation participants" on conversation_participants;
+create policy "Users can add conversation participants"
+  on conversation_participants for insert
+  to authenticated
+  with check (
+    auth.uid() = user_id
+    or public.is_conversation_participant(conversation_id)
+  );
+
+-- Ensure authenticated role can insert into chat tables (RLS still applies)
+grant insert on conversations to authenticated;
+grant insert on conversation_participants to authenticated;
+grant insert on messages to authenticated;
+
+-- Helper RPC to create a conversation with the current user + target user
+-- Runs with elevated privileges but enforces authenticated access explicitly
+create or replace function public.create_conversation_with_participants(target_user_id uuid)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  new_conversation_id uuid;
+begin
+  if auth.uid() is null then
+    raise exception 'Not authenticated';
+  end if;
+
+  insert into conversations default values
+  returning id into new_conversation_id;
+
+  insert into conversation_participants (conversation_id, user_id)
+  values (new_conversation_id, auth.uid());
+
+  if target_user_id is not null and target_user_id <> auth.uid() then
+    insert into conversation_participants (conversation_id, user_id)
+    values (new_conversation_id, target_user_id);
+  end if;
+
+  return new_conversation_id;
+end;
+$$;
+
+grant execute on function public.create_conversation_with_participants(uuid) to authenticated;

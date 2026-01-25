@@ -1,5 +1,16 @@
 import { supabase } from "./supabase";
 
+const formatSupabaseError = (error: unknown) => {
+  if (!error) return "Unknown error";
+  if (typeof error === "string") return error;
+  if (error instanceof Error && error.message) return error.message;
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return "Unknown error";
+  }
+};
+
 export type Message = {
   id: string;
   conversation_id: string;
@@ -33,7 +44,7 @@ export async function fetchConversations(userId: string) {
 
   if (partError) {
     console.error("Error fetching conversation_participants:", partError);
-    throw partError;
+    throw new Error(formatSupabaseError(partError));
   }
 
   const conversationIds = participations.map((p) => p.conversation_id);
@@ -60,7 +71,7 @@ export async function fetchConversations(userId: string) {
 
   if (convError) {
     console.error("Error fetching conversations:", convError);
-    throw convError;
+    throw new Error(formatSupabaseError(convError));
   }
 
   // Fetch last message for each conversation
@@ -105,7 +116,7 @@ export async function sendMessage(conversationId: string, senderId: string, cont
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) throw new Error(formatSupabaseError(error));
 
   // Update conversation updated_at
   await supabase
@@ -116,25 +127,51 @@ export async function sendMessage(conversationId: string, senderId: string, cont
   return data as Message;
 }
 
-export async function createConversation(userIds: string[]) {
+export async function createConversation(userIds: string[], creatorId?: string) {
+  if (creatorId && userIds.length === 2) {
+    const targetUserId = userIds.find((uid) => uid !== creatorId);
+    if (targetUserId) {
+      const { data, error } = await supabase.rpc("create_conversation_with_participants", {
+        target_user_id: targetUserId,
+      });
+      if (error) throw new Error(formatSupabaseError(error));
+      return { id: data } as { id: string };
+    }
+  }
+
   const { data: conversation, error: convError } = await supabase
     .from("conversations")
     .insert({})
     .select()
     .single();
 
-  if (convError) throw convError;
+  if (convError) throw new Error(formatSupabaseError(convError));
 
-  const participants = userIds.map((uid) => ({
-    conversation_id: conversation.id,
-    user_id: uid,
-  }));
+  const creator = creatorId ?? userIds[0];
+  if (!creator) throw new Error("Missing conversation creator.");
 
-  const { error: partError } = await supabase
+  const { error: creatorError } = await supabase
     .from("conversation_participants")
-    .insert(participants);
+    .insert({
+      conversation_id: conversation.id,
+      user_id: creator,
+    });
 
-  if (partError) throw partError;
+  if (creatorError) throw new Error(formatSupabaseError(creatorError));
+
+  const otherIds = userIds.filter((uid) => uid !== creator);
+  if (otherIds.length > 0) {
+    const { error: partError } = await supabase
+      .from("conversation_participants")
+      .insert(
+        otherIds.map((uid) => ({
+          conversation_id: conversation.id,
+          user_id: uid,
+        }))
+      );
+
+    if (partError) throw new Error(formatSupabaseError(partError));
+  }
 
   return conversation;
 }
@@ -161,7 +198,7 @@ export async function getOrCreateConversation(currentUserId: string, targetUserI
       .limit(1)
       .maybeSingle();
 
-    if (matchError) throw matchError;
+    if (matchError) throw new Error(formatSupabaseError(matchError));
 
     if (existing) {
       return existing.conversation_id;
@@ -169,6 +206,6 @@ export async function getOrCreateConversation(currentUserId: string, targetUserI
   }
 
   // 3. Create new if not found
-  const newConv = await createConversation([currentUserId, targetUserId]);
+  const newConv = await createConversation([currentUserId, targetUserId], currentUserId);
   return newConv.id;
 }
