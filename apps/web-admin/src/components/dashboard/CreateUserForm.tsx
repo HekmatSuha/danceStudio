@@ -200,7 +200,6 @@ export function CreateUserForm({ initialRole, onSuccess, onCancel, studios }: Cr
             </select>
           </div>
         ) : studios && studios.length === 1 ? null : studios ? (
-        ) : studios ? (
           <div className="space-y-1 md:col-span-2">
             <label className="text-sm font-medium text-gray-700">Studio ID</label>
             <input
