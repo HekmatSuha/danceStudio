@@ -336,21 +336,26 @@ function ChatContent() {
                 const isMe = msg.sender_id === user?.uuid;
                 return (
                   <div key={msg.id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
-                    <div
-                      className={`max-w-[70%] rounded-2xl px-5 py-3 shadow-sm ${
-                        isMe
-                          ? "bg-purple-600 text-white rounded-br-none"
-                          : "bg-white text-slate-700 border border-slate-100 rounded-bl-none"
-                      }`}
-                    >
-                      <p className="text-sm">{msg.content}</p>
-                      <p
-                        className={`text-[10px] mt-1 text-right ${
-                          isMe ? "text-purple-200" : "text-slate-400"
+                    <div className={`max-w-[70%] ${isMe ? "text-right" : "text-left"}`}>
+                      <div className="mb-1 text-[10px] uppercase tracking-wide text-slate-400">
+                        {isMe ? "You" : `${otherParticipant?.first_name || "Guest"}`}
+                      </div>
+                      <div
+                        className={`rounded-2xl px-5 py-3 shadow-sm ${
+                          isMe
+                            ? "bg-purple-600 text-white rounded-br-none"
+                            : "bg-white text-slate-700 border border-slate-100 rounded-bl-none"
                         }`}
                       >
-                        {formatTime(msg.created_at)}
-                      </p>
+                        <p className="text-sm">{msg.content}</p>
+                        <p
+                          className={`text-[10px] mt-1 text-right ${
+                            isMe ? "text-purple-200" : "text-slate-400"
+                          }`}
+                        >
+                          {formatTime(msg.created_at)}
+                        </p>
+                      </div>
                     </div>
                   </div>
                 );
