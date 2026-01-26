@@ -3,13 +3,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
-  TrendingUp,
   Users,
-  CalendarCheck,
   CreditCard,
   Plus,
-  Bell,
-  Megaphone,
   Briefcase,
   ClipboardList,
   Wallet,
@@ -40,6 +36,7 @@ import {
 import { Calendar } from "../../../components/ui/calendar";
 import {
   addDays,
+  addMonths,
   endOfDay,
   format,
   startOfDay,
@@ -47,20 +44,11 @@ import {
   startOfWeek,
   startOfYear,
   subDays,
+  subMonths,
 } from "date-fns";
 import { DateRange } from "react-day-picker";
 import { cn } from "../../../components/ui/utils";
 import { supabase } from "../../../lib/supabase";
-
-// Mock data for the chart
-const REVENUE_DATA = [
-  { name: "Jan", revenue: 4000 },
-  { name: "Feb", revenue: 3000 },
-  { name: "Mar", revenue: 5000 },
-  { name: "Apr", revenue: 4500 },
-  { name: "May", revenue: 6000 },
-  { name: "Jun", revenue: 7500 },
-];
 
 export default function OwnerDashboardPage() {
   const { studios, loading, role } = useOwnerStudiosGuard();
@@ -78,6 +66,13 @@ export default function OwnerDashboardPage() {
     lessons: 0,
     attendees: 0,
   });
+  const [revenueRange, setRevenueRange] = useState<"6m" | "12m">("6m");
+  const [revenueData, setRevenueData] = useState<Array<{ name: string; revenue: number }>>([]);
+  const [outstandingLoading, setOutstandingLoading] = useState(false);
+  const [outstandingError, setOutstandingError] = useState<string | null>(null);
+  const [outstandingStudents, setOutstandingStudents] = useState<
+    Array<{ id: string; name: string; email?: string | null; phone?: string | null; amount: number }>
+  >([]);
 
   const filterLabel = useMemo(() => {
     switch(filter) {
@@ -237,6 +232,166 @@ export default function OwnerDashboardPage() {
 
     loadStats();
   }, [loading, studios, dateRange]);
+
+  useEffect(() => {
+    if (loading || studios.length === 0) return;
+    const studioIds = studios.map((studio) => studio.uuid);
+    const monthsBack = revenueRange === "12m" ? 12 : 6;
+    const endDate = new Date();
+    const startDate = startOfMonth(subMonths(endDate, monthsBack - 1));
+
+    const loadRevenue = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("finance_entries")
+          .select("entry_type, amount, payment_date")
+          .in("studio_id", studioIds)
+          .gte("payment_date", format(startDate, "yyyy-MM-dd"))
+          .lte("payment_date", format(endDate, "yyyy-MM-dd"));
+
+        if (error) throw error;
+
+        const buckets = new Map<string, number>();
+        for (let i = 0; i < monthsBack; i += 1) {
+          const month = addMonths(startDate, i);
+          buckets.set(format(month, "yyyy-MM"), 0);
+        }
+
+        (data || []).forEach((row) => {
+          if (row.entry_type !== "income" || !row.payment_date) return;
+          const key = format(new Date(row.payment_date), "yyyy-MM");
+          if (!buckets.has(key)) return;
+          const nextValue = (buckets.get(key) || 0) + Number(row.amount || 0);
+          buckets.set(key, nextValue);
+        });
+
+        const chartRows = Array.from(buckets.entries()).map(([key, value]) => ({
+          name: format(new Date(`${key}-01`), "MMM"),
+          revenue: value,
+        }));
+
+        setRevenueData(chartRows);
+      } catch (err) {
+        console.warn("Failed to load revenue data", err);
+        setRevenueData([]);
+      }
+    };
+
+    loadRevenue();
+  }, [loading, studios, revenueRange]);
+
+  useEffect(() => {
+    if (loading || studios.length === 0) return;
+    const studioIds = studios.map((studio) => studio.uuid);
+
+    const loadOutstanding = async () => {
+      setOutstandingLoading(true);
+      setOutstandingError(null);
+      try {
+        const { data: slotRows, error: slotError } = await supabase
+          .from("slots")
+          .select("uuid, price, studio_id")
+          .in("studio_id", studioIds);
+
+        if (slotError) throw slotError;
+
+        const slotPrices = new Map<string, number>();
+        (slotRows || []).forEach((row) => {
+          slotPrices.set(String(row.uuid), Number(row.price || 0));
+        });
+
+        const slotIds = Array.from(slotPrices.keys());
+        if (slotIds.length === 0) {
+          setOutstandingStudents([]);
+          setOutstandingLoading(false);
+          return;
+        }
+
+        const { data: bookingRows, error: bookingError } = await supabase
+          .from("bookings")
+          .select("user_id, appointment_slot, status, attended")
+          .in("appointment_slot", slotIds);
+
+        if (bookingError) throw bookingError;
+
+        const totalsByStudent = new Map<string, number>();
+        (bookingRows || []).forEach((booking) => {
+          if (!booking.user_id) return;
+          const attended = booking.attended === true || booking.status === "confirmed";
+          if (!attended) return;
+          const price = slotPrices.get(String(booking.appointment_slot)) || 0;
+          if (price <= 0) return;
+          totalsByStudent.set(booking.user_id, (totalsByStudent.get(booking.user_id) || 0) + price);
+        });
+
+        const studentIds = Array.from(totalsByStudent.keys());
+        if (studentIds.length === 0) {
+          setOutstandingStudents([]);
+          setOutstandingLoading(false);
+          return;
+        }
+
+        const { data: paymentRows, error: paymentError } = await supabase
+          .from("finance_entries")
+          .select("student_id, amount")
+          .in("studio_id", studioIds)
+          .in("student_id", studentIds)
+          .eq("entry_type", "income");
+
+        if (paymentError) throw paymentError;
+
+        const paidByStudent = new Map<string, number>();
+        (paymentRows || []).forEach((row) => {
+          if (!row.student_id) return;
+          paidByStudent.set(row.student_id, (paidByStudent.get(row.student_id) || 0) + Number(row.amount || 0));
+        });
+
+        const { data: profileRows, error: profileError } = await supabase
+          .from("profiles")
+          .select("id, first_name, last_name, email, phone_number")
+          .in("id", studentIds);
+
+        if (profileError) throw profileError;
+
+        const profiles = new Map<string, { name: string; email?: string | null; phone?: string | null }>();
+        (profileRows || []).forEach((row) => {
+          const name = `${row.first_name || ""} ${row.last_name || ""}`.trim() || "Student";
+          profiles.set(row.id, { name, email: row.email, phone: row.phone_number });
+        });
+
+        const due = studentIds
+          .map((id) => {
+            const total = totalsByStudent.get(id) || 0;
+            const paid = paidByStudent.get(id) || 0;
+            return {
+              id,
+              amount: total - paid,
+              profile: profiles.get(id),
+            };
+          })
+          .filter((row) => row.amount > 0.01)
+          .sort((a, b) => b.amount - a.amount)
+          .slice(0, 6)
+          .map((row) => ({
+            id: row.id,
+            name: row.profile?.name || "Student",
+            email: row.profile?.email,
+            phone: row.profile?.phone,
+            amount: row.amount,
+          }));
+
+        setOutstandingStudents(due);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Unable to load outstanding students.";
+        setOutstandingError(message);
+        setOutstandingStudents([]);
+      } finally {
+        setOutstandingLoading(false);
+      }
+    };
+
+    loadOutstanding();
+  }, [loading, studios]);
 
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center text-slate-400">Loading dashboard...</div>;
@@ -412,15 +567,19 @@ export default function OwnerDashboardPage() {
         <section className="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-lg font-bold text-slate-900">Revenue Trends</h2>
-            <select className="bg-slate-50 border-none text-sm font-medium text-slate-600 rounded-lg px-3 py-1.5 cursor-pointer outline-none hover:bg-slate-100">
-              <option>Last 6 months</option>
-              <option>Last year</option>
+            <select
+              className="bg-slate-50 border-none text-sm font-medium text-slate-600 rounded-lg px-3 py-1.5 cursor-pointer outline-none hover:bg-slate-100"
+              value={revenueRange}
+              onChange={(event) => setRevenueRange(event.target.value as "6m" | "12m")}
+            >
+              <option value="6m">Last 6 months</option>
+              <option value="12m">Last year</option>
             </select>
           </div>
           <div className="h-[300px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart
-                data={REVENUE_DATA}
+                data={revenueData}
                 margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
               >
                 <defs>
@@ -441,7 +600,7 @@ export default function OwnerDashboardPage() {
                   axisLine={false} 
                   tickLine={false} 
                   tick={{ fill: "#64748b", fontSize: 12 }} 
-                  tickFormatter={(value) => `$${value}`}
+                  tickFormatter={(value) => `₸${value}`}
                 />
                 <Tooltip 
                   contentStyle={{ 
@@ -451,7 +610,7 @@ export default function OwnerDashboardPage() {
                     boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
                   }}
                   itemStyle={{ color: '#1e293b', fontWeight: 600 }}
-                  formatter={(value: number) => [`$${value}`, "Revenue"]}
+                  formatter={(value: number) => [`₸${value}`, "Revenue"]}
                 />
                 <Area
                   type="monotone"
@@ -466,49 +625,46 @@ export default function OwnerDashboardPage() {
           </div>
         </section>
 
-        {/* Quick Actions - Takes up 1/3 columns */}
+        {/* Outstanding balances - Takes up 1/3 columns */}
         <section className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-          <h2 className="text-lg font-bold text-slate-900 mb-6">Quick Actions</h2>
-          <div className="grid gap-4">
-            <Link
-              href="/dashboard/owner/notifications"
-              className="group flex items-center gap-4 p-4 rounded-xl border border-slate-100 hover:border-purple-200 hover:bg-purple-50 transition-all"
-            >
-              <div className="h-10 w-10 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center transition-colors group-hover:bg-purple-200">
-                <Bell size={20} />
-              </div>
-              <div>
-                <h3 className="font-semibold text-slate-900 group-hover:text-purple-700">Send Notification</h3>
-                <p className="text-xs text-slate-500">Reach all students instantly</p>
-              </div>
-            </Link>
-
-            <Link
-              href="/dashboard/owner/advertisements"
-              className="group flex items-center gap-4 p-4 rounded-xl border border-slate-100 hover:border-pink-200 hover:bg-pink-50 transition-all"
-            >
-              <div className="h-10 w-10 rounded-full bg-pink-100 text-pink-600 flex items-center justify-center transition-colors group-hover:bg-pink-200">
-                <Megaphone size={20} />
-              </div>
-              <div>
-                <h3 className="font-semibold text-slate-900 group-hover:text-pink-700">New Advertisement</h3>
-                <p className="text-xs text-slate-500">Promote a new event</p>
-              </div>
-            </Link>
-
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-lg font-bold text-slate-900">Outstanding balances</h2>
             <Link
               href="/dashboard/owner/students"
-              className="group flex items-center gap-4 p-4 rounded-xl border border-slate-100 hover:border-blue-200 hover:bg-blue-50 transition-all"
+              className="text-xs font-semibold text-slate-500 hover:text-slate-700"
             >
-              <div className="h-10 w-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center transition-colors group-hover:bg-blue-200">
-                <Plus size={20} />
-              </div>
-              <div>
-                <h3 className="font-semibold text-slate-900 group-hover:text-blue-700">Add Student</h3>
-                <p className="text-xs text-slate-500">Register a new profile</p>
-              </div>
+              View all
             </Link>
           </div>
+          {outstandingLoading ? (
+            <div className="text-sm text-slate-400">Loading balances...</div>
+          ) : outstandingError ? (
+            <div className="text-sm text-rose-500">{outstandingError}</div>
+          ) : outstandingStudents.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+              No outstanding balances right now.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {outstandingStudents.map((student) => (
+                <Link
+                  key={student.id}
+                  href={`/dashboard/owner/students/${student.id}`}
+                  className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 px-4 py-3 hover:border-rose-200 hover:bg-rose-50 transition-all"
+                >
+                  <div className="min-w-0">
+                    <div className="font-semibold text-slate-900 truncate">{student.name}</div>
+                    <div className="text-xs text-slate-500 truncate">
+                      {student.email || student.phone || "No contact"}
+                    </div>
+                  </div>
+                  <div className="text-sm font-semibold text-rose-600">
+                    ₸{student.amount.toLocaleString()}
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
         </section>
       </div>
     </main>

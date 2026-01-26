@@ -204,19 +204,11 @@ export function ClassForm({ onSuccess, onCancel }: ClassFormProps) {
       let finalTrainerId = formData.trainerId;
       
       // Safe check for trainer role
-      const isTrainer = Array.isArray(user?.roles)
-        ? user.roles.some((r) => {
-            if (typeof r === "string") {
-              return r === "TRAINER" || r === "INSTRUCTOR";
-            }
-            if (typeof r === "object" && r && "code" in r) {
-              const code = String((r as { code?: string }).code ?? "");
-              return code === "TRAINER" || code === "INSTRUCTOR";
-            }
-            return false;
-          })
-        : typeof user?.roles === "string" &&
-          (user.roles.includes("TRAINER") || user.roles.includes("INSTRUCTOR"));
+      const roleValue = Array.isArray(user?.roles)
+        ? user?.roles.join(",")
+        : (user?.role || user?.roles || "");
+      const normalizedRole = String(roleValue).toLowerCase();
+      const isTrainer = normalizedRole.includes("trainer") || normalizedRole.includes("instructor");
 
       if (!finalTrainerId && isTrainer) {
           finalTrainerId = user?.uuid;
