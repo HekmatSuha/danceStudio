@@ -15,8 +15,12 @@ export async function createStudentAction(formData: FormData): Promise<CreateStu
   const email = formData.get("email") as string;
   const phone = formData.get("phone") as string;
   const gender = formData.get("gender") as string;
+  const studioId = formData.get("studioId") as string;
 
   try {
+    if (!studioId) {
+      return { success: false, message: "Studio ID is required to create a student." };
+    }
     const { data: userData, error: userError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
       email,
       {
@@ -50,6 +54,15 @@ export async function createStudentAction(formData: FormData): Promise<CreateStu
         },
         { onConflict: "id" }
       );
+
+    if (studioId) {
+      await supabaseAdmin
+        .from("student_studios")
+        .upsert(
+          { studio_id: studioId, student_id: userId },
+          { onConflict: "studio_id,student_id" }
+        );
+    }
 
     return { success: true, message: "Student created successfully.", userId };
   } catch (err: unknown) {

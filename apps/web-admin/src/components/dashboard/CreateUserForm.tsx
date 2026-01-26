@@ -1,18 +1,20 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Loader2, Plus, X } from "lucide-react";
 import { type UserRole } from "../../lib/auth";
 import { getErrorMessage } from "../../lib/errors";
 import { createStudentAction } from "../../app/actions/create-student";
+import { type Studio } from "../../lib/studios";
 
 interface CreateUserFormProps {
   initialRole: UserRole;
   onSuccess: () => void;
   onCancel: () => void;
+  studios?: Studio[];
 }
 
-export function CreateUserForm({ initialRole, onSuccess, onCancel }: CreateUserFormProps) {
+export function CreateUserForm({ initialRole, onSuccess, onCancel, studios }: CreateUserFormProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
@@ -23,7 +25,16 @@ export function CreateUserForm({ initialRole, onSuccess, onCancel }: CreateUserF
     phone: "",
     gender: "F",
     role: initialRole,
+    studioId: studios?.[0]?.uuid || "",
   });
+
+  useEffect(() => {
+    if (!studios?.length) return;
+    setFormData((prev) => {
+      if (prev.studioId) return prev;
+      return { ...prev, studioId: studios[0].uuid };
+    });
+  }, [studios]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,12 +45,19 @@ export function CreateUserForm({ initialRole, onSuccess, onCancel }: CreateUserF
       if (formData.role !== "student") {
         throw new Error("This form currently supports creating students only.");
       }
+      const fallbackStudioId = formData.studioId || studios?.[0]?.uuid || "";
+      if (studios?.length && !fallbackStudioId) {
+        throw new Error("Please select a studio for this student.");
+      }
       const payload = new FormData();
       payload.set("firstName", formData.firstName);
       payload.set("lastName", formData.lastName);
       payload.set("email", formData.email);
       payload.set("phone", formData.phone);
       payload.set("gender", formData.gender);
+      if (fallbackStudioId) {
+        payload.set("studioId", fallbackStudioId);
+      }
 
       const result = await createStudentAction(payload);
       if (!result.success) {
@@ -165,6 +183,34 @@ export function CreateUserForm({ initialRole, onSuccess, onCancel }: CreateUserF
             <option value="O">Other</option>
           </select>
         </div>
+
+        {studios && studios.length > 1 ? (
+          <div className="space-y-1 md:col-span-2">
+            <label className="text-sm font-medium text-gray-700">Assign to Studio</label>
+            <select
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none bg-white"
+              value={formData.studioId}
+              onChange={(e) => setFormData({ ...formData, studioId: e.target.value })}
+            >
+              {studios.map((studio) => (
+                <option key={studio.uuid} value={studio.uuid}>
+                  {studio.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : studios && studios.length === 1 ? null : studios ? (
+        ) : studios ? (
+          <div className="space-y-1 md:col-span-2">
+            <label className="text-sm font-medium text-gray-700">Studio ID</label>
+            <input
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none"
+              placeholder="Paste studio ID"
+              value={formData.studioId}
+              onChange={(e) => setFormData({ ...formData, studioId: e.target.value })}
+            />
+          </div>
+        ) : null}
 
         <div className="space-y-1 md:col-span-2 text-sm text-gray-500">
           An invite email will be sent so the student can set their password.

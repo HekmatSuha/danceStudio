@@ -25,6 +25,7 @@ export default function OwnerStudentsPage() {
   const [showForm, setShowForm] = useState(false);
   const [students, setStudents] = useState<StudentRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [bookingCounts, setBookingCounts] = useState<Record<string, number>>({});
   const [nameSearch, setNameSearch] = useState("");
   const [phoneSearch, setPhoneSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
@@ -41,43 +42,119 @@ export default function OwnerStudentsPage() {
     alert("Student created successfully!");
     setNameSearch("");
     setPhoneSearch("");
-    refreshStudents(studios.map((s) => s.uuid));
+    refreshStudents();
   };
 
   const refreshStudents = useCallback(async () => {
     setLoading(true);
-
-    // Simplified fetch: Get all profiles with role 'student' (or implicit student)
-    // We assume RLS allows owner to see students.
-    const { data: profiles, error } = await supabase
-      .from("profiles")
-      .select("*")
-      // You might filter by role if 'role' column exists or check metadata
-      // For now, we fetch all and filter in memory if needed, or assume RLS handles visibility
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      console.warn("Failed to load students", error);
+    const studioIds = studios.map((s) => s.uuid).filter(Boolean);
+    if (studioIds.length === 0) {
       setStudents([]);
+      setBookingCounts({});
       setLoading(false);
       return;
     }
 
-    const rows = (profiles || []).map((p) => ({
-      ...p,
-      uuid: p.id, // Ensure compatibility
-    })) as StudentRow[];
-    
-    // Optional: Filter by role if your schema uses a specific column
-    // const studentsOnly = rows.filter(r => r.role === 'student'); 
-    
+    const { data: linkRows, error: linkError } = await supabase
+      .from("student_studios")
+      .select("student_id")
+      .in("studio_id", studioIds);
+
+    if (linkError) {
+      console.warn("Failed to load studio students", linkError);
+      setStudents([]);
+      setBookingCounts({});
+      setLoading(false);
+      return;
+    }
+
+    const studentIds = Array.from(
+      new Set(
+        (linkRows as { student_id?: string | null }[] | null | undefined)
+          ?.map((row) => row.student_id)
+          .filter((id): id is string => Boolean(id)) || []
+      )
+    );
+
+    if (studentIds.length === 0) {
+      setStudents([]);
+      setBookingCounts({});
+      setLoading(false);
+      return;
+    }
+
+    const { data: profiles, error: profileError } = await supabase
+      .from("profiles")
+      .select("*")
+      .in("id", studentIds)
+      .order("created_at", { ascending: false });
+
+    if (profileError) {
+      console.warn("Failed to load students", profileError);
+      setStudents([]);
+      setBookingCounts({});
+      setLoading(false);
+      return;
+    }
+
+    const rows = (profiles || [])
+      .filter((p) => !p.role || p.role === "student")
+      .map((p) => ({
+        ...p,
+        uuid: p.id,
+      })) as StudentRow[];
+
+    const { data: slotRows, error: slotError } = await supabase
+      .from("slots")
+      .select("uuid")
+      .in("studio_id", studioIds);
+
+    if (slotError) {
+      console.warn("Failed to load studio slots", slotError);
+      setStudents(rows);
+      setBookingCounts({});
+      setLoading(false);
+      return;
+    }
+
+    const slotIds = (slotRows as { uuid: string }[] | null | undefined)?.map((row) => row.uuid) ?? [];
+    if (slotIds.length === 0) {
+      setStudents(rows);
+      setBookingCounts({});
+      setLoading(false);
+      return;
+    }
+
+    const { data: bookingRows, error: bookingError } = await supabase
+      .from("bookings")
+      .select("user_id")
+      .in("appointment_slot", slotIds);
+
+    if (bookingError) {
+      console.warn("Failed to load studio bookings", bookingError);
+      setStudents(rows);
+      setBookingCounts({});
+      setLoading(false);
+      return;
+    }
+
+    const counts: Record<string, number> = {};
+    const studentIdSet = new Set(studentIds);
+    (bookingRows as { user_id?: string | null }[] | null | undefined)?.forEach((row) => {
+      if (!row.user_id) return;
+      if (!studentIdSet.has(row.user_id)) return;
+      counts[row.user_id] = (counts[row.user_id] || 0) + 1;
+    });
+
     setStudents(rows);
+    setBookingCounts(counts);
     setLoading(false);
-  }, []);
+  }, [studios]);
 
   useEffect(() => {
+    if (studiosLoading) return;
     refreshStudents();
-  }, [refreshStudents]);
+  }, [refreshStudents, studiosLoading]);
 
   const filteredStudents = useMemo(() => {
     const nameQuery = nameSearch.trim().toLowerCase();
@@ -109,12 +186,14 @@ export default function OwnerStudentsPage() {
       }
       if (statusFilter !== "all") {
         const isActive = s.is_active ?? true;
+        const studentId = s.id || s.uuid;
+        const hasBookings = Boolean(studentId && (bookingCounts[studentId] ?? 0) > 0);
         if (statusFilter === "active" && !isActive) return false;
-        if (statusFilter === "inactive" && isActive) return false;
+        if (statusFilter === "inactive" && isActive && hasBookings) return false;
       }
       return true;
     });
-  }, [students, nameSearch, phoneSearch, dateFrom, dateTo, genderFilter, statusFilter]);
+  }, [students, bookingCounts, nameSearch, phoneSearch, dateFrom, dateTo, genderFilter, statusFilter]);
 
   if (studiosLoading) {
     return <div className="p-6 text-slate-500">Loading students...</div>;
@@ -249,6 +328,7 @@ export default function OwnerStudentsPage() {
             initialRole="student"
             onSuccess={handleSuccess}
             onCancel={() => setShowForm(false)}
+            studios={studios}
           />
         </div>
       )}
