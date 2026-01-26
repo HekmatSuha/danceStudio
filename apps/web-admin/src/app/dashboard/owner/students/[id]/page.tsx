@@ -124,7 +124,7 @@ export default function OwnerStudentDetailPage() {
     description: "",
   });
 
-  const { studios } = useOwnerStudiosGuard({ redirectTo: null });
+  const { studios } = useOwnerStudiosGuard();
   const { user } = useAuthUser();
   const searchParams = useSearchParams();
 

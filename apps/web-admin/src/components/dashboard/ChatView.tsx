@@ -71,13 +71,15 @@ function ChatContent() {
     setContactsLoading(true);
     setContactsError(null);
 
-    supabase
-      .from("profiles")
-      .select("id, first_name, last_name, role")
-      .neq("id", user.uuid)
-      .order("first_name", { ascending: true })
-      .limit(100)
-      .then(({ data, error }) => {
+    const loadContacts = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("id, first_name, last_name, role")
+          .neq("id", user.uuid)
+          .order("first_name", { ascending: true })
+          .limit(100);
+
         if (error) throw error;
         setContacts(
           (data || []).map((item) => ({
@@ -87,12 +89,15 @@ function ChatContent() {
             role: item.role,
           }))
         );
-      })
-      .catch((err) => {
+      } catch (err) {
         console.error("Failed to load chat contacts", err);
         setContactsError("Unable to load contacts.");
-      })
-      .finally(() => setContactsLoading(false));
+      } finally {
+        setContactsLoading(false);
+      }
+    };
+
+    loadContacts();
   }, [user]);
 
   useEffect(() => {

@@ -64,8 +64,8 @@ export default function OwnerClassDetailPage() {
         const teacherName = trainer
           ? `${trainer.first_name || ""} ${trainer.last_name || ""}`.trim()
           : "Unknown Instructor";
-        const studio = slot?.studio;
-        const room = slot?.room;
+        const studio = Array.isArray(slot?.studio) ? slot?.studio?.[0] : slot?.studio;
+        const room = Array.isArray(slot?.room) ? slot?.room?.[0] : slot?.room;
         const location = room?.name
           ? `${room.name}${studio?.name ? ` @ ${studio.name}` : ""}`
           : studio?.address || studio?.city || studio?.name || "Studio";
