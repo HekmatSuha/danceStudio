@@ -18,6 +18,7 @@ function ChatContent() {
   const { user } = useAuthUser();
   const searchParams = useSearchParams();
   const urlChatId = searchParams.get("id");
+  const participantId = searchParams.get("participantId");
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
@@ -59,6 +60,11 @@ function ChatContent() {
     if (!user) return;
     loadConversations();
   }, [user]);
+
+  useEffect(() => {
+    if (!user || !participantId || urlChatId) return;
+    handleStartChat(participantId);
+  }, [user, participantId, urlChatId]);
 
   useEffect(() => {
     if (!user) return;

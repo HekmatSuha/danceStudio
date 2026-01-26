@@ -5,6 +5,7 @@ create table if not exists finance_entries (
   id uuid default uuid_generate_v4() primary key,
   studio_id uuid references studios(uuid) on delete cascade not null,
   student_id uuid references profiles(id) on delete set null,
+  booking_id uuid references bookings(uuid) on delete set null,
   entry_type text not null check (entry_type in ('income', 'expense')),
   amount numeric(12,2) not null,
   currency text default 'KZT' not null,
@@ -20,6 +21,8 @@ create table if not exists finance_entries (
 
 alter table finance_entries
   add column if not exists student_id uuid references profiles(id) on delete set null;
+alter table finance_entries
+  add column if not exists booking_id uuid references bookings(uuid) on delete set null;
 
 alter table finance_entries enable row level security;
 

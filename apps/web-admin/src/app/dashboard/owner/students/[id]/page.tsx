@@ -1,12 +1,11 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import {
   Calendar,
   ChevronDown,
   Info,
-  MessageCircle,
   Plus,
   Search,
   Settings,
@@ -23,7 +22,6 @@ import {
 } from "../../../../../components/ui/dialog";
 import { supabase } from "../../../../../lib/supabase";
 import { markAttendance } from "../../../../../lib/bookings";
-import { getOrCreateConversation } from "../../../../../lib/chat";
 import { useAuthUser } from "../../../../../lib/useAuthUser";
 import { useOwnerStudiosGuard } from "../../../../../lib/useOwnerStudiosGuard";
 const incomeSources = ["Cash", "Card", "Kaspi QR", "Bank transfer"];
@@ -57,6 +55,7 @@ type SlotRow = {
   start_time?: string | null;
   end_time?: string | null;
   price?: number | string | null;
+  currency?: string | null;
   max_participants?: number | null;
   trainer?: { first_name?: string | null; last_name?: string | null } | null;
   studio?: { uuid?: string | null; name?: string | null; address?: string | null; city?: string | null } | null;
@@ -76,6 +75,7 @@ type FinanceEntryRow = {
   amount: number;
   currency: string;
   payment_date: string;
+  booking_id?: string | null;
   payment_source?: string | null;
   category?: string | null;
   description?: string | null;
@@ -124,19 +124,16 @@ export default function OwnerStudentDetailPage() {
     description: "",
   });
 
-  const { user } = useAuthUser();
   const { studios } = useOwnerStudiosGuard({ redirectTo: null });
-  const router = useRouter();
+  const { user } = useAuthUser();
   const searchParams = useSearchParams();
 
-  const handleMessage = async () => {
-    if (!user || !studentId) return;
-    try {
-      const conversationId = await getOrCreateConversation(user.uuid, studentId);
-      router.push(`/dashboard/owner/chat?id=${conversationId}`);
-    } catch (error) {
-      console.error("Failed to start chat", error);
-    }
+  const handleMessage = () => {
+    const phone = (student?.phone_number || "").trim();
+    if (!phone) return;
+    const normalized = phone.replace(/\D/g, "");
+    if (!normalized) return;
+    window.location.href = `https://wa.me/${normalized}`;
   };
 
   useEffect(() => {
@@ -174,6 +171,7 @@ export default function OwnerStudentDetailPage() {
               start_time,
               end_time,
               price,
+              currency,
               max_participants,
               trainer:profiles(first_name, last_name),
               studio:studios(uuid, name, address, city)
@@ -221,7 +219,7 @@ export default function OwnerStudentDetailPage() {
       try {
         const { data, error } = await supabase
           .from("finance_entries")
-          .select("id, entry_type, amount, currency, payment_date, payment_source, category, description")
+          .select("id, entry_type, amount, currency, payment_date, booking_id, payment_source, category, description")
           .eq("student_id", studentId)
           .order("payment_date", { ascending: false });
 
@@ -317,11 +315,19 @@ export default function OwnerStudentDetailPage() {
   }, [seasonStudioId]);
 
   const studentName = `${student?.first_name || ""} ${student?.last_name || ""}`.trim() || "Student";
-  const totalPaid = useMemo(() => {
+  const incomeTotal = useMemo(() => {
     return financeEntries
       .filter((entry) => entry.entry_type === "income")
       .reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
   }, [financeEntries]);
+  const expenseTotal = useMemo(() => {
+    return financeEntries
+      .filter((entry) => entry.entry_type === "expense")
+      .reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+  }, [financeEntries]);
+  const totalPaid = useMemo(() => {
+    return incomeTotal - expenseTotal;
+  }, [incomeTotal, expenseTotal]);
 
   const paymentsRows = useMemo(() => {
     return financeEntries
@@ -374,6 +380,63 @@ export default function OwnerStudentDetailPage() {
     const attended = value === "Visited" || value === "Visited (by car)";
     try {
       await markAttendance(bookingId, attended);
+      const booking = bookings.find((item) => item.uuid === bookingId);
+      const slot = booking ? slotMap.get(booking.appointment_slot) : null;
+      const studioId = slot?.studio_id || slot?.studio?.uuid || null;
+      const amount = Number(slot?.price || 0);
+      const currency = slot?.currency || "KZT";
+
+      if (studioId && Number.isFinite(amount) && amount > 0) {
+        const { data: existing, error: existingError } = await supabase
+          .from("finance_entries")
+          .select("id")
+          .eq("booking_id", bookingId)
+          .eq("entry_type", "expense")
+          .maybeSingle();
+
+        if (existingError) throw existingError;
+
+        if (attended && !existing) {
+          const { error } = await supabase.from("finance_entries").insert({
+            studio_id: studioId,
+            student_id: studentId,
+            booking_id: bookingId,
+            entry_type: "expense",
+            amount,
+            currency,
+            payment_date: slot?.start_time
+              ? new Date(slot.start_time).toISOString().slice(0, 10)
+              : new Date().toISOString().slice(0, 10),
+            category: "Class usage",
+            description: slot?.title ? `Class usage: ${slot.title}` : "Class usage",
+          });
+          if (error) throw error;
+          setFinanceEntries((prev) => [
+            {
+              id: `entry-${Date.now()}`,
+              entry_type: "expense",
+              amount,
+              currency,
+              payment_date: slot?.start_time
+                ? new Date(slot.start_time).toISOString().slice(0, 10)
+                : new Date().toISOString().slice(0, 10),
+              booking_id: bookingId,
+              category: "Class usage",
+              description: slot?.title ? `Class usage: ${slot.title}` : "Class usage",
+            },
+            ...prev,
+          ]);
+        }
+
+        if (!attended && existing?.id) {
+          const { error } = await supabase
+            .from("finance_entries")
+            .delete()
+            .eq("id", existing.id);
+          if (error) throw error;
+          setFinanceEntries((prev) => prev.filter((entry) => entry.id !== existing.id));
+        }
+      }
     } catch (err) {
       console.error(err);
     }
@@ -411,6 +474,7 @@ export default function OwnerStudentDetailPage() {
         payment_source: paymentForm.source || null,
         category: paymentForm.category || null,
         description: paymentForm.description || null,
+        booking_id: paymentBookingId || null,
       });
 
       if (error) throw error;
@@ -434,6 +498,7 @@ export default function OwnerStudentDetailPage() {
           amount,
           currency: paymentCurrency || "KZT",
           payment_date: paymentForm.date,
+          booking_id: paymentBookingId || null,
           payment_source: paymentForm.source || null,
           category: paymentForm.category || null,
           description: paymentForm.description || null,
@@ -512,6 +577,7 @@ export default function OwnerStudentDetailPage() {
           payment_source: null,
           category: "Membership",
           description: seasonDescriptionParts.join(" | ") || "Season ticket",
+          booking_id: null,
         },
         ...prev,
       ]);
@@ -537,7 +603,14 @@ export default function OwnerStudentDetailPage() {
             <div className="flex items-center gap-2 text-slate-500">
               <Info size={18} className="text-indigo-500" />
               <button onClick={handleMessage} className="hover:bg-slate-100 p-1 rounded-full transition-colors">
-                <MessageCircle size={18} className="text-emerald-500" />
+                <svg
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  className="h-[18px] w-[18px] text-emerald-500"
+                  fill="currentColor"
+                >
+                  <path d="M20.52 3.48A11.86 11.86 0 0 0 12 0a12 12 0 0 0-10.4 18l-1.6 6 6.16-1.62A12 12 0 0 0 24 12a11.86 11.86 0 0 0-3.48-8.52ZM12 22a9.9 9.9 0 0 1-5-1.36l-.36-.2-3.66.96.98-3.56-.24-.38A9.9 9.9 0 1 1 12 22Zm5.52-7.28c-.3-.16-1.76-.86-2.04-.96s-.48-.16-.68.16-.78.96-.96 1.16-.36.22-.66.06a8.1 8.1 0 0 1-2.36-1.44 8.88 8.88 0 0 1-1.64-2.04c-.18-.3 0-.46.14-.62.14-.14.3-.36.46-.54a2.1 2.1 0 0 0 .3-.52.55.55 0 0 0 0-.52c-.06-.16-.68-1.64-.94-2.24s-.5-.5-.68-.5h-.6a1.16 1.16 0 0 0-.84.4 3.52 3.52 0 0 0-1.1 2.6 6.1 6.1 0 0 0 1.28 3.2 13.94 13.94 0 0 0 5.4 4.58c2.06.9 2.06.6 2.44.56a4.16 4.16 0 0 0 2.74-1.94 3.4 3.4 0 0 0 .24-1.94c-.1-.16-.28-.24-.58-.4Z" />
+                </svg>
               </button>
             </div>
             <div className="flex items-center gap-3 text-sm text-slate-600">
@@ -545,9 +618,6 @@ export default function OwnerStudentDetailPage() {
               <span className="text-indigo-600 font-semibold border-b border-dashed border-indigo-400 pb-0.5">
                 {totalPaid.toLocaleString()} T
               </span>
-              <button className="text-indigo-500 font-medium hover:underline">
-                Reconciliation
-              </button>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-6 text-sm text-slate-500">
@@ -722,8 +792,8 @@ export default function OwnerStudentDetailPage() {
         <section className="space-y-6">
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 grid gap-4 lg:grid-cols-5 text-sm">
             {[
-              { id: "total-income", label: "Total income", value: `${totalPaid.toLocaleString()} T` },
-              { id: "total-purchases", label: "Total purchases", value: `${totalPaid.toLocaleString()} T` },
+              { id: "total-income", label: "Total income", value: `${incomeTotal.toLocaleString()} T` },
+              { id: "total-purchases", label: "Total purchases", value: `${incomeTotal.toLocaleString()} T` },
               { id: "returns", label: "Returns", value: "0 T" },
               {
                 id: "average-bill",
