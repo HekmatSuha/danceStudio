@@ -40,6 +40,7 @@ export default function InstructorDashboardPage() {
   };
 
   useEffect(() => {
+    if (!user?.uuid) return;
     const load = async () => {
       setLoading(true);
       try {

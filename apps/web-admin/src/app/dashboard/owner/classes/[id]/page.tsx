@@ -60,7 +60,7 @@ export default function OwnerClassDetailPage() {
 
         if (error) throw error;
 
-        const trainer = slot?.trainer;
+        const trainer = Array.isArray(slot?.trainer) ? slot?.trainer?.[0] : slot?.trainer;
         const teacherName = trainer
           ? `${trainer.first_name || ""} ${trainer.last_name || ""}`.trim()
           : "Unknown Instructor";
