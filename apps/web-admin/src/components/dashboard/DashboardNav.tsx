@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
@@ -27,6 +27,11 @@ import {
 import { useAuthUser } from "../../lib/useAuthUser";
 import { signOut, type UserRole } from "../../lib/auth";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
+import { fetchMyStudios } from "../../lib/studios";
+import { useAuthedSWR } from "../../lib/useAuthedSWR";
+import { fetchConversations } from "../../lib/chat";
+
+type RequestRow = { id: string };
 
 type NavItem = {
   label: string;
@@ -39,6 +44,77 @@ export function DashboardNav({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { user, role, loading } = useAuthUser();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [studioIdsParam, setStudioIdsParam] = useState("");
+  const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
+
+  useEffect(() => {
+    if (!user || role !== "owner") {
+      setStudioIdsParam("");
+      return;
+    }
+
+    let mounted = true;
+    fetchMyStudios()
+      .then((studios) => {
+        if (!mounted) return;
+        setStudioIdsParam(studios.map((studio) => studio.uuid).join(","));
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setStudioIdsParam("");
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [role, user]);
+
+  const { data: bookingRequests } = useAuthedSWR<RequestRow[]>(
+    role === "owner" && studioIdsParam
+      ? `/api/owner/requests/bookings?studioIds=${studioIdsParam}`
+      : null
+  );
+
+  const { data: rentalRequests } = useAuthedSWR<RequestRow[]>(
+    role === "owner" && studioIdsParam
+      ? `/api/owner/requests/rentals?studioIds=${studioIdsParam}`
+      : null
+  );
+
+  const hasPendingRequests = useMemo(() => {
+    if (role !== "owner") return false;
+    const bookingCount = bookingRequests?.length ?? 0;
+    const rentalCount = rentalRequests?.length ?? 0;
+    return bookingCount + rentalCount > 0;
+  }, [bookingRequests, rentalRequests, role]);
+
+  useEffect(() => {
+    if (!user || role !== "owner") {
+      setHasUnreadMessages(false);
+      return;
+    }
+
+    let mounted = true;
+    fetchConversations(user.uuid)
+      .then((conversations) => {
+        if (!mounted) return;
+        const hasUnread = conversations.some((conv) => {
+          const last = conv.last_message;
+          if (!last) return false;
+          if (last.sender_id === user.uuid) return false;
+          return !last.is_read;
+        });
+        setHasUnreadMessages(hasUnread);
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setHasUnreadMessages(false);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [role, user]);
 
   // Define navigation items based on role
   const getNavItems = (role: UserRole | null): NavItem[] => {
@@ -164,6 +240,8 @@ export function DashboardNav({ children }: { children: React.ReactNode }) {
             </p>
             {navItems.map((item) => {
               const isActive = pathname === item.href;
+              const showIndicator = (role === "owner" && item.href === "/dashboard/owner/requests" && hasPendingRequests)
+                || (role === "owner" && item.href === "/dashboard/owner/chat" && hasUnreadMessages);
               return (
                 <Link
                   key={item.href}
@@ -179,7 +257,12 @@ export function DashboardNav({ children }: { children: React.ReactNode }) {
                     {item.icon}
                   </span>
                   {item.label}
-                  {isActive && <ChevronRight size={16} className="ml-auto opacity-50" />}
+                  <span className="ml-auto flex items-center gap-2">
+                    {showIndicator && (
+                      <span className="h-2 w-2 rounded-full bg-rose-500" />
+                    )}
+                    {isActive && <ChevronRight size={16} className="opacity-50" />}
+                  </span>
                 </Link>
               );
             })}
