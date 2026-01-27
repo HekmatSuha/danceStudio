@@ -39,6 +39,7 @@ import {
   addMonths,
   endOfDay,
   format,
+  isValid,
   startOfDay,
   startOfMonth,
   startOfWeek,
@@ -72,6 +73,11 @@ export default function OwnerDashboardPage() {
   const [outstandingError, setOutstandingError] = useState<string | null>(null);
   const [outstandingStudents, setOutstandingStudents] = useState<
     Array<{ id: string; name: string; email?: string | null; phone?: string | null; amount: number }>
+  >([]);
+  const [birthdayLoading, setBirthdayLoading] = useState(false);
+  const [birthdayError, setBirthdayError] = useState<string | null>(null);
+  const [upcomingBirthdays, setUpcomingBirthdays] = useState<
+    Array<{ id: string; name: string; date: string }>
   >([]);
 
   const filterLabel = useMemo(() => {
@@ -393,6 +399,59 @@ export default function OwnerDashboardPage() {
     loadOutstanding();
   }, [loading, studios]);
 
+  useEffect(() => {
+    if (loading || studios.length === 0) return;
+    const studioIds = studios.map((studio) => studio.uuid);
+
+    const loadBirthdays = async () => {
+      setBirthdayLoading(true);
+      setBirthdayError(null);
+      try {
+        const { data, error } = await supabase
+          .from("tenant_staff")
+          .select("user:profiles(id, first_name, last_name, date_of_birth)")
+          .in("studio_id", studioIds);
+
+        if (error) throw error;
+
+        const today = new Date();
+        const year = today.getFullYear();
+        const endWindow = addDays(today, 30);
+        const rows = (data || [])
+          .map((row) => {
+            const user = (row as { user?: { id?: string; first_name?: string | null; last_name?: string | null; date_of_birth?: string | null } }).user;
+            if (!user?.date_of_birth) return null;
+            const dob = new Date(user.date_of_birth);
+            if (!isValid(dob)) return null;
+            const next = new Date(year, dob.getMonth(), dob.getDate());
+            const nextDate = next < today ? new Date(year + 1, dob.getMonth(), dob.getDate()) : next;
+            if (nextDate > endWindow) return null;
+            const name = `${user.first_name || ""} ${user.last_name || ""}`.trim() || "Instructor";
+            return {
+              id: user.id || `${name}-${user.date_of_birth}`,
+              name,
+              date: format(nextDate, "MMM d"),
+              sortDate: nextDate.getTime(),
+            };
+          })
+          .filter((row): row is { id: string; name: string; date: string; sortDate: number } => Boolean(row))
+          .sort((a, b) => a.sortDate - b.sortDate)
+          .slice(0, 5)
+          .map(({ sortDate, ...rest }) => rest);
+
+        setUpcomingBirthdays(rows);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Unable to load birthdays.";
+        setBirthdayError(message);
+        setUpcomingBirthdays([]);
+      } finally {
+        setBirthdayLoading(false);
+      }
+    };
+
+    loadBirthdays();
+  }, [loading, studios]);
+
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center text-slate-400">Loading dashboard...</div>;
   }
@@ -622,6 +681,32 @@ export default function OwnerDashboardPage() {
                 />
               </AreaChart>
             </ResponsiveContainer>
+          </div>
+
+          <div className="mt-6 border-t border-slate-100 pt-5">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-slate-900">Upcoming instructor birthdays</h3>
+              <span className="text-xs text-slate-400">Next 30 days</span>
+            </div>
+            {birthdayLoading ? (
+              <div className="text-sm text-slate-400">Loading birthdays...</div>
+            ) : birthdayError ? (
+              <div className="text-sm text-rose-500">{birthdayError}</div>
+            ) : upcomingBirthdays.length === 0 ? (
+              <div className="text-sm text-slate-500">No birthdays coming up.</div>
+            ) : (
+              <div className="space-y-2">
+                {upcomingBirthdays.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center justify-between rounded-xl border border-slate-100 px-4 py-2 text-sm"
+                  >
+                    <span className="font-semibold text-slate-800">{item.name}</span>
+                    <span className="text-slate-500">{item.date}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </section>
 
