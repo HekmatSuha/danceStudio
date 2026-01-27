@@ -23,6 +23,10 @@ import {
   Bell,
   Megaphone,
   MessageCircle,
+  Search,
+  BarChart3,
+  TrendingUp,
+  MapPin,
 } from "lucide-react";
 import { useAuthUser } from "../../lib/useAuthUser";
 import { signOut, type UserRole } from "../../lib/auth";
@@ -131,6 +135,14 @@ export function DashboardNav({ children }: { children: React.ReactNode }) {
           { label: "Overview", href: "/dashboard/instructor", icon: <LayoutDashboard size={20} /> },
           { label: "My Schedule", href: "/dashboard/instructor/schedule", icon: <CalendarDays size={20} /> },
           { label: "Students", href: "/dashboard/instructor/students", icon: <Users size={20} /> },
+          { label: "Requests", href: "/dashboard/instructor/requests", icon: <Inbox size={20} /> },
+          { label: "Studio Rentals", href: "/dashboard/instructor/rentals", icon: <Search size={20} /> },
+          { label: "Payments", href: "/dashboard/instructor/payments", icon: <DollarSign size={20} /> },
+          { label: "Notifications", href: "/dashboard/instructor/notifications", icon: <Bell size={20} /> },
+          { label: "Activity Analytics", href: "/dashboard/instructor/analytics", icon: <BarChart3 size={20} /> },
+          { label: "Income Analytics", href: "/dashboard/instructor/income", icon: <TrendingUp size={20} /> },
+          { label: "Advertisements", href: "/dashboard/instructor/advertisements", icon: <Megaphone size={20} /> },
+          { label: "City Events", href: "/dashboard/instructor/events", icon: <MapPin size={20} /> },
           { label: "Messages", href: "/dashboard/instructor/chat", icon: <MessageCircle size={20} /> },
         ];
       case "owner":

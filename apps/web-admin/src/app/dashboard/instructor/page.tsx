@@ -1,7 +1,28 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { CheckCircle2, Clock3, Flame, CalendarCheck2, Sparkles, Plus } from "lucide-react";
+import Link from "next/link";
+import {
+  CheckCircle2,
+  Clock3,
+  Plus,
+  Search,
+  Inbox,
+  UserCircle,
+  Settings,
+  DollarSign,
+  Bell,
+  MessageCircle,
+  BarChart3,
+  TrendingUp,
+  Megaphone,
+  MapPin,
+  Users,
+  Calendar as CalendarIcon,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
+
 import { ClassForm } from "../../../components/dashboard/ClassForm";
 import { fetchClasses, markClassLocked, type ClassEvent } from "../../../lib/classes";
 import { useAuthUser } from "../../../lib/useAuthUser";
@@ -13,6 +34,15 @@ import {
   DialogTitle,
 } from "../../../components/ui/dialog";
 import { fetchSlotBookings, markAttendance, type BookingWithUser } from "../../../lib/bookings";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "../../../components/ui/card";
+import { Button } from "../../../components/ui/button";
+import { cn } from "../../../components/ui/utils";
 
 export default function InstructorDashboardPage() {
   const { user } = useAuthUser();
@@ -24,6 +54,8 @@ export default function InstructorDashboardPage() {
   const [roster, setRoster] = useState<BookingWithUser[]>([]);
   const [loadingRoster, setLoadingRoster] = useState(false);
   const [locking, setLocking] = useState(false);
+  
+  // Initialize week start to the most recent Monday
   const [weekStart, setWeekStart] = useState<Date>(() => {
     const today = new Date();
     const day = today.getDay();
@@ -58,23 +90,21 @@ export default function InstructorDashboardPage() {
   const stats = useMemo(() => {
     const now = Date.now();
     const upcoming = slots.filter((s) => s.startAt > now);
-    const past = slots.filter((s) => s.startAt <= now);
     const next = upcoming.sort((a, b) => a.startAt - b.startAt)[0];
     const seatsTaken = upcoming.reduce(
       (sum, s) => sum + (s.reservedCount ?? 0),
       0,
     );
+    // Rough estimate or actual capacity sum
     const seatsCapacity = upcoming.reduce(
       (sum, s) => sum + (s.capacity || 0),
       0,
     );
+    
     return {
-      nextClass: next
-        ? new Date(next.startAt).toLocaleString()
-        : "No upcoming",
-      booked: `${seatsTaken} / ${seatsCapacity || 1}`,
+      nextClass: next,
+      bookedRatio: `${seatsTaken} / ${seatsCapacity || "-"}`,
       weekCount: upcoming.length,
-      pastCount: past.length,
       loading,
     };
   }, [slots, loading]);
@@ -154,286 +184,391 @@ export default function InstructorDashboardPage() {
     }
   };
 
+  const quickLinks = [
+    { title: "Rentals", href: "/dashboard/instructor/rentals", icon: Search },
+    { title: "Requests", href: "/dashboard/instructor/requests", icon: Inbox },
+    { title: "Profile", href: "/profile", icon: UserCircle },
+    { title: "Settings", href: "/profile", icon: Settings },
+    { title: "Payments", href: "/dashboard/instructor/payments", icon: DollarSign },
+    { title: "Notifications", href: "/dashboard/instructor/notifications", icon: Bell },
+    { title: "Chat", href: "/dashboard/instructor/chat", icon: MessageCircle },
+    { title: "Analytics", href: "/dashboard/instructor/analytics", icon: BarChart3 },
+    { title: "Income", href: "/dashboard/instructor/income", icon: TrendingUp },
+    { title: "Ads", href: "/dashboard/instructor/advertisements", icon: Megaphone },
+    { title: "Events", href: "/dashboard/instructor/events", icon: MapPin },
+  ];
+
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-emerald-50">
-      <div className="relative isolate overflow-hidden">
-        <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_15%_10%,rgba(52,211,153,0.18),transparent_30%),radial-gradient(circle_at_85%_0%,rgba(99,102,241,0.12),transparent_25%)]" />
-
-        <div className="max-w-7xl mx-auto px-6 py-10 lg:py-14">
-          <header className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <p className="text-xs font-semibold tracking-[0.25em] text-emerald-600 uppercase">
-                Teaching Hub
-              </p>
-              <h1 className="text-4xl lg:text-5xl font-black text-slate-900 leading-tight">
-                Instructor Dashboard
-              </h1>
-              <p className="text-lg text-slate-600 mt-3 max-w-2xl">
-                Schedule, track, and refine every class with a clear split of what is coming up and what is behind you.
-              </p>
-            </div>
-
-            {!showForm && (
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowForm(true)}
-                  className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 px-5 py-3 text-white font-semibold shadow-lg shadow-emerald-500/20 hover:translate-y-[-1px] transition-all"
-                >
-                  <Plus size={18} />
-                  Schedule New Class
-                </button>
-                <button className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-700 hover:border-slate-300 shadow-sm">
-                  <Sparkles size={18} />
-                  Templates
-                </button>
-              </div>
-            )}
-          </header>
-
-          <section className="mt-10 grid gap-4 sm:grid-cols-3">
-            {[
-              {
-                icon: <Clock3 size={20} />,
-                label: "Next class",
-                value: stats.nextClass,
-                tone: "from-emerald-500/10 to-teal-500/5",
-              },
-              {
-                icon: <Flame size={20} />,
-                label: "Booked seats",
-                value: stats.booked,
-                tone: "from-orange-500/10 to-amber-500/5",
-              },
-              {
-                icon: <CalendarCheck2 size={20} />,
-                label: "Upcoming sessions",
-                value: `${stats.weekCount}`,
-                tone: "from-indigo-500/10 to-slate-500/5",
-              },
-            ].map((item) => (
-              <div
-                key={item.label}
-                className="relative overflow-hidden rounded-2xl border border-slate-100 bg-white/80 p-4 shadow-sm backdrop-blur-sm"
-              >
-                <div className={`absolute inset-0 bg-gradient-to-br ${item.tone}`} />
-                <div className="relative flex items-center gap-3">
-                  <div className="rounded-xl bg-white text-slate-700 p-2.5 shadow-sm border border-slate-100">
-                    {item.icon}
-                  </div>
-                  <div>
-                    <p className="text-xs uppercase tracking-wide text-slate-500">{item.label}</p>
-                    <p className="text-lg font-semibold text-slate-900">{item.value}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </section>
-
-          {showForm && (
-            <div className="mt-8 rounded-2xl border border-emerald-100 bg-white shadow-sm p-4">
-              <ClassForm onSuccess={handleSuccess} onCancel={() => setShowForm(false)} />
-            </div>
-          )}
-
-          <section className="mt-12 space-y-4">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Weekly View</p>
-                <h2 className="text-2xl font-bold text-slate-900">Schedule & attendance</h2>
-                <p className="text-sm text-slate-500">Click a class to manage attendance.</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const prev = new Date(weekStart);
-                    prev.setDate(prev.getDate() - 7);
-                    setWeekStart(prev);
-                  }}
-                  className="px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white hover:bg-slate-50"
-                >
-                  Prev week
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const next = new Date(weekStart);
-                    next.setDate(next.getDate() + 7);
-                    setWeekStart(next);
-                  }}
-                  className="px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white hover:bg-slate-50"
-                >
-                  Next week
-                </button>
-              </div>
-            </div>
-
-            {loading ? (
-              <div className="text-center py-10 text-slate-400">Loading classes...</div>
-            ) : (
-              <div className="rounded-2xl border border-slate-100 bg-white shadow-sm overflow-hidden">
-                <div className="grid" style={{ gridTemplateColumns: "80px repeat(7, minmax(150px, 1fr))" }}>
-                  <div className="border-b border-slate-100 bg-slate-50 p-2 text-xs text-slate-500">Time</div>
-                  {weekDays.map((day) => {
-                    const isToday = new Date().toDateString() === day.toDateString();
-                    return (
-                      <div
-                        key={day.toDateString()}
-                        className={`border-b border-slate-100 p-2 text-xs font-semibold text-slate-700 ${
-                          isToday ? "bg-emerald-50 text-emerald-700" : "bg-slate-50"
-                        }`}
-                      >
-                        {day.toLocaleDateString(undefined, { weekday: "short" })}
-                        <span className="block text-xs font-normal">{day.toLocaleDateString()}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                <div className="grid" style={{ gridTemplateColumns: "80px repeat(7, minmax(150px, 1fr))" }}>
-                  <div className="relative h-[720px]">
-                    {Array.from({ length: 12 }).map((_, hourIndex) => {
-                      const hour = hourIndex + 8;
-                      return (
-                        <div key={hour} className="h-[60px] border-b border-slate-100 p-2 text-xs text-slate-400">
-                          {hour.toString().padStart(2, "0")}:00
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {weekDays.map((day) => {
-                    const dayClasses = classesByDay.get(day.toDateString()) || [];
-                    return (
-                      <div key={day.toDateString()} className="relative h-[720px] border-l border-slate-100">
-                        {Array.from({ length: 12 }).map((_, hourIndex) => (
-                          <div key={hourIndex} className="h-[60px] border-b border-slate-100" />
-                        ))}
-                        {dayClasses.map((slot) => {
-                          const start = new Date(slot.startAt);
-                          const end = new Date(slot.endAt);
-                          const minutesFromStart = (start.getHours() - 8) * 60 + start.getMinutes();
-                          const duration = Math.max((end.getTime() - start.getTime()) / 60000, 30);
-                          if (minutesFromStart < 0 || minutesFromStart > 720) return null;
-                          const top = (minutesFromStart / 720) * 720;
-                          const height = (duration / 720) * 720;
-                          return (
-                            <button
-                              key={slot.id}
-                              type="button"
-                              onClick={() => handleOpenRoster(slot.id)}
-                              className={`absolute left-1 right-1 px-2 py-2 text-left text-xs rounded-lg shadow-sm border ${
-                                slot.isLocked
-                                  ? "bg-emerald-50 border-emerald-200 text-emerald-700"
-                                  : "bg-white border-slate-200 text-slate-700 hover:border-emerald-300"
-                              }`}
-                              style={{ top, height }}
-                            >
-                              <div className="font-semibold">{slot.title}</div>
-                              <div className="text-[11px]">{start.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>
-                              <div className="text-[11px] truncate">{slot.locationName}</div>
-                              {slot.isLocked && <div className="text-[10px] mt-1">Done</div>}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </section>
-
-          <Dialog
-            open={!!selectedClassId}
-            onOpenChange={(open) => {
-              if (!open) {
-                setSelectedClassId(null);
-                setRoster([]);
-              }
-            }}
-          >
-            <DialogContent className="sm:max-w-2xl">
-              <DialogHeader>
-                <DialogTitle>Class Roster: {selectedClass?.title}</DialogTitle>
-                <DialogDescription>
-                  Manage attendance and view student details for this session.
-                </DialogDescription>
-              </DialogHeader>
-              
-              <div className="py-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="text-xs text-slate-500">
-                    {selectedClass?.isLocked ? "Attendance locked" : "Attendance open"}
-                  </div>
-                  {!selectedClass?.isLocked && (
-                    <button
-                      type="button"
-                      onClick={handleLockClass}
-                      disabled={locking}
-                      className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 disabled:opacity-70"
-                    >
-                      <CheckCircle2 size={14} />
-                      {locking ? "Locking..." : "Mark done"}
-                    </button>
-                  )}
-                </div>
-
-                {loadingRoster ? (
-                  <div className="py-10 text-center text-slate-400">Loading roster...</div>
-                ) : roster.length === 0 ? (
-                  <div className="py-10 text-center text-slate-400">No bookings yet.</div>
-                ) : (
-                  <div className="rounded-lg border border-slate-100 overflow-hidden">
-                    <table className="w-full text-sm text-slate-600">
-                      <thead className="bg-slate-50 border-b border-slate-100">
-                        <tr>
-                          <th className="px-4 py-3 text-left font-semibold text-slate-900">Student</th>
-                          <th className="px-4 py-3 text-left font-semibold text-slate-900">Email</th>
-                          <th className="px-4 py-3 text-right font-semibold text-slate-900">Status</th>
-                          <th className="px-4 py-3 text-right font-semibold text-slate-900">Attendance</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {roster.map((booking) => (
-                          <tr key={booking.uuid} className="hover:bg-slate-50/50">
-                            <td className="px-4 py-3 font-medium text-slate-900">
-                              {booking.user?.first_name} {booking.user?.last_name}
-                            </td>
-                            <td className="px-4 py-3">{booking.user?.email || "-"}</td>
-                            <td className="px-4 py-3 text-right">
-                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                                booking.status === "cancelled" ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"
-                              }`}>
-                                {booking.status}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 text-right">
-                              <button
-                                className={`h-5 w-5 rounded border flex items-center justify-center ${
-                                  booking.attended ? "border-emerald-400 bg-emerald-500" : "border-slate-300 bg-white"
-                                }`}
-                                onClick={() => handleToggleAttendance(booking)}
-                                disabled={selectedClass?.isLocked || booking.status === "cancelled"}
-                                aria-label={booking.attended ? "Present" : "Not present"}
-                                title={booking.attended ? "Present" : "Not present"}
-                              >
-                                {booking.attended && (
-                                  <span className="text-white text-xs leading-none">✓</span>
-                                )}
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            </DialogContent>
-          </Dialog>
+    <div className="min-h-screen bg-slate-50/50 p-6 lg:p-8 space-y-8">
+      
+      {/* Header */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">
+            Welcome back, {user?.first_name || "Instructor"}
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            Here&apos;s what&apos;s happening with your classes this week.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+           {!showForm ? (
+            <Button onClick={() => setShowForm(true)} className="gap-2 shadow-sm">
+              <Plus className="h-4 w-4" />
+              Schedule Class
+            </Button>
+           ) : (
+            <Button variant="outline" onClick={() => setShowForm(false)}>
+                Cancel
+            </Button>
+           )}
         </div>
       </div>
-    </main>
+
+      {showForm && (
+        <Card className="border-emerald-100 shadow-md">
+            <CardHeader>
+                <CardTitle>Schedule a New Class</CardTitle>
+            </CardHeader>
+            <CardContent>
+                <ClassForm onSuccess={handleSuccess} onCancel={() => setShowForm(false)} />
+            </CardContent>
+        </Card>
+      )}
+
+      {/* Stats Grid */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Next Class</CardTitle>
+            <Clock3 className="h-4 w-4 text-emerald-600" />
+          </CardHeader>
+          <CardContent>
+            {stats.loading ? (
+                <div className="h-6 w-24 animate-pulse bg-slate-100 rounded" />
+            ) : stats.nextClass ? (
+                <>
+                    <div className="text-2xl font-bold truncate">{stats.nextClass.title}</div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                        {new Date(stats.nextClass.startAt).toLocaleString(undefined, {
+                            weekday: 'short', hour: 'numeric', minute: '2-digit'
+                        })}
+                    </p>
+                </>
+            ) : (
+                <div className="text-sm text-muted-foreground">No upcoming classes</div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Weekly Bookings</CardTitle>
+            <Users className="h-4 w-4 text-emerald-600" />
+          </CardHeader>
+          <CardContent>
+             <div className="text-2xl font-bold">{stats.bookedRatio}</div>
+             <p className="text-xs text-muted-foreground mt-1">
+                Seats booked / Total capacity
+             </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Upcoming Sessions</CardTitle>
+            <CalendarIcon className="h-4 w-4 text-emerald-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.weekCount}</div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Classes scheduled this week
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-3 xl:grid-cols-4">
+        {/* Main Schedule Column */}
+        <Card className="lg:col-span-2 xl:col-span-3 border-slate-200 shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between pb-4">
+            <div>
+                <CardTitle>Weekly Schedule</CardTitle>
+                <CardDescription>Manage your classes and attendance</CardDescription>
+            </div>
+            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg">
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => {
+                        const prev = new Date(weekStart);
+                        prev.setDate(prev.getDate() - 7);
+                        setWeekStart(prev);
+                    }}
+                >
+                    <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="text-xs font-medium px-2 min-w-[100px] text-center">
+                    {weekStart.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                </span>
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => {
+                        const next = new Date(weekStart);
+                        next.setDate(next.getDate() + 7);
+                        setWeekStart(next);
+                    }}
+                >
+                    <ChevronRight className="h-4 w-4" />
+                </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0 overflow-auto">
+             {loading ? (
+                <div className="flex h-64 items-center justify-center text-muted-foreground">
+                    Loading schedule...
+                </div>
+             ) : (
+                <div className="min-w-[600px] p-4">
+                    {/* Header Row */}
+                    <div className="grid grid-cols-[60px_repeat(7,1fr)] gap-2 mb-4 text-center">
+                        <div className="text-xs text-muted-foreground pt-2">Time</div>
+                        {weekDays.map((day) => {
+                            const isToday = new Date().toDateString() === day.toDateString();
+                            return (
+                                <div key={day.toDateString()} className={cn(
+                                    "flex flex-col items-center justify-center p-2 rounded-lg text-sm",
+                                    isToday ? "bg-emerald-50 text-emerald-700 font-semibold" : "text-slate-600"
+                                )}>
+                                    <span className="text-xs uppercase opacity-70">
+                                        {day.toLocaleDateString(undefined, { weekday: "short" })}
+                                    </span>
+                                    <span>{day.getDate()}</span>
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    {/* Schedule Grid */}
+                    <div className="relative grid grid-cols-[60px_repeat(7,1fr)] gap-2">
+                        {/* Time Column */}
+                        <div className="space-y-[40px] text-right pr-2 pt-[-10px]">
+                             {Array.from({ length: 13 }).map((_, i) => {
+                                const hour = i + 8; // Start at 8 AM
+                                return (
+                                    <div key={hour} className="h-5 text-xs text-muted-foreground relative -top-2.5">
+                                        {hour}:00
+                                    </div>
+                                );
+                             })}
+                        </div>
+                        
+                        {/* Days Columns */}
+                        {weekDays.map((day) => {
+                             const dayClasses = classesByDay.get(day.toDateString()) || [];
+                             return (
+                                 <div key={day.toDateString()} className="relative h-[720px] bg-slate-50/50 rounded-lg border border-slate-100/50">
+                                     {/* Hour lines */}
+                                     {Array.from({ length: 12 }).map((_, i) => (
+                                         <div key={i} className="absolute w-full border-b border-slate-200/50" style={{ top: `${(i + 1) * 60}px` }} />
+                                     ))}
+                                     
+                                     {dayClasses.map((slot) => {
+                                         const start = new Date(slot.startAt);
+                                         const end = new Date(slot.endAt);
+                                         const startMinutes = (start.getHours() - 8) * 60 + start.getMinutes();
+                                         const duration = (end.getTime() - start.getTime()) / 60000;
+                                         
+                                         // Skip if out of bounds (before 8am or after 8pm) - simplistic check
+                                         if (startMinutes < 0) return null;
+
+                                         return (
+                                             <button
+                                                 key={slot.id}
+                                                 onClick={() => handleOpenRoster(slot.id)}
+                                                 className={cn(
+                                                     "absolute left-0.5 right-0.5 rounded-md border p-1.5 text-left transition-all hover:scale-[1.02] hover:shadow-md",
+                                                     slot.isLocked 
+                                                        ? "bg-slate-100 border-slate-300 text-slate-500" 
+                                                        : "bg-emerald-100 border-emerald-200 text-emerald-900 hover:bg-emerald-200"
+                                                 )}
+                                                 style={{
+                                                     top: `${startMinutes}px`,
+                                                     height: `${Math.max(duration, 30)}px`
+                                                 }}
+                                             >
+                                                 <div className="text-xs font-semibold leading-tight truncate">
+                                                    {slot.title}
+                                                 </div>
+                                                 <div className="text-[10px] opacity-80 leading-tight">
+                                                    {start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                                                 </div>
+                                             </button>
+                                         );
+                                     })}
+                                 </div>
+                             );
+                        })}
+                    </div>
+                </div>
+             )}
+          </CardContent>
+        </Card>
+
+        {/* Sidebar Column */}
+        <div className="space-y-6 lg:col-span-1">
+            {/* Quick Actions */}
+            <Card>
+                <CardHeader>
+                    <CardTitle className="text-lg">Quick Actions</CardTitle>
+                </CardHeader>
+                <CardContent className="grid grid-cols-2 gap-3">
+                    {quickLinks.map((link) => (
+                        <Link 
+                            key={link.title} 
+                            href={link.href}
+                            className="flex flex-col items-center justify-center gap-2 p-3 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-100 transition-colors text-center"
+                        >
+                            <div className="p-2 bg-emerald-50 text-emerald-600 rounded-full">
+                                <link.icon size={18} />
+                            </div>
+                            <span className="text-xs font-medium text-slate-700">{link.title}</span>
+                        </Link>
+                    ))}
+                </CardContent>
+            </Card>
+
+            {/* Weekly Focus */}
+            <Card className="bg-slate-900 text-white border-none">
+                <CardHeader>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                        <CheckCircle2 size={18} className="text-emerald-400" />
+                        Weekly Focus
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="text-sm text-slate-300">
+                        Stay on top of your administrative tasks.
+                    </div>
+                    <div className="space-y-2">
+                        <div className="flex items-center justify-between text-sm p-2 rounded bg-white/10">
+                            <span>Classes to confirm</span>
+                            <span className="font-bold text-white">{stats.weekCount}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm p-2 rounded bg-white/10">
+                            <span>Pending Requests</span>
+                            <span className="font-bold text-white">-</span>
+                        </div>
+                    </div>
+                    <Button variant="secondary" className="w-full text-xs" asChild>
+                        <Link href="/dashboard/instructor/requests">
+                            View All Requests
+                        </Link>
+                    </Button>
+                </CardContent>
+            </Card>
+        </div>
+      </div>
+
+      {/* Roster Dialog */}
+      <Dialog
+        open={!!selectedClassId}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedClassId(null);
+            setRoster([]);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Class Roster: {selectedClass?.title}</DialogTitle>
+            <DialogDescription>
+              Manage attendance and view student details for this session.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="py-4">
+            <div className="flex items-center justify-between mb-4">
+              <div className="text-sm font-medium text-slate-500">
+                {selectedClass?.isLocked ? (
+                    <span className="flex items-center gap-2 text-amber-600">
+                        <CheckCircle2 size={16} /> Attendance Locked
+                    </span>
+                ) : (
+                    <span className="flex items-center gap-2 text-emerald-600">
+                        <Clock3 size={16} /> Attendance Open
+                    </span>
+                )}
+              </div>
+              {!selectedClass?.isLocked && (
+                <Button
+                  size="sm"
+                  onClick={handleLockClass}
+                  disabled={locking}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                >
+                  {locking ? "Locking..." : "Finalize & Lock"}
+                </Button>
+              )}
+            </div>
+
+            {loadingRoster ? (
+              <div className="py-10 text-center text-slate-400">Loading roster...</div>
+            ) : roster.length === 0 ? (
+              <div className="py-10 text-center text-slate-400 bg-slate-50 rounded-lg">No bookings yet for this class.</div>
+            ) : (
+              <div className="rounded-lg border border-slate-200 overflow-hidden">
+                <table className="w-full text-sm text-slate-600">
+                  <thead className="bg-slate-50 border-b border-slate-200">
+                    <tr>
+                      <th className="px-4 py-3 text-left font-semibold text-slate-900">Student</th>
+                      <th className="px-4 py-3 text-left font-semibold text-slate-900">Email</th>
+                      <th className="px-4 py-3 text-right font-semibold text-slate-900">Status</th>
+                      <th className="px-4 py-3 text-right font-semibold text-slate-900">Attendance</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {roster.map((booking) => (
+                      <tr key={booking.uuid} className="hover:bg-slate-50/50">
+                        <td className="px-4 py-3 font-medium text-slate-900">
+                          {booking.user?.first_name} {booking.user?.last_name}
+                        </td>
+                        <td className="px-4 py-3">{booking.user?.email || "-"}</td>
+                        <td className="px-4 py-3 text-right">
+                          <span className={cn(
+                            "inline-flex items-center px-2 py-0.5 rounded text-xs font-medium",
+                            booking.status === "cancelled" ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"
+                          )}>
+                            {booking.status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <button
+                            className={cn(
+                                "h-6 w-6 rounded border flex items-center justify-center transition-all ml-auto",
+                                booking.attended 
+                                    ? "border-emerald-500 bg-emerald-500 text-white" 
+                                    : "border-slate-300 bg-white hover:border-emerald-400"
+                            )}
+                            onClick={() => handleToggleAttendance(booking)}
+                            disabled={selectedClass?.isLocked || booking.status === "cancelled"}
+                          >
+                            {booking.attended && <CheckCircle2 size={14} />}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }
