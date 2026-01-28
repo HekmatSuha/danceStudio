@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import {
   Users,
   CreditCard,
@@ -13,15 +14,6 @@ import {
   Calendar as CalendarIcon,
 } from "lucide-react";
 import { useOwnerStudiosGuard } from "../../../lib/useOwnerStudiosGuard";
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -50,6 +42,49 @@ import {
 import { DateRange } from "react-day-picker";
 import { cn } from "../../../components/ui/utils";
 import { supabase } from "../../../lib/supabase";
+
+const OwnerRevenueChart = dynamic(
+  () =>
+    import("../../../components/dashboard/owner/OwnerRevenueChart").then(
+      (mod) => mod.OwnerRevenueChart,
+    ),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-[300px] w-full animate-pulse rounded-xl bg-slate-100" />
+    ),
+  },
+);
+
+const OwnerBirthdaysPanel = dynamic(
+  () =>
+    import("../../../components/dashboard/owner/OwnerBirthdaysPanel").then(
+      (mod) => mod.OwnerBirthdaysPanel,
+    ),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="mt-6 rounded-xl border border-slate-100 bg-white p-4 text-sm text-slate-500">
+        Loading birthdays...
+      </div>
+    ),
+  },
+);
+
+const OwnerOutstandingBalances = dynamic(
+  () =>
+    import("../../../components/dashboard/owner/OwnerOutstandingBalances").then(
+      (mod) => mod.OwnerOutstandingBalances,
+    ),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-500">
+        Loading balances...
+      </div>
+    ),
+  },
+);
 
 export default function OwnerDashboardPage() {
   const { studios, loading, role } = useOwnerStudiosGuard();
@@ -635,122 +670,19 @@ export default function OwnerDashboardPage() {
               <option value="12m">Last year</option>
             </select>
           </div>
-          <div className="h-[300px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart
-                data={revenueData}
-                margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
-              >
-                <defs>
-                  <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis 
-                  dataKey="name" 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{ fill: "#64748b", fontSize: 12 }} 
-                  dy={10}
-                />
-                <YAxis 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{ fill: "#64748b", fontSize: 12 }} 
-                  tickFormatter={(value) => `₸${value}`}
-                />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: '#fff', 
-                    borderRadius: '12px', 
-                    border: '1px solid #e2e8f0',
-                    boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
-                  }}
-                  itemStyle={{ color: '#1e293b', fontWeight: 600 }}
-                  formatter={(value: number) => [`₸${value}`, "Revenue"]}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="revenue"
-                  stroke="#8b5cf6"
-                  strokeWidth={3}
-                  fillOpacity={1}
-                  fill="url(#colorRevenue)"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-
-          <div className="mt-6 border-t border-slate-100 pt-5">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-slate-900">Upcoming instructor birthdays</h3>
-              <span className="text-xs text-slate-400">Next 30 days</span>
-            </div>
-            {birthdayLoading ? (
-              <div className="text-sm text-slate-400">Loading birthdays...</div>
-            ) : birthdayError ? (
-              <div className="text-sm text-rose-500">{birthdayError}</div>
-            ) : upcomingBirthdays.length === 0 ? (
-              <div className="text-sm text-slate-500">No birthdays coming up.</div>
-            ) : (
-              <div className="space-y-2">
-                {upcomingBirthdays.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex items-center justify-between rounded-xl border border-slate-100 px-4 py-2 text-sm"
-                  >
-                    <span className="font-semibold text-slate-800">{item.name}</span>
-                    <span className="text-slate-500">{item.date}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          <OwnerRevenueChart data={revenueData} />
+          <OwnerBirthdaysPanel
+            loading={birthdayLoading}
+            error={birthdayError}
+            items={upcomingBirthdays}
+          />
         </section>
 
-        {/* Outstanding balances - Takes up 1/3 columns */}
-        <section className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg font-bold text-slate-900">Outstanding balances</h2>
-            <Link
-              href="/dashboard/owner/students"
-              className="text-xs font-semibold text-slate-500 hover:text-slate-700"
-            >
-              View all
-            </Link>
-          </div>
-          {outstandingLoading ? (
-            <div className="text-sm text-slate-400">Loading balances...</div>
-          ) : outstandingError ? (
-            <div className="text-sm text-rose-500">{outstandingError}</div>
-          ) : outstandingStudents.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
-              No outstanding balances right now.
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {outstandingStudents.map((student) => (
-                <Link
-                  key={student.id}
-                  href={`/dashboard/owner/students/${student.id}`}
-                  className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 px-4 py-3 hover:border-rose-200 hover:bg-rose-50 transition-all"
-                >
-                  <div className="min-w-0">
-                    <div className="font-semibold text-slate-900 truncate">{student.name}</div>
-                    <div className="text-xs text-slate-500 truncate">
-                      {student.email || student.phone || "No contact"}
-                    </div>
-                  </div>
-                  <div className="text-sm font-semibold text-rose-600">
-                    ₸{student.amount.toLocaleString()}
-                  </div>
-                </Link>
-              ))}
-            </div>
-          )}
-        </section>
+        <OwnerOutstandingBalances
+          loading={outstandingLoading}
+          error={outstandingError}
+          students={outstandingStudents}
+        />
       </div>
     </main>
   );

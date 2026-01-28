@@ -1,7 +1,20 @@
-"use client";
-
 import React from "react";
-import { StudentClassList } from "../../../../components/dashboard/StudentClassList";
+import dynamic from "next/dynamic";
+
+const StudentClassList = dynamic(
+  () =>
+    import("../../../../components/dashboard/StudentClassList").then(
+      (mod) => mod.StudentClassList,
+    ),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500">
+        Loading classes...
+      </div>
+    ),
+  },
+);
 
 export default function StudentExplorePage() {
   return (

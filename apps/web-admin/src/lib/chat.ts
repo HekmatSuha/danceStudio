@@ -36,24 +36,10 @@ export type Conversation = {
 };
 
 export async function fetchConversations(userId: string) {
-  // distinct conversations where user is a participant
-  const { data: participations, error: partError } = await supabase
-    .from("conversation_participants")
-    .select("conversation_id")
-    .eq("user_id", userId);
-
-  if (partError) {
-    console.error("Error fetching conversation_participants:", partError);
-    throw new Error(formatSupabaseError(partError));
-  }
-
-  const conversationIds = participations.map((p) => p.conversation_id);
-
-  if (conversationIds.length === 0) return [];
-
   const { data: conversations, error: convError } = await supabase
     .from("conversations")
-    .select(`
+    .select(
+      `
       id,
       created_at,
       updated_at,
@@ -64,34 +50,37 @@ export async function fetchConversations(userId: string) {
           last_name,
           avatar_url
         )
+      ),
+      messages:messages(
+        id,
+        conversation_id,
+        sender_id,
+        content,
+        created_at,
+        is_read
       )
-    `)
-    .in("id", conversationIds)
-    .order("updated_at", { ascending: false });
+    `
+    )
+    .eq("conversation_participants.user_id", userId)
+    .order("updated_at", { ascending: false })
+    .order("created_at", { foreignTable: "messages", ascending: false })
+    .limit(1, { foreignTable: "messages" });
 
   if (convError) {
     console.error("Error fetching conversations:", convError);
     throw new Error(formatSupabaseError(convError));
   }
 
-  // Fetch last message for each conversation
-  const conversationsWithLastMessage = await Promise.all(
-    conversations.map(async (conv) => {
-      const { data: messages } = await supabase
-        .from("messages")
-        .select("*")
-        .eq("conversation_id", conv.id)
-        .order("created_at", { ascending: false })
-        .limit(1);
+  const payload = (conversations || []).map((conv) => {
+    const lastMessage =
+      (conv as { messages?: Message[] }).messages?.[0] || null;
+    return {
+      ...conv,
+      last_message: lastMessage,
+    };
+  });
 
-      return {
-        ...conv,
-        last_message: messages?.[0] || null,
-      };
-    })
-  );
-
-  return conversationsWithLastMessage as unknown as Conversation[];
+  return payload as Conversation[];
 }
 
 export async function fetchMessages(conversationId: string) {

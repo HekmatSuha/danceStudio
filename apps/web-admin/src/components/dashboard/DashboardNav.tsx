@@ -33,9 +33,9 @@ import { signOut, type UserRole } from "../../lib/auth";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import { fetchMyStudios } from "../../lib/studios";
 import { useAuthedSWR } from "../../lib/useAuthedSWR";
-import { fetchConversations } from "../../lib/chat";
 
-type RequestRow = { id: string };
+type RequestSummary = { bookingCount: number; rentalCount: number };
+type UnreadSummary = { hasUnread: boolean; count: number };
 
 type NavItem = {
   label: string;
@@ -73,24 +73,22 @@ export function DashboardNav({ children }: { children: React.ReactNode }) {
     };
   }, [role, user]);
 
-  const { data: bookingRequests } = useAuthedSWR<RequestRow[]>(
+  const { data: requestSummary } = useAuthedSWR<RequestSummary>(
     role === "owner" && studioIdsParam
-      ? `/api/owner/requests/bookings?studioIds=${studioIdsParam}`
+      ? `/api/owner/requests/summary?studioIds=${studioIdsParam}`
       : null
   );
 
-  const { data: rentalRequests } = useAuthedSWR<RequestRow[]>(
-    role === "owner" && studioIdsParam
-      ? `/api/owner/requests/rentals?studioIds=${studioIdsParam}`
-      : null
+  const { data: unreadSummary } = useAuthedSWR<UnreadSummary>(
+    role === "owner" ? "/api/chat/unread" : null
   );
 
   const hasPendingRequests = useMemo(() => {
     if (role !== "owner") return false;
-    const bookingCount = bookingRequests?.length ?? 0;
-    const rentalCount = rentalRequests?.length ?? 0;
+    const bookingCount = requestSummary?.bookingCount ?? 0;
+    const rentalCount = requestSummary?.rentalCount ?? 0;
     return bookingCount + rentalCount > 0;
-  }, [bookingRequests, rentalRequests, role]);
+  }, [requestSummary, role]);
 
   useEffect(() => {
     if (!user || role !== "owner") {
@@ -98,27 +96,10 @@ export function DashboardNav({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    let mounted = true;
-    fetchConversations(user.uuid)
-      .then((conversations) => {
-        if (!mounted) return;
-        const hasUnread = conversations.some((conv) => {
-          const last = conv.last_message;
-          if (!last) return false;
-          if (last.sender_id === user.uuid) return false;
-          return !last.is_read;
-        });
-        setHasUnreadMessages(hasUnread);
-      })
-      .catch(() => {
-        if (!mounted) return;
-        setHasUnreadMessages(false);
-      });
-
-    return () => {
-      mounted = false;
-    };
-  }, [role, user]);
+    if (unreadSummary) {
+      setHasUnreadMessages(unreadSummary.hasUnread);
+    }
+  }, [role, unreadSummary, user]);
 
   // Define navigation items based on role
   const getNavItems = (role: UserRole | null): NavItem[] => {

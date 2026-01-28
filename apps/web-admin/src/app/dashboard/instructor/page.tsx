@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import {
   CheckCircle2,
   Clock3,
@@ -11,7 +12,6 @@ import {
   Calendar as CalendarIcon,
 } from "lucide-react";
 
-import { ClassForm } from "../../../components/dashboard/ClassForm";
 import { fetchClasses, type ClassEvent } from "../../../lib/classes";
 import { useAuthUser } from "../../../lib/useAuthUser";
 import {
@@ -21,6 +21,21 @@ import {
   CardTitle,
 } from "../../../components/ui/card";
 import { Button } from "../../../components/ui/button";
+
+const ClassForm = dynamic(
+  () =>
+    import("../../../components/dashboard/ClassForm").then(
+      (mod) => mod.ClassForm,
+    ),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="rounded-lg border border-emerald-100 bg-white/60 p-6 text-sm text-slate-500">
+        Loading class form...
+      </div>
+    ),
+  },
+);
 
 export default function InstructorDashboardPage() {
   const { user } = useAuthUser();
