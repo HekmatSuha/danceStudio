@@ -242,7 +242,14 @@ function ChatContent() {
               const name = other ? `${other.first_name} ${other.last_name}` : "Unknown User";
               const initials = other ? getInitials(other.first_name, other.last_name) : "?";
               const lastMsg = chat.last_message?.content || "No messages yet";
+              const lastFromMe = chat.last_message?.sender_id === user?.uuid;
+              const lastPrefix = chat.last_message
+                ? lastFromMe
+                  ? "You: "
+                  : `${other?.first_name || "Unknown"}: `
+                : "";
               const time = chat.last_message ? formatTime(chat.last_message.created_at) : "";
+              const hasUnread = chat.unread_count > 0 && !lastFromMe;
 
               return (
                 <div
@@ -259,11 +266,25 @@ function ChatContent() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-baseline mb-1">
-                      <h3 className="font-semibold text-slate-900 truncate">{name}</h3>
+                      <h3
+                        className={`font-semibold truncate ${
+                          hasUnread ? "text-slate-900" : "text-slate-900/80"
+                        }`}
+                      >
+                        {name}
+                      </h3>
                       <span className="text-xs text-slate-500">{time}</span>
                     </div>
-                    <p className="text-sm truncate text-slate-500">{lastMsg}</p>
+                    <p className={`text-sm truncate ${hasUnread ? "text-slate-800" : "text-slate-500"}`}>
+                      {lastPrefix}
+                      {lastMsg}
+                    </p>
                   </div>
+                  {hasUnread ? (
+                    <div className="ml-2 flex items-center justify-center">
+                      <span className="inline-flex h-2.5 w-2.5 rounded-full bg-purple-600" />
+                    </div>
+                  ) : null}
                 </div>
               );
             })

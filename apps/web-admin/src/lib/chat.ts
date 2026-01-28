@@ -33,6 +33,7 @@ export type Conversation = {
     };
   }[];
   last_message?: Message;
+  unread_count: number;
 };
 
 type ConversationRow = {
@@ -57,6 +58,36 @@ type ConversationRow = {
 };
 
 export async function fetchConversations(userId: string) {
+  const { data: membership, error: membershipError } = await supabase
+    .from("conversation_participants")
+    .select("conversation_id")
+    .eq("user_id", userId);
+
+  if (membershipError) {
+    console.error("Error fetching conversation membership:", membershipError);
+    throw new Error(formatSupabaseError(membershipError));
+  }
+
+  const conversationIds = (membership || []).map((row) => row.conversation_id);
+  if (conversationIds.length === 0) return [];
+
+  const { data: unreadRows, error: unreadError } = await supabase
+    .from("messages")
+    .select("conversation_id")
+    .in("conversation_id", conversationIds)
+    .eq("is_read", false)
+    .neq("sender_id", userId);
+
+  if (unreadError) {
+    console.error("Error fetching unread messages:", unreadError);
+    throw new Error(formatSupabaseError(unreadError));
+  }
+
+  const unreadCounts = (unreadRows || []).reduce<Record<string, number>>((acc, row) => {
+    acc[row.conversation_id] = (acc[row.conversation_id] || 0) + 1;
+    return acc;
+  }, {});
+
   const { data: conversations, error: convError } = await supabase
     .from("conversations")
     .select(
@@ -82,7 +113,7 @@ export async function fetchConversations(userId: string) {
       )
     `
     )
-    .eq("conversation_participants.user_id", userId)
+    .in("id", conversationIds)
     .order("updated_at", { ascending: false })
     .order("created_at", { foreignTable: "messages", ascending: false })
     .limit(1, { foreignTable: "messages" });
@@ -114,6 +145,7 @@ export async function fetchConversations(userId: string) {
       updated_at: conv.updated_at,
       participants,
       last_message: lastMessage ?? undefined,
+      unread_count: unreadCounts[conv.id] ?? 0,
     };
   });
 
