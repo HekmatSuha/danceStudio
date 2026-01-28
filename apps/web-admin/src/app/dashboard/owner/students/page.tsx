@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   Plus,
   UserCheck,
@@ -17,15 +17,13 @@ import { supabase } from "../../../../lib/supabase";
 import { type AccountProfile } from "../../../../lib/auth";
 import { useOwnerStudiosGuard } from "../../../../lib/useOwnerStudiosGuard";
 import { useRouter } from "next/navigation";
+import useSWR from "swr";
 
 type StudentRow = AccountProfile & { id?: string; created_at?: string; is_active?: boolean | null };
 type BookingRow = { user?: StudentRow | null };
 
 export default function OwnerStudentsPage() {
   const [showForm, setShowForm] = useState(false);
-  const [students, setStudents] = useState<StudentRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [bookingCounts, setBookingCounts] = useState<Record<string, number>>({});
   const [nameSearch, setNameSearch] = useState("");
   const [phoneSearch, setPhoneSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
@@ -37,124 +35,111 @@ export default function OwnerStudentsPage() {
   const { studios, loading: studiosLoading, role } = useOwnerStudiosGuard();
   const router = useRouter();
 
+  const studioIdsKey = useMemo(
+    () => studios.map((studio) => studio.uuid).join(","),
+    [studios],
+  );
+
   const handleSuccess = () => {
     setShowForm(false);
     alert("Student created successfully!");
     setNameSearch("");
     setPhoneSearch("");
-    refreshStudents();
+    void mutate();
   };
 
-  const refreshStudents = useCallback(async () => {
-    setLoading(true);
-    const studioIds = studios.map((s) => s.uuid).filter(Boolean);
-    if (studioIds.length === 0) {
-      setStudents([]);
-      setBookingCounts({});
-      setLoading(false);
-      return;
-    }
+  const {
+    data: studentPayload,
+    isLoading,
+    mutate,
+  } = useSWR<{ students: StudentRow[]; bookingCounts: Record<string, number> }>(
+    studioIdsKey ? `owner:students:${studioIdsKey}` : null,
+    async () => {
+      const studioIds = studioIdsKey ? studioIdsKey.split(",") : [];
+      if (studioIds.length === 0) {
+        return { students: [], bookingCounts: {} };
+      }
 
-    const { data: linkRows, error: linkError } = await supabase
-      .from("student_studios")
-      .select("student_id")
-      .in("studio_id", studioIds);
+      const { data: linkRows, error: linkError } = await supabase
+        .from("student_studios")
+        .select("student_id")
+        .in("studio_id", studioIds);
 
-    if (linkError) {
-      console.warn("Failed to load studio students", linkError);
-      setStudents([]);
-      setBookingCounts({});
-      setLoading(false);
-      return;
-    }
+      if (linkError) {
+        console.warn("Failed to load studio students", linkError);
+        return { students: [], bookingCounts: {} };
+      }
 
-    const studentIds = Array.from(
-      new Set(
-        (linkRows as { student_id?: string | null }[] | null | undefined)
-          ?.map((row) => row.student_id)
-          .filter((id): id is string => Boolean(id)) || []
-      )
-    );
+      const studentIds = Array.from(
+        new Set(
+          (linkRows as { student_id?: string | null }[] | null | undefined)
+            ?.map((row) => row.student_id)
+            .filter((id): id is string => Boolean(id)) || [],
+        ),
+      );
 
-    if (studentIds.length === 0) {
-      setStudents([]);
-      setBookingCounts({});
-      setLoading(false);
-      return;
-    }
+      if (studentIds.length === 0) {
+        return { students: [], bookingCounts: {} };
+      }
 
-    const { data: profiles, error: profileError } = await supabase
-      .from("profiles")
-      .select("*")
-      .in("id", studentIds)
-      .order("created_at", { ascending: false });
+      const { data: profiles, error: profileError } = await supabase
+        .from("profiles")
+        .select("*")
+        .in("id", studentIds)
+        .order("created_at", { ascending: false });
 
-    if (profileError) {
-      console.warn("Failed to load students", profileError);
-      setStudents([]);
-      setBookingCounts({});
-      setLoading(false);
-      return;
-    }
+      if (profileError) {
+        console.warn("Failed to load students", profileError);
+        return { students: [], bookingCounts: {} };
+      }
 
-    const rows = (profiles || [])
-      .filter((p) => !p.role || p.role === "student")
-      .map((p) => ({
-        ...p,
-        uuid: p.id,
-      })) as StudentRow[];
+      const rows = (profiles || [])
+        .filter((p) => !p.role || p.role === "student")
+        .map((p) => ({
+          ...p,
+          uuid: p.id,
+        })) as StudentRow[];
 
-    const { data: slotRows, error: slotError } = await supabase
-      .from("slots")
-      .select("uuid")
-      .in("studio_id", studioIds);
+      const { data: slotRows, error: slotError } = await supabase
+        .from("slots")
+        .select("uuid")
+        .in("studio_id", studioIds);
 
-    if (slotError) {
-      console.warn("Failed to load studio slots", slotError);
-      setStudents(rows);
-      setBookingCounts({});
-      setLoading(false);
-      return;
-    }
+      if (slotError) {
+        console.warn("Failed to load studio slots", slotError);
+        return { students: rows, bookingCounts: {} };
+      }
 
-    const slotIds = (slotRows as { uuid: string }[] | null | undefined)?.map((row) => row.uuid) ?? [];
-    if (slotIds.length === 0) {
-      setStudents(rows);
-      setBookingCounts({});
-      setLoading(false);
-      return;
-    }
+      const slotIds =
+        (slotRows as { uuid: string }[] | null | undefined)?.map((row) => row.uuid) ?? [];
+      if (slotIds.length === 0) {
+        return { students: rows, bookingCounts: {} };
+      }
 
-    const { data: bookingRows, error: bookingError } = await supabase
-      .from("bookings")
-      .select("user_id")
-      .in("appointment_slot", slotIds);
+      const { data: bookingRows, error: bookingError } = await supabase
+        .from("bookings")
+        .select("user_id")
+        .in("appointment_slot", slotIds);
 
-    if (bookingError) {
-      console.warn("Failed to load studio bookings", bookingError);
-      setStudents(rows);
-      setBookingCounts({});
-      setLoading(false);
-      return;
-    }
+      if (bookingError) {
+        console.warn("Failed to load studio bookings", bookingError);
+        return { students: rows, bookingCounts: {} };
+      }
 
-    const counts: Record<string, number> = {};
-    const studentIdSet = new Set(studentIds);
-    (bookingRows as { user_id?: string | null }[] | null | undefined)?.forEach((row) => {
-      if (!row.user_id) return;
-      if (!studentIdSet.has(row.user_id)) return;
-      counts[row.user_id] = (counts[row.user_id] || 0) + 1;
-    });
+      const counts: Record<string, number> = {};
+      const studentIdSet = new Set(studentIds);
+      (bookingRows as { user_id?: string | null }[] | null | undefined)?.forEach((row) => {
+        if (!row.user_id) return;
+        if (!studentIdSet.has(row.user_id)) return;
+        counts[row.user_id] = (counts[row.user_id] || 0) + 1;
+      });
 
-    setStudents(rows);
-    setBookingCounts(counts);
-    setLoading(false);
-  }, [studios]);
+      return { students: rows, bookingCounts: counts };
+    },
+  );
 
-  useEffect(() => {
-    if (studiosLoading) return;
-    refreshStudents();
-  }, [refreshStudents, studiosLoading]);
+  const students = studentPayload?.students ?? [];
+  const bookingCounts = studentPayload?.bookingCounts ?? {};
 
   const filteredStudents = useMemo(() => {
     const nameQuery = nameSearch.trim().toLowerCase();
@@ -230,18 +215,7 @@ export default function OwnerStudentsPage() {
 
       if (error) throw error;
 
-      setStudents((prev) =>
-        prev.map((s) =>
-          (s.id || s.uuid) === studentId
-            ? {
-                ...s,
-                first_name: formData.get("firstName") as string,
-                last_name: formData.get("lastName") as string,
-                phone_number: formData.get("phone") as string,
-              }
-            : s
-        )
-      );
+      await mutate();
       setEditingStudent(null);
     } catch (err) {
       console.error(err);
@@ -263,11 +237,7 @@ export default function OwnerStudentsPage() {
         .update({ is_active: nextActive })
         .eq("id", studentId);
       if (error) throw error;
-      setStudents((prev) =>
-        prev.map((s) =>
-          (s.id || s.uuid) === studentId ? { ...s, is_active: nextActive } : s
-        )
-      );
+      await mutate();
     } catch (err) {
       console.error(err);
       alert("Failed to update student status.");
@@ -287,7 +257,7 @@ export default function OwnerStudentsPage() {
         .delete()
         .eq("id", studentId);
       if (error) throw error;
-      setStudents((prev) => prev.filter((s) => (s.id || s.uuid) !== studentId));
+      await mutate();
     } catch (err) {
       console.error(err);
       alert("Failed to delete student.");
@@ -421,7 +391,7 @@ export default function OwnerStudentsPage() {
         </div>
       </div>
 
-      {loading ? (
+      {isLoading ? (
         <div className="text-center py-12 text-slate-400">Loading students...</div>
       ) : filteredStudents.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-xl border border-dashed border-slate-300">

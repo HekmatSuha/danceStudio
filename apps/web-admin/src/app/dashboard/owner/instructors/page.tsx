@@ -7,6 +7,7 @@ import { createInstructorAction } from "../../../actions/create-instructor";
 import { supabase } from "../../../../lib/supabase";
 import { useOwnerStudiosGuard } from "../../../../lib/useOwnerStudiosGuard";
 import { getErrorMessage } from "../../../../lib/errors";
+import useSWR from "swr";
 import {
   Dialog,
   DialogContent,
@@ -16,11 +17,8 @@ import {
 } from "../../../../components/ui/dialog";
 
 export default function OwnerInstructorsPage() {
-  const [instructors, setInstructors] = useState<Trainer[]>([]);
   const { studios, loading: studiosLoading, role } = useOwnerStudiosGuard();
-  const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [ownerUserId, setOwnerUserId] = useState<string>("");
   const [search, setSearch] = useState("");
@@ -40,30 +38,16 @@ export default function OwnerInstructorsPage() {
     });
   }, []);
 
-  useEffect(() => {
-    setLoading(true);
-    let isMounted = true;
-    const load = async () => {
-      try {
-        const studioIds = studioIdsKey ? studioIdsKey.split(",") : [];
-        const trainersData = studioIds.length > 0
-          ? await fetchTrainers({ studioIds })
-          : [];
+  const { data: instructorsData, isLoading, mutate } = useSWR<Trainer[]>(
+    studioIdsKey ? `owner:instructors:${studioIdsKey}` : null,
+    async () => {
+      const studioIds = studioIdsKey ? studioIdsKey.split(",") : [];
+      if (studioIds.length === 0) return [];
+      return fetchTrainers({ studioIds });
+    },
+  );
 
-        if (!isMounted) return;
-        setInstructors(trainersData);
-      } catch (err) {
-        console.warn("Failed to load data", err);
-      } finally {
-        if (isMounted) setLoading(false);
-      }
-    };
-
-    load();
-    return () => {
-      isMounted = false;
-    };
-  }, [refreshTrigger, studioIdsKey]);
+  const instructors = instructorsData || [];
 
   const filteredInstructors = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -104,18 +88,7 @@ export default function OwnerInstructorsPage() {
 
       if (error) throw error;
 
-      setInstructors((prev) =>
-        prev.map((item) =>
-          item.uuid === editingInstructor.uuid
-            ? {
-                ...item,
-                first_name: formData.get("firstName") as string,
-                last_name: formData.get("lastName") as string,
-                bio: (formData.get("bio") as string) || "",
-              }
-            : item
-        )
-      );
+      await mutate();
       setEditingInstructor(null);
     } catch (err) {
       console.error(err);
@@ -139,11 +112,7 @@ export default function OwnerInstructorsPage() {
 
       if (error) throw error;
 
-      setInstructors((prev) =>
-        prev.map((item) =>
-          item.uuid === instructor.uuid ? { ...item, is_active: nextActive } : item
-        )
-      );
+      await mutate();
     } catch (err) {
       console.error(err);
       alert("Failed to update instructor status.");
@@ -166,7 +135,7 @@ export default function OwnerInstructorsPage() {
       const result = await createInstructorAction(formData);
       if (result.success) {
         setShowForm(false);
-        setRefreshTrigger((prev) => prev + 1);
+        await mutate();
       } else {
         alert("Error: " + result.message);
       }
@@ -239,7 +208,7 @@ export default function OwnerInstructorsPage() {
 
       {/* Table View */}
       <div className="bg-white border border-slate-200 shadow-sm rounded-xl overflow-hidden">
-        {loading ? (
+        {isLoading ? (
            <div className="text-center py-12 text-slate-400">Loading instructors...</div>
         ) : filteredInstructors.length === 0 ? (
            <div className="text-center py-16">

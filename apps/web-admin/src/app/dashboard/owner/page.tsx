@@ -42,6 +42,7 @@ import {
 import { DateRange } from "react-day-picker";
 import { cn } from "../../../components/ui/utils";
 import { supabase } from "../../../lib/supabase";
+import useSWR from "swr";
 
 const OwnerRevenueChart = dynamic(
   () =>
@@ -93,8 +94,6 @@ export default function OwnerDashboardPage() {
     from: new Date(),
     to: addDays(new Date(), 7),
   });
-  const [statsLoading, setStatsLoading] = useState(false);
-  const [statsError, setStatsError] = useState<string | null>(null);
   const [statsValues, setStatsValues] = useState({
     income: 0,
     expenses: 0,
@@ -103,14 +102,9 @@ export default function OwnerDashboardPage() {
     attendees: 0,
   });
   const [revenueRange, setRevenueRange] = useState<"6m" | "12m">("6m");
-  const [revenueData, setRevenueData] = useState<Array<{ name: string; revenue: number }>>([]);
-  const [outstandingLoading, setOutstandingLoading] = useState(false);
-  const [outstandingError, setOutstandingError] = useState<string | null>(null);
   const [outstandingStudents, setOutstandingStudents] = useState<
     Array<{ id: string; name: string; email?: string | null; phone?: string | null; amount: number }>
   >([]);
-  const [birthdayLoading, setBirthdayLoading] = useState(false);
-  const [birthdayError, setBirthdayError] = useState<string | null>(null);
   const [upcomingBirthdays, setUpcomingBirthdays] = useState<
     Array<{ id: string; name: string; date: string }>
   >([]);
@@ -202,290 +196,288 @@ export default function OwnerDashboardPage() {
     return { start: startOfDay(now), end: endOfDay(now) };
   }, [filter, date]);
 
-  useEffect(() => {
-    if (loading || studios.length === 0) return;
-    const studioIds = studios.map((studio) => studio.uuid);
-    const loadStats = async () => {
-      setStatsLoading(true);
-      setStatsError(null);
-      try {
-        const startIso = dateRange.start.toISOString();
-        const endIso = dateRange.end.toISOString();
-        const startDate = format(dateRange.start, "yyyy-MM-dd");
-        const endDate = format(dateRange.end, "yyyy-MM-dd");
+  const studioIdsKey = useMemo(
+    () => studios.map((studio) => studio.uuid).join(","),
+    [studios],
+  );
 
-        const { data: financeRows, error: financeError } = await supabase
-          .from("finance_entries")
-          .select("entry_type, amount")
-          .in("studio_id", studioIds)
-          .gte("payment_date", startDate)
-          .lte("payment_date", endDate);
-
-        if (financeError) throw financeError;
-
-        const income = (financeRows || [])
-          .filter((row) => row.entry_type === "income")
-          .reduce((sum, row) => sum + Number(row.amount || 0), 0);
-        const expenses = (financeRows || [])
-          .filter((row) => row.entry_type === "expense")
-          .reduce((sum, row) => sum + Number(row.amount || 0), 0);
-
-        const { data: slotRows, error: slotError } = await supabase
-          .from("slots")
-          .select("uuid")
-          .in("studio_id", studioIds)
-          .gte("start_time", startIso)
-          .lte("start_time", endIso);
-
-        if (slotError) throw slotError;
-        const slotIds = (slotRows || []).map((row) => row.uuid);
-        const lessons = slotIds.length;
-
-        let memberships = 0;
-        let attendees = 0;
-        if (slotIds.length > 0) {
-          const { data: bookingRows, error: bookingError } = await supabase
-            .from("bookings")
-            .select("status, attended")
-            .in("appointment_slot", slotIds)
-            .gte("booking_date", startIso)
-            .lte("booking_date", endIso);
-
-          if (bookingError) throw bookingError;
-          memberships = (bookingRows || []).filter((row) => row.status === "confirmed").length;
-          attendees = (bookingRows || []).filter((row) => row.attended).length;
-        }
-
-        setStatsValues({
-          income,
-          expenses,
-          memberships,
-          lessons,
-          attendees,
-        });
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "Unable to load stats.";
-        setStatsError(message);
-      } finally {
-        setStatsLoading(false);
+  const {
+    data: statsPayload,
+    isLoading: statsLoading,
+    error: statsError,
+  } = useSWR<{ income: number; expenses: number; memberships: number; lessons: number; attendees: number }>(
+    !loading && studioIdsKey ? `owner:stats:${studioIdsKey}:${dateRange.start.toISOString()}:${dateRange.end.toISOString()}` : null,
+    async () => {
+      const studioIds = studioIdsKey.split(",").filter(Boolean);
+      if (studioIds.length === 0) {
+        return { income: 0, expenses: 0, memberships: 0, lessons: 0, attendees: 0 };
       }
-    };
 
-    loadStats();
-  }, [loading, studios, dateRange]);
+      const startIso = dateRange.start.toISOString();
+      const endIso = dateRange.end.toISOString();
+      const startDate = format(dateRange.start, "yyyy-MM-dd");
+      const endDate = format(dateRange.end, "yyyy-MM-dd");
 
-  useEffect(() => {
-    if (loading || studios.length === 0) return;
-    const studioIds = studios.map((studio) => studio.uuid);
-    const monthsBack = revenueRange === "12m" ? 12 : 6;
-    const endDate = new Date();
-    const startDate = startOfMonth(subMonths(endDate, monthsBack - 1));
+      const { data: financeRows, error: financeError } = await supabase
+        .from("finance_entries")
+        .select("entry_type, amount")
+        .in("studio_id", studioIds)
+        .gte("payment_date", startDate)
+        .lte("payment_date", endDate);
 
-    const loadRevenue = async () => {
-      try {
-        const { data, error } = await supabase
-          .from("finance_entries")
-          .select("entry_type, amount, payment_date")
-          .in("studio_id", studioIds)
-          .gte("payment_date", format(startDate, "yyyy-MM-dd"))
-          .lte("payment_date", format(endDate, "yyyy-MM-dd"));
+      if (financeError) throw financeError;
 
-        if (error) throw error;
+      const income = (financeRows || [])
+        .filter((row) => row.entry_type === "income")
+        .reduce((sum, row) => sum + Number(row.amount || 0), 0);
+      const expenses = (financeRows || [])
+        .filter((row) => row.entry_type === "expense")
+        .reduce((sum, row) => sum + Number(row.amount || 0), 0);
 
-        const buckets = new Map<string, number>();
-        for (let i = 0; i < monthsBack; i += 1) {
-          const month = addMonths(startDate, i);
-          buckets.set(format(month, "yyyy-MM"), 0);
-        }
+      const { data: slotRows, error: slotError } = await supabase
+        .from("slots")
+        .select("uuid")
+        .in("studio_id", studioIds)
+        .gte("start_time", startIso)
+        .lte("start_time", endIso);
 
-        (data || []).forEach((row) => {
-          if (row.entry_type !== "income" || !row.payment_date) return;
-          const key = format(new Date(row.payment_date), "yyyy-MM");
-          if (!buckets.has(key)) return;
-          const nextValue = (buckets.get(key) || 0) + Number(row.amount || 0);
-          buckets.set(key, nextValue);
-        });
+      if (slotError) throw slotError;
+      const slotIds = (slotRows || []).map((row) => row.uuid);
+      const lessons = slotIds.length;
 
-        const chartRows = Array.from(buckets.entries()).map(([key, value]) => ({
-          name: format(new Date(`${key}-01`), "MMM"),
-          revenue: value,
-        }));
-
-        setRevenueData(chartRows);
-      } catch (err) {
-        console.warn("Failed to load revenue data", err);
-        setRevenueData([]);
-      }
-    };
-
-    loadRevenue();
-  }, [loading, studios, revenueRange]);
-
-  useEffect(() => {
-    if (loading || studios.length === 0) return;
-    const studioIds = studios.map((studio) => studio.uuid);
-
-    const loadOutstanding = async () => {
-      setOutstandingLoading(true);
-      setOutstandingError(null);
-      try {
-        const { data: slotRows, error: slotError } = await supabase
-          .from("slots")
-          .select("uuid, price, studio_id")
-          .in("studio_id", studioIds);
-
-        if (slotError) throw slotError;
-
-        const slotPrices = new Map<string, number>();
-        (slotRows || []).forEach((row) => {
-          slotPrices.set(String(row.uuid), Number(row.price || 0));
-        });
-
-        const slotIds = Array.from(slotPrices.keys());
-        if (slotIds.length === 0) {
-          setOutstandingStudents([]);
-          setOutstandingLoading(false);
-          return;
-        }
-
+      let memberships = 0;
+      let attendees = 0;
+      if (slotIds.length > 0) {
         const { data: bookingRows, error: bookingError } = await supabase
           .from("bookings")
-          .select("user_id, appointment_slot, status, attended")
-          .in("appointment_slot", slotIds);
+          .select("status, attended")
+          .in("appointment_slot", slotIds)
+          .gte("booking_date", startIso)
+          .lte("booking_date", endIso);
 
         if (bookingError) throw bookingError;
-
-        const totalsByStudent = new Map<string, number>();
-        (bookingRows || []).forEach((booking) => {
-          if (!booking.user_id) return;
-          const attended = booking.attended === true || booking.status === "confirmed";
-          if (!attended) return;
-          const price = slotPrices.get(String(booking.appointment_slot)) || 0;
-          if (price <= 0) return;
-          totalsByStudent.set(booking.user_id, (totalsByStudent.get(booking.user_id) || 0) + price);
-        });
-
-        const studentIds = Array.from(totalsByStudent.keys());
-        if (studentIds.length === 0) {
-          setOutstandingStudents([]);
-          setOutstandingLoading(false);
-          return;
-        }
-
-        const { data: paymentRows, error: paymentError } = await supabase
-          .from("finance_entries")
-          .select("student_id, amount")
-          .in("studio_id", studioIds)
-          .in("student_id", studentIds)
-          .eq("entry_type", "income");
-
-        if (paymentError) throw paymentError;
-
-        const paidByStudent = new Map<string, number>();
-        (paymentRows || []).forEach((row) => {
-          if (!row.student_id) return;
-          paidByStudent.set(row.student_id, (paidByStudent.get(row.student_id) || 0) + Number(row.amount || 0));
-        });
-
-        const { data: profileRows, error: profileError } = await supabase
-          .from("profiles")
-          .select("id, first_name, last_name, email, phone_number")
-          .in("id", studentIds);
-
-        if (profileError) throw profileError;
-
-        const profiles = new Map<string, { name: string; email?: string | null; phone?: string | null }>();
-        (profileRows || []).forEach((row) => {
-          const name = `${row.first_name || ""} ${row.last_name || ""}`.trim() || "Student";
-          profiles.set(row.id, { name, email: row.email, phone: row.phone_number });
-        });
-
-        const due = studentIds
-          .map((id) => {
-            const total = totalsByStudent.get(id) || 0;
-            const paid = paidByStudent.get(id) || 0;
-            return {
-              id,
-              amount: total - paid,
-              profile: profiles.get(id),
-            };
-          })
-          .filter((row) => row.amount > 0.01)
-          .sort((a, b) => b.amount - a.amount)
-          .slice(0, 6)
-          .map((row) => ({
-            id: row.id,
-            name: row.profile?.name || "Student",
-            email: row.profile?.email,
-            phone: row.profile?.phone,
-            amount: row.amount,
-          }));
-
-        setOutstandingStudents(due);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "Unable to load outstanding students.";
-        setOutstandingError(message);
-        setOutstandingStudents([]);
-      } finally {
-        setOutstandingLoading(false);
+        memberships = (bookingRows || []).filter((row) => row.status === "confirmed").length;
+        attendees = (bookingRows || []).filter((row) => row.attended).length;
       }
-    };
 
-    loadOutstanding();
-  }, [loading, studios]);
+      return {
+        income,
+        expenses,
+        memberships,
+        lessons,
+        attendees,
+      };
+    },
+  );
+
+  const { data: revenueData = [] } = useSWR<Array<{ name: string; revenue: number }>>(
+    !loading && studioIdsKey ? `owner:revenue:${studioIdsKey}:${revenueRange}` : null,
+    async () => {
+      const studioIds = studioIdsKey.split(",").filter(Boolean);
+      if (studioIds.length === 0) return [];
+
+      const monthsBack = revenueRange === "12m" ? 12 : 6;
+      const endDate = new Date();
+      const startDate = startOfMonth(subMonths(endDate, monthsBack - 1));
+
+      const { data, error } = await supabase
+        .from("finance_entries")
+        .select("entry_type, amount, payment_date")
+        .in("studio_id", studioIds)
+        .gte("payment_date", format(startDate, "yyyy-MM-dd"))
+        .lte("payment_date", format(endDate, "yyyy-MM-dd"));
+
+      if (error) throw error;
+
+      const buckets = new Map<string, number>();
+      for (let i = 0; i < monthsBack; i += 1) {
+        const month = addMonths(startDate, i);
+        buckets.set(format(month, "yyyy-MM"), 0);
+      }
+
+      (data || []).forEach((row) => {
+        if (row.entry_type !== "income" || !row.payment_date) return;
+        const key = format(new Date(row.payment_date), "yyyy-MM");
+        if (!buckets.has(key)) return;
+        const nextValue = (buckets.get(key) || 0) + Number(row.amount || 0);
+        buckets.set(key, nextValue);
+      });
+
+      return Array.from(buckets.entries()).map(([key, value]) => ({
+        name: format(new Date(`${key}-01`), "MMM"),
+        revenue: value,
+      }));
+    },
+  );
+
+  const {
+    data: outstandingPayload,
+    isLoading: outstandingLoading,
+    error: outstandingError,
+  } = useSWR<Array<{ id: string; name: string; email?: string | null; phone?: string | null; amount: number }>>(
+    !loading && studioIdsKey ? `owner:outstanding:${studioIdsKey}` : null,
+    async () => {
+      const studioIds = studioIdsKey.split(",").filter(Boolean);
+      if (studioIds.length === 0) return [];
+
+      const { data: slotRows, error: slotError } = await supabase
+        .from("slots")
+        .select("uuid, price, studio_id")
+        .in("studio_id", studioIds);
+
+      if (slotError) throw slotError;
+
+      const slotPrices = new Map<string, number>();
+      (slotRows || []).forEach((row) => {
+        slotPrices.set(String(row.uuid), Number(row.price || 0));
+      });
+
+      const slotIds = Array.from(slotPrices.keys());
+      if (slotIds.length === 0) {
+        return [];
+      }
+
+      const { data: bookingRows, error: bookingError } = await supabase
+        .from("bookings")
+        .select("user_id, appointment_slot, status, attended")
+        .in("appointment_slot", slotIds);
+
+      if (bookingError) throw bookingError;
+
+      const totalsByStudent = new Map<string, number>();
+      (bookingRows || []).forEach((booking) => {
+        if (!booking.user_id) return;
+        const attended = booking.attended === true || booking.status === "confirmed";
+        if (!attended) return;
+        const price = slotPrices.get(String(booking.appointment_slot)) || 0;
+        if (price <= 0) return;
+        totalsByStudent.set(booking.user_id, (totalsByStudent.get(booking.user_id) || 0) + price);
+      });
+
+      const studentIds = Array.from(totalsByStudent.keys());
+      if (studentIds.length === 0) {
+        return [];
+      }
+
+      const { data: paymentRows, error: paymentError } = await supabase
+        .from("finance_entries")
+        .select("student_id, amount")
+        .in("studio_id", studioIds)
+        .in("student_id", studentIds)
+        .eq("entry_type", "income");
+
+      if (paymentError) throw paymentError;
+
+      const paidByStudent = new Map<string, number>();
+      (paymentRows || []).forEach((row) => {
+        if (!row.student_id) return;
+        paidByStudent.set(
+          row.student_id,
+          (paidByStudent.get(row.student_id) || 0) + Number(row.amount || 0),
+        );
+      });
+
+      const { data: profileRows, error: profileError } = await supabase
+        .from("profiles")
+        .select("id, first_name, last_name, email, phone_number")
+        .in("id", studentIds);
+
+      if (profileError) throw profileError;
+
+      const profiles = new Map<string, { name: string; email?: string | null; phone?: string | null }>();
+      (profileRows || []).forEach((row) => {
+        const name = `${row.first_name || ""} ${row.last_name || ""}`.trim() || "Student";
+        profiles.set(row.id, { name, email: row.email, phone: row.phone_number });
+      });
+
+      return studentIds
+        .map((id) => {
+          const total = totalsByStudent.get(id) || 0;
+          const paid = paidByStudent.get(id) || 0;
+          return {
+            id,
+            amount: total - paid,
+            profile: profiles.get(id),
+          };
+        })
+        .filter((row) => row.amount > 0.01)
+        .sort((a, b) => b.amount - a.amount)
+        .slice(0, 6)
+        .map((row) => ({
+          id: row.id,
+          name: row.profile?.name || "Student",
+          email: row.profile?.email,
+          phone: row.profile?.phone,
+          amount: row.amount,
+        }));
+    },
+  );
 
   useEffect(() => {
-    if (loading || studios.length === 0) return;
-    const studioIds = studios.map((studio) => studio.uuid);
+    if (outstandingPayload) {
+      setOutstandingStudents(outstandingPayload);
+    }
+  }, [outstandingPayload]);
 
-    const loadBirthdays = async () => {
-      setBirthdayLoading(true);
-      setBirthdayError(null);
-      try {
-        const { data, error } = await supabase
-          .from("tenant_staff")
-          .select("user:profiles(id, first_name, last_name, date_of_birth)")
-          .in("studio_id", studioIds);
+  const {
+    data: birthdayPayload,
+    isLoading: birthdayLoading,
+    error: birthdayError,
+  } = useSWR<Array<{ id: string; name: string; date: string }>>(
+    !loading && studioIdsKey ? `owner:birthdays:${studioIdsKey}` : null,
+    async () => {
+      const studioIds = studioIdsKey.split(",").filter(Boolean);
+      if (studioIds.length === 0) return [];
 
-        if (error) throw error;
+      const { data, error } = await supabase
+        .from("tenant_staff")
+        .select("user:profiles(id, first_name, last_name, date_of_birth)")
+        .in("studio_id", studioIds);
 
-        const today = new Date();
-        const year = today.getFullYear();
-        const endWindow = addDays(today, 30);
-        const rows = (data || [])
-          .map((row) => {
-            const user = (row as { user?: { id?: string; first_name?: string | null; last_name?: string | null; date_of_birth?: string | null } }).user;
-            if (!user?.date_of_birth) return null;
-            const dob = new Date(user.date_of_birth);
-            if (!isValid(dob)) return null;
-            const next = new Date(year, dob.getMonth(), dob.getDate());
-            const nextDate = next < today ? new Date(year + 1, dob.getMonth(), dob.getDate()) : next;
-            if (nextDate > endWindow) return null;
-            const name = `${user.first_name || ""} ${user.last_name || ""}`.trim() || "Instructor";
-            return {
-              id: user.id || `${name}-${user.date_of_birth}`,
-              name,
-              date: format(nextDate, "MMM d"),
-              sortDate: nextDate.getTime(),
-            };
-          })
-          .filter((row): row is { id: string; name: string; date: string; sortDate: number } => Boolean(row))
-          .sort((a, b) => a.sortDate - b.sortDate)
-          .slice(0, 5)
-          .map(({ sortDate, ...rest }) => rest);
+      if (error) throw error;
 
-        setUpcomingBirthdays(rows);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "Unable to load birthdays.";
-        setBirthdayError(message);
-        setUpcomingBirthdays([]);
-      } finally {
-        setBirthdayLoading(false);
-      }
-    };
+      const today = new Date();
+      const year = today.getFullYear();
+      const endWindow = addDays(today, 30);
+      const rows = (data || [])
+        .map((row) => {
+          const user = (row as {
+            user?: { id?: string; first_name?: string | null; last_name?: string | null; date_of_birth?: string | null };
+          }).user;
+          if (!user?.date_of_birth) return null;
+          const dob = new Date(user.date_of_birth);
+          if (!isValid(dob)) return null;
+          const next = new Date(year, dob.getMonth(), dob.getDate());
+          const nextDate = next < today ? new Date(year + 1, dob.getMonth(), dob.getDate()) : next;
+          if (nextDate > endWindow) return null;
+          const name = `${user.first_name || ""} ${user.last_name || ""}`.trim() || "Instructor";
+          return {
+            id: user.id || `${name}-${user.date_of_birth}`,
+            name,
+            date: format(nextDate, "MMM d"),
+            sortDate: nextDate.getTime(),
+          };
+        })
+        .filter((row): row is { id: string; name: string; date: string; sortDate: number } => Boolean(row))
+        .sort((a, b) => a.sortDate - b.sortDate)
+        .slice(0, 5)
+        .map(({ sortDate, ...rest }) => rest);
 
-    loadBirthdays();
-  }, [loading, studios]);
+      return rows;
+    },
+  );
+
+  useEffect(() => {
+    if (statsPayload) {
+      setStatsValues(statsPayload);
+    }
+  }, [statsPayload]);
+
+  useEffect(() => {
+    if (birthdayPayload) {
+      setUpcomingBirthdays(birthdayPayload);
+    }
+  }, [birthdayPayload]);
 
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center text-slate-400">Loading dashboard...</div>;
@@ -639,7 +631,9 @@ export default function OwnerDashboardPage() {
       {statsLoading ? (
         <div className="text-sm text-slate-400">Loading overview stats...</div>
       ) : statsError ? (
-        <div className="text-sm text-rose-500">{statsError}</div>
+        <div className="text-sm text-rose-500">
+          {statsError instanceof Error ? statsError.message : "Unable to load stats."}
+        </div>
       ) : null}
 
       {/* New Records Section - Pinkish card from reference */}
@@ -680,7 +674,7 @@ export default function OwnerDashboardPage() {
 
         <OwnerOutstandingBalances
           loading={outstandingLoading}
-          error={outstandingError}
+          error={outstandingError instanceof Error ? outstandingError.message : null}
           students={outstandingStudents}
         />
       </div>
