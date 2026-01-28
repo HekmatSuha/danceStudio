@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { withServerCache } from "../../../../lib/server-cache";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -34,98 +35,102 @@ export async function GET(req: NextRequest) {
     return NextResponse.json([]);
   }
 
-  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  const cacheKey = `public:studios-by-style:${query.toLowerCase()}`;
 
-  const { data: styles, error: stylesError } = await supabase
-    .from("dance_styles")
-    .select("uuid,name")
-    .ilike("name", `%${query}%`)
-    .limit(5);
+  try {
+    const results = await withServerCache(cacheKey, 20000, async () => {
+      const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+        auth: { persistSession: false, autoRefreshToken: false },
+      });
 
-  if (stylesError) {
-    return NextResponse.json({ error: stylesError.message }, { status: 500 });
-  }
+      const { data: styles, error: stylesError } = await supabase
+        .from("dance_styles")
+        .select("uuid,name")
+        .ilike("name", `%${query}%`)
+        .limit(5);
 
-  const styleIds = (styles as StyleRow[] | null | undefined)?.map((style) => style.uuid) ?? [];
+      if (stylesError) throw new Error(stylesError.message);
 
-  const { data: studioMatches, error: studiosError } = await supabase
-    .from("studios")
-    .select("uuid,name,city,address")
-    .ilike("name", `%${query}%`)
-    .limit(20);
+      const styleIds = (styles as StyleRow[] | null | undefined)?.map((style) => style.uuid) ?? [];
 
-  if (studiosError) {
-    return NextResponse.json({ error: studiosError.message }, { status: 500 });
-  }
+      const { data: studioMatches, error: studiosError } = await supabase
+        .from("studios")
+        .select("uuid,name,city,address")
+        .ilike("name", `%${query}%`)
+        .limit(20);
 
-  const matchedStudios = (studioMatches as StudioRow[] | null | undefined) ?? [];
-  const studioIdsFromName = matchedStudios.map((studio) => studio.uuid);
+      if (studiosError) throw new Error(studiosError.message);
 
-  const { data: trainers, error: trainersError } = await supabase
-    .from("profiles")
-    .select("id")
-    .eq("role", "instructor")
-    .or(`first_name.ilike.%${query}%,last_name.ilike.%${query}%`)
-    .limit(20);
+      const matchedStudios = (studioMatches as StudioRow[] | null | undefined) ?? [];
+      const studioIdsFromName = matchedStudios.map((studio) => studio.uuid);
 
-  if (trainersError) {
-    return NextResponse.json({ error: trainersError.message }, { status: 500 });
-  }
+      const { data: trainers, error: trainersError } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("role", "instructor")
+        .or(`first_name.ilike.%${query}%,last_name.ilike.%${query}%`)
+        .limit(20);
 
-  const trainerIds = (trainers as ProfileRow[] | null | undefined)?.map((trainer) => trainer.id) ?? [];
+      if (trainersError) throw new Error(trainersError.message);
 
-  const orFilters = [
-    styleIds.length ? `dance_style_id.in.(${styleIds.join(",")})` : null,
-    trainerIds.length ? `trainer_id.in.(${trainerIds.join(",")})` : null,
-    studioIdsFromName.length ? `studio_id.in.(${studioIdsFromName.join(",")})` : null,
-  ].filter(Boolean);
+      const trainerIds =
+        (trainers as ProfileRow[] | null | undefined)?.map((trainer) => trainer.id) ?? [];
 
-  if (orFilters.length === 0 && matchedStudios.length === 0) {
-    return NextResponse.json([]);
-  }
+      const orFilters = [
+        styleIds.length ? `dance_style_id.in.(${styleIds.join(",")})` : null,
+        trainerIds.length ? `trainer_id.in.(${trainerIds.join(",")})` : null,
+        studioIdsFromName.length ? `studio_id.in.(${studioIdsFromName.join(",")})` : null,
+      ].filter(Boolean);
 
-  const studiosMap = new Map<string, { studio: StudioRow; styles: string[] }>();
-  matchedStudios.forEach((studio) => {
-    studiosMap.set(studio.uuid, { studio, styles: [] });
-  });
+      if (orFilters.length === 0 && matchedStudios.length === 0) {
+        return [];
+      }
 
-  if (orFilters.length) {
-    const { data: slots, error: slotsError } = await supabase
-      .from("slots")
-      .select(`
-        studio:studios(uuid, name, city, address),
-        dance_style:dance_styles(uuid, name)
-      `)
-      .or(orFilters.join(","))
-      .limit(200);
+      const studiosMap = new Map<string, { studio: StudioRow; styles: string[] }>();
+      matchedStudios.forEach((studio) => {
+        studiosMap.set(studio.uuid, { studio, styles: [] });
+      });
 
-    if (slotsError) {
-      return NextResponse.json({ error: slotsError.message }, { status: 500 });
-    }
+      if (orFilters.length) {
+        const { data: slots, error: slotsError } = await supabase
+          .from("slots")
+          .select(`
+            studio:studios(uuid, name, city, address),
+            dance_style:dance_styles(uuid, name)
+          `)
+          .or(orFilters.join(","))
+          .limit(200);
 
-    (slots as SlotRow[] | null | undefined)?.forEach((slot) => {
-      const studioRaw = slot.studio ?? null;
-      const studio = Array.isArray(studioRaw) ? studioRaw[0] : studioRaw;
-      const styleRaw = slot.dance_style ?? null;
-      const style = Array.isArray(styleRaw) ? styleRaw[0] : styleRaw;
-      const styleName = style?.name ?? undefined;
-      if (!studio?.uuid) return;
+        if (slotsError) throw new Error(slotsError.message);
 
-      const existing = studiosMap.get(studio.uuid);
-      if (existing) {
-        if (styleName && !existing.styles.includes(styleName)) {
-          existing.styles.push(styleName);
-        }
-      } else {
-        studiosMap.set(studio.uuid, {
-          studio,
-          styles: styleName ? [styleName] : [],
+        (slots as SlotRow[] | null | undefined)?.forEach((slot) => {
+          const studioRaw = slot.studio ?? null;
+          const studio = Array.isArray(studioRaw) ? studioRaw[0] : studioRaw;
+          const styleRaw = slot.dance_style ?? null;
+          const style = Array.isArray(styleRaw) ? styleRaw[0] : styleRaw;
+          const styleName = style?.name ?? undefined;
+          if (!studio?.uuid) return;
+
+          const existing = studiosMap.get(studio.uuid);
+          if (existing) {
+            if (styleName && !existing.styles.includes(styleName)) {
+              existing.styles.push(styleName);
+            }
+          } else {
+            studiosMap.set(studio.uuid, {
+              studio,
+              styles: styleName ? [styleName] : [],
+            });
+          }
         });
       }
-    });
-  }
 
-  return NextResponse.json(Array.from(studiosMap.values()));
+      return Array.from(studiosMap.values());
+    });
+
+    return NextResponse.json(results);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to load studio matches";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }

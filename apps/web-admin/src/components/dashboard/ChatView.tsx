@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { useAuthUser } from "../../lib/useAuthUser";
 import {
   fetchConversations,
+  fetchChatContacts,
   fetchMessages,
   getOrCreateConversation,
   sendMessage,
@@ -73,22 +74,8 @@ function ChatContent() {
 
     const loadContacts = async () => {
       try {
-        const { data, error } = await supabase
-          .from("profiles")
-          .select("id, first_name, last_name, role")
-          .neq("id", user.uuid)
-          .order("first_name", { ascending: true })
-          .limit(100);
-
-        if (error) throw error;
-        setContacts(
-          (data || []).map((item) => ({
-            id: item.id,
-            first_name: item.first_name,
-            last_name: item.last_name,
-            role: item.role,
-          }))
-        );
+        const data = await fetchChatContacts(user.uuid);
+        setContacts(data);
       } catch (err) {
         console.error("Failed to load chat contacts", err);
         setContactsError("Unable to load contacts.");

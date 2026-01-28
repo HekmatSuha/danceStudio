@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthedSupabaseClient } from "../../../../../lib/server-supabase";
+import { withServerCache } from "../../../../../lib/server-cache";
 
 type StudioIdRow = { studio_id?: string | null };
 type OwnedStudioRow = { uuid?: string | null };
@@ -56,94 +57,103 @@ export async function GET(req: NextRequest) {
   }
 
   const studioIdsParam = req.nextUrl.searchParams.get("studioIds");
-  const allowedStudioIds = await resolveStudios(auth);
-  const requestedIds = studioIdsParam
-    ? studioIdsParam.split(",").map((id) => id.trim()).filter(Boolean)
-    : allowedStudioIds;
-  const studioIds = requestedIds.filter((id) => allowedStudioIds.includes(id));
 
-  if (studioIds.length === 0) {
-    return NextResponse.json([]);
-  }
+  const payload = await withServerCache(
+    `owner:requests:bookings:${auth.userId}:${studioIdsParam || "all"}`,
+    10000,
+    async () => {
+      const allowedStudioIds = await resolveStudios(auth);
+      const requestedIds = studioIdsParam
+        ? studioIdsParam.split(",").map((id) => id.trim()).filter(Boolean)
+        : allowedStudioIds;
+      const studioIds = requestedIds.filter((id) => allowedStudioIds.includes(id));
 
-  const { data: slotRows, error: slotError } = await auth.supabase
-    .from("slots")
-    .select("uuid, title, start_time, end_time, price, currency, studio_id, studio:studios(name)")
-    .in("studio_id", studioIds);
+      if (studioIds.length === 0) {
+        return [];
+      }
 
-  if (slotError) {
-    return NextResponse.json({ error: slotError.message }, { status: 500 });
-  }
+      const { data: slotRows, error: slotError } = await auth.supabase
+        .from("slots")
+        .select(
+          "uuid, title, start_time, end_time, price, currency, studio_id, studio:studios(name)",
+        )
+        .in("studio_id", studioIds);
 
-  const slots = (slotRows as SlotRow[] | null | undefined) ?? [];
-  const slotIds = slots.map((slot) => slot.uuid);
-  if (slotIds.length === 0) {
-    return NextResponse.json([]);
-  }
+      if (slotError) {
+        throw new Error(slotError.message);
+      }
 
-  const { data: bookingRows, error: bookingError } = await auth.supabase
-    .from("bookings")
-    .select("uuid, status, booking_date, appointment_slot, user_id")
-    .eq("status", "pending")
-    .in("appointment_slot", slotIds);
+      const slots = (slotRows as SlotRow[] | null | undefined) ?? [];
+      const slotIds = slots.map((slot) => slot.uuid);
+      if (slotIds.length === 0) {
+        return [];
+      }
 
-  if (bookingError) {
-    return NextResponse.json({ error: bookingError.message }, { status: 500 });
-  }
+      const { data: bookingRows, error: bookingError } = await auth.supabase
+        .from("bookings")
+        .select("uuid, status, booking_date, appointment_slot, user_id")
+        .eq("status", "pending")
+        .in("appointment_slot", slotIds);
 
-  const bookings = (bookingRows as BookingRow[] | null | undefined) ?? [];
-  const userIds = bookings.map((b) => b.user_id).filter(Boolean) as string[];
-  const { data: profileRows, error: profileError } = userIds.length
-    ? await auth.supabase
-        .from("profiles")
-        .select("id, first_name, last_name, email, phone_number")
-        .in("id", userIds)
-    : { data: [], error: null };
+      if (bookingError) {
+        throw new Error(bookingError.message);
+      }
 
-  if (profileError) {
-    return NextResponse.json({ error: profileError.message }, { status: 500 });
-  }
+      const bookings = (bookingRows as BookingRow[] | null | undefined) ?? [];
+      const userIds = bookings.map((b) => b.user_id).filter(Boolean) as string[];
+      const { data: profileRows, error: profileError } = userIds.length
+        ? await auth.supabase
+            .from("profiles")
+            .select("id, first_name, last_name, email, phone_number")
+            .in("id", userIds)
+        : { data: [], error: null };
 
-  const profileMap = new Map<string, ProfileRow>();
-  (profileRows as ProfileRow[] | null | undefined)?.forEach((profile) => {
-    profileMap.set(profile.id, profile);
-  });
+      if (profileError) {
+        throw new Error(profileError.message);
+      }
 
-  const slotMap = new Map<string, SlotRow>();
-  slots.forEach((slot) => {
-    slotMap.set(slot.uuid, slot);
-  });
+      const profileMap = new Map<string, ProfileRow>();
+      (profileRows as ProfileRow[] | null | undefined)?.forEach((profile) => {
+        profileMap.set(profile.id, profile);
+      });
 
-  const payload = bookings.map((booking) => {
-    const slot = booking.appointment_slot ? slotMap.get(booking.appointment_slot) : null;
-    const student = booking.user_id ? profileMap.get(booking.user_id) : null;
-    return {
-      id: booking.uuid,
-      status: booking.status || "pending",
-      booking_date: booking.booking_date || null,
-      slot: slot
-        ? {
-            id: slot.uuid,
-            title: slot.title || "Class",
-            start_time: slot.start_time || null,
-            end_time: slot.end_time || null,
-            price: slot.price ?? 0,
-            currency: slot.currency || "USD",
-            studio_id: slot.studio_id || null,
-            studio_name: slot.studio?.name || null,
-          }
-        : null,
-      student: student
-        ? {
-            id: student.id,
-            first_name: student.first_name || "",
-            last_name: student.last_name || "",
-            email: student.email || "",
-            phone_number: student.phone_number || "",
-          }
-        : null,
-    };
-  });
+      const slotMap = new Map<string, SlotRow>();
+      slots.forEach((slot) => {
+        slotMap.set(slot.uuid, slot);
+      });
+
+      return bookings.map((booking) => {
+        const slot = booking.appointment_slot ? slotMap.get(booking.appointment_slot) : null;
+        const student = booking.user_id ? profileMap.get(booking.user_id) : null;
+        return {
+          id: booking.uuid,
+          status: booking.status || "pending",
+          booking_date: booking.booking_date || null,
+          slot: slot
+            ? {
+                id: slot.uuid,
+                title: slot.title || "Class",
+                start_time: slot.start_time || null,
+                end_time: slot.end_time || null,
+                price: slot.price ?? 0,
+                currency: slot.currency || "USD",
+                studio_id: slot.studio_id || null,
+                studio_name: slot.studio?.name || null,
+              }
+            : null,
+          student: student
+            ? {
+                id: student.id,
+                first_name: student.first_name || "",
+                last_name: student.last_name || "",
+                email: student.email || "",
+                phone_number: student.phone_number || "",
+              }
+            : null,
+        };
+      });
+    },
+  );
 
   return NextResponse.json(payload);
 }

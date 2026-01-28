@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthedSupabaseClient } from "../../../../../lib/server-supabase";
+import { withServerCache } from "../../../../../lib/server-cache";
 
 type StudioIdRow = { studio_id?: string | null };
 type OwnedStudioRow = { uuid?: string | null };
@@ -54,92 +55,99 @@ export async function GET(req: NextRequest) {
   }
 
   const studioIdsParam = req.nextUrl.searchParams.get("studioIds");
-  const allowedStudioIds = await resolveStudios(auth);
-  const requestedIds = studioIdsParam
-    ? studioIdsParam.split(",").map((id) => id.trim()).filter(Boolean)
-    : allowedStudioIds;
-  const studioIds = requestedIds.filter((id) => allowedStudioIds.includes(id));
 
-  if (studioIds.length === 0) {
-    return NextResponse.json([]);
-  }
+  const payload = await withServerCache(
+    `owner:requests:rentals:${auth.userId}:${studioIdsParam || "all"}`,
+    10000,
+    async () => {
+      const allowedStudioIds = await resolveStudios(auth);
+      const requestedIds = studioIdsParam
+        ? studioIdsParam.split(",").map((id) => id.trim()).filter(Boolean)
+        : allowedStudioIds;
+      const studioIds = requestedIds.filter((id) => allowedStudioIds.includes(id));
 
-  const { data: roomRows, error: roomError } = await auth.supabase
-    .from("rooms")
-    .select("id, name, studio_id, studio:studios(name)")
-    .in("studio_id", studioIds);
+      if (studioIds.length === 0) {
+        return [];
+      }
 
-  if (roomError) {
-    return NextResponse.json({ error: roomError.message }, { status: 500 });
-  }
+      const { data: roomRows, error: roomError } = await auth.supabase
+        .from("rooms")
+        .select("id, name, studio_id, studio:studios(name)")
+        .in("studio_id", studioIds);
 
-  const rooms = (roomRows as RoomRow[] | null | undefined) ?? [];
-  const roomIds = rooms.map((room) => room.id);
-  if (roomIds.length === 0) {
-    return NextResponse.json([]);
-  }
+      if (roomError) {
+        throw new Error(roomError.message);
+      }
 
-  const { data: rentalRows, error: rentalError } = await auth.supabase
-    .from("room_rentals")
-    .select("id, room_id, renter_id, start_time, end_time, total_price, status")
-    .eq("status", "pending")
-    .in("room_id", roomIds);
+      const rooms = (roomRows as RoomRow[] | null | undefined) ?? [];
+      const roomIds = rooms.map((room) => room.id);
+      if (roomIds.length === 0) {
+        return [];
+      }
 
-  if (rentalError) {
-    return NextResponse.json({ error: rentalError.message }, { status: 500 });
-  }
+      const { data: rentalRows, error: rentalError } = await auth.supabase
+        .from("room_rentals")
+        .select("id, room_id, renter_id, start_time, end_time, total_price, status")
+        .eq("status", "pending")
+        .in("room_id", roomIds);
 
-  const rentals = (rentalRows as RentalRow[] | null | undefined) ?? [];
-  const renterIds = rentals.map((r) => r.renter_id).filter(Boolean) as string[];
-  const { data: profileRows, error: profileError } = renterIds.length
-    ? await auth.supabase
-        .from("profiles")
-        .select("id, first_name, last_name, email, phone_number")
-        .in("id", renterIds)
-    : { data: [], error: null };
+      if (rentalError) {
+        throw new Error(rentalError.message);
+      }
 
-  if (profileError) {
-    return NextResponse.json({ error: profileError.message }, { status: 500 });
-  }
+      const rentals = (rentalRows as RentalRow[] | null | undefined) ?? [];
+      const renterIds = rentals.map((r) => r.renter_id).filter(Boolean) as string[];
+      const { data: profileRows, error: profileError } = renterIds.length
+        ? await auth.supabase
+            .from("profiles")
+            .select("id, first_name, last_name, email, phone_number")
+            .in("id", renterIds)
+        : { data: [], error: null };
 
-  const profileMap = new Map<string, ProfileRow>();
-  (profileRows as ProfileRow[] | null | undefined)?.forEach((profile) => {
-    profileMap.set(profile.id, profile);
-  });
+      if (profileError) {
+        throw new Error(profileError.message);
+      }
 
-  const roomMap = new Map<string, RoomRow>();
-  rooms.forEach((room) => {
-    roomMap.set(room.id, room);
-  });
+      const profileMap = new Map<string, ProfileRow>();
+      (profileRows as ProfileRow[] | null | undefined)?.forEach((profile) => {
+        profileMap.set(profile.id, profile);
+      });
 
-  const payload = rentals.map((rental) => {
-    const room = rental.room_id ? roomMap.get(rental.room_id) : null;
-    const renter = rental.renter_id ? profileMap.get(rental.renter_id) : null;
-    return {
-      id: rental.id,
-      status: rental.status || "pending",
-      start_time: rental.start_time || null,
-      end_time: rental.end_time || null,
-      total_price: rental.total_price ?? 0,
-      room: room
-        ? {
-            id: room.id,
-            name: room.name || "Room",
-            studio_id: room.studio_id || null,
-            studio_name: room.studio?.name || null,
-          }
-        : null,
-      renter: renter
-        ? {
-            id: renter.id,
-            first_name: renter.first_name || "",
-            last_name: renter.last_name || "",
-            email: renter.email || "",
-            phone_number: renter.phone_number || "",
-          }
-        : null,
-    };
-  });
+      const roomMap = new Map<string, RoomRow>();
+      rooms.forEach((room) => {
+        roomMap.set(room.id, room);
+      });
+
+      return rentals.map((rental) => {
+        const room = rental.room_id ? roomMap.get(rental.room_id) : null;
+        const renter = rental.renter_id ? profileMap.get(rental.renter_id) : null;
+        return {
+          id: rental.id,
+          status: rental.status || "pending",
+          start_time: rental.start_time || null,
+          end_time: rental.end_time || null,
+          total_price: rental.total_price ?? 0,
+          room: room
+            ? {
+                id: room.id,
+                name: room.name || "Room",
+                studio_id: room.studio_id || null,
+                studio_name: room.studio?.name || null,
+              }
+            : null,
+          renter: renter
+            ? {
+                id: renter.id,
+                first_name: renter.first_name || "",
+                last_name: renter.last_name || "",
+                email: renter.email || "",
+                phone_number: renter.phone_number || "",
+              }
+            : null,
+        };
+      });
+    },
+  );
 
   return NextResponse.json(payload);
 }

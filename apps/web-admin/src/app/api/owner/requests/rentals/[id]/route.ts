@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthedSupabaseClient } from "../../../../../../lib/server-supabase";
+import { clearServerCacheByPrefix } from "../../../../../../lib/server-cache";
 
 type StudioIdRow = { studio_id?: string | null };
 type OwnedStudioRow = { uuid?: string | null };
@@ -85,6 +86,9 @@ export async function PATCH(
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  clearServerCacheByPrefix(`owner:requests:`);
+  clearServerCacheByPrefix(`owner:rooms:`);
 
   return NextResponse.json(data || { id: rentalId, status });
 }

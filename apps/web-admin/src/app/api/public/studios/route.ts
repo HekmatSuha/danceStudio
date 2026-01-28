@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { withServerCache } from "../../../../lib/server-cache";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -17,27 +18,34 @@ export async function GET(req: NextRequest) {
   }
 
   const limit = Number(req.nextUrl.searchParams.get("limit") || "8");
-  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  const cacheKey = `public:studios:${limit}`;
 
-  const { data, error } = await supabase
-    .from("studios")
-    .select("uuid,name,city,address")
-    .order("name")
-    .limit(limit);
+  try {
+    const mapped = await withServerCache(cacheKey, 30000, async () => {
+      const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+        auth: { persistSession: false, autoRefreshToken: false },
+      });
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+      const { data, error } = await supabase
+        .from("studios")
+        .select("uuid,name,city,address")
+        .order("name")
+        .limit(limit);
+
+      if (error) throw new Error(error.message);
+
+      return (data || []).map((studio, index) => ({
+        id: studio.uuid,
+        name: studio.name || "Studio",
+        city: studio.city || null,
+        address: studio.address || null,
+        imageUrl: fallbackImages[index % fallbackImages.length],
+      }));
+    });
+
+    return NextResponse.json(mapped);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to load studios";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
-
-  const mapped = (data || []).map((studio, index) => ({
-    id: studio.uuid,
-    name: studio.name || "Studio",
-    city: studio.city || null,
-    address: studio.address || null,
-    imageUrl: fallbackImages[index % fallbackImages.length],
-  }));
-
-  return NextResponse.json(mapped);
 }

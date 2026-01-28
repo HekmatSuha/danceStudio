@@ -1,3 +1,6 @@
+"use client";
+
+import { clearCacheByPrefix, withCache } from "./cache";
 import { supabase } from "./supabase";
 
 const formatSupabaseError = (error: unknown) => {
@@ -36,6 +39,13 @@ export type Conversation = {
   unread_count: number;
 };
 
+export type ChatContact = {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  role?: string | null;
+};
+
 type ConversationRow = {
   id: string;
   created_at: string;
@@ -58,98 +68,101 @@ type ConversationRow = {
 };
 
 export async function fetchConversations(userId: string) {
-  const { data: membership, error: membershipError } = await supabase
-    .from("conversation_participants")
-    .select("conversation_id")
-    .eq("user_id", userId);
+  const cacheKey = `chat:conversations:${userId}`;
+  return withCache(cacheKey, 10000, async () => {
+    const { data: membership, error: membershipError } = await supabase
+      .from("conversation_participants")
+      .select("conversation_id")
+      .eq("user_id", userId);
 
-  if (membershipError) {
-    console.error("Error fetching conversation membership:", membershipError);
-    throw new Error(formatSupabaseError(membershipError));
-  }
+    if (membershipError) {
+      console.error("Error fetching conversation membership:", membershipError);
+      throw new Error(formatSupabaseError(membershipError));
+    }
 
-  const conversationIds = (membership || []).map((row) => row.conversation_id);
-  if (conversationIds.length === 0) return [];
+    const conversationIds = (membership || []).map((row) => row.conversation_id);
+    if (conversationIds.length === 0) return [];
 
-  const { data: unreadRows, error: unreadError } = await supabase
-    .from("messages")
-    .select("conversation_id")
-    .in("conversation_id", conversationIds)
-    .eq("is_read", false)
-    .neq("sender_id", userId);
+    const { data: unreadRows, error: unreadError } = await supabase
+      .from("messages")
+      .select("conversation_id")
+      .in("conversation_id", conversationIds)
+      .eq("is_read", false)
+      .neq("sender_id", userId);
 
-  if (unreadError) {
-    console.error("Error fetching unread messages:", unreadError);
-    throw new Error(formatSupabaseError(unreadError));
-  }
+    if (unreadError) {
+      console.error("Error fetching unread messages:", unreadError);
+      throw new Error(formatSupabaseError(unreadError));
+    }
 
-  const unreadCounts = (unreadRows || []).reduce<Record<string, number>>((acc, row) => {
-    acc[row.conversation_id] = (acc[row.conversation_id] || 0) + 1;
-    return acc;
-  }, {});
+    const unreadCounts = (unreadRows || []).reduce<Record<string, number>>((acc, row) => {
+      acc[row.conversation_id] = (acc[row.conversation_id] || 0) + 1;
+      return acc;
+    }, {});
 
-  const { data: conversations, error: convError } = await supabase
-    .from("conversations")
-    .select(
-      `
-      id,
-      created_at,
-      updated_at,
-      participants:conversation_participants(
-        user_id,
-        user:profiles(
-          first_name,
-          last_name,
-          avatar_url
-        )
-      ),
-      messages:messages(
+    const { data: conversations, error: convError } = await supabase
+      .from("conversations")
+      .select(
+        `
         id,
-        conversation_id,
-        sender_id,
-        content,
         created_at,
-        is_read
+        updated_at,
+        participants:conversation_participants(
+          user_id,
+          user:profiles(
+            first_name,
+            last_name,
+            avatar_url
+          )
+        ),
+        messages:messages(
+          id,
+          conversation_id,
+          sender_id,
+          content,
+          created_at,
+          is_read
+        )
+      `
       )
-    `
-    )
-    .in("id", conversationIds)
-    .order("updated_at", { ascending: false })
-    .order("created_at", { foreignTable: "messages", ascending: false })
-    .limit(1, { foreignTable: "messages" });
+      .in("id", conversationIds)
+      .order("updated_at", { ascending: false })
+      .order("created_at", { foreignTable: "messages", ascending: false })
+      .limit(1, { foreignTable: "messages" });
 
-  if (convError) {
-    console.error("Error fetching conversations:", convError);
-    throw new Error(formatSupabaseError(convError));
-  }
+    if (convError) {
+      console.error("Error fetching conversations:", convError);
+      throw new Error(formatSupabaseError(convError));
+    }
 
-  const payload = ((conversations || []) as ConversationRow[]).map((conv) => {
-    const lastMessage = conv.messages?.[0];
-    const participants = (conv.participants || []).map((participant) => {
-      const user = Array.isArray(participant.user)
-        ? participant.user[0]
-        : participant.user;
+    const payload = ((conversations || []) as ConversationRow[]).map((conv) => {
+      const lastMessage = conv.messages?.[0];
+      const participants = (conv.participants || []).map((participant) => {
+        const user = Array.isArray(participant.user)
+          ? participant.user[0]
+          : participant.user;
+        return {
+          user_id: participant.user_id,
+          user: {
+            first_name: user?.first_name ?? "",
+            last_name: user?.last_name ?? "",
+            avatar_url: user?.avatar_url,
+          },
+        };
+      });
+
       return {
-        user_id: participant.user_id,
-        user: {
-          first_name: user?.first_name ?? "",
-          last_name: user?.last_name ?? "",
-          avatar_url: user?.avatar_url,
-        },
+        id: conv.id,
+        created_at: conv.created_at,
+        updated_at: conv.updated_at,
+        participants,
+        last_message: lastMessage ?? undefined,
+        unread_count: unreadCounts[conv.id] ?? 0,
       };
     });
 
-    return {
-      id: conv.id,
-      created_at: conv.created_at,
-      updated_at: conv.updated_at,
-      participants,
-      last_message: lastMessage ?? undefined,
-      unread_count: unreadCounts[conv.id] ?? 0,
-    };
+    return payload;
   });
-
-  return payload;
 }
 
 export async function fetchMessages(conversationId: string) {
@@ -182,6 +195,8 @@ export async function sendMessage(conversationId: string, senderId: string, cont
     .update({ updated_at: new Date().toISOString() })
     .eq("id", conversationId);
 
+  clearCacheByPrefix("chat:conversations:");
+
   return data as Message;
 }
 
@@ -193,6 +208,7 @@ export async function createConversation(userIds: string[], creatorId?: string) 
         target_user_id: targetUserId,
       });
       if (error) throw new Error(formatSupabaseError(error));
+      clearCacheByPrefix("chat:conversations:");
       return { id: data } as { id: string };
     }
   }
@@ -228,10 +244,32 @@ export async function createConversation(userIds: string[], creatorId?: string) 
         }))
       );
 
-    if (partError) throw new Error(formatSupabaseError(partError));
+  if (partError) throw new Error(formatSupabaseError(partError));
   }
 
+  clearCacheByPrefix("chat:conversations:");
   return conversation;
+}
+
+export async function fetchChatContacts(userId: string) {
+  const cacheKey = `chat:contacts:${userId}`;
+  return withCache(cacheKey, 60000, async () => {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id, first_name, last_name, role")
+      .neq("id", userId)
+      .order("first_name", { ascending: true })
+      .limit(100);
+
+    if (error) throw error;
+
+    return (data || []).map((item) => ({
+      id: item.id,
+      first_name: item.first_name,
+      last_name: item.last_name,
+      role: item.role,
+    })) as ChatContact[];
+  });
 }
 
 export async function getOrCreateConversation(currentUserId: string, targetUserId: string) {

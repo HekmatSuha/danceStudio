@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthedSupabaseClient } from "../../../../../lib/server-supabase";
+import { withServerCache } from "../../../../../lib/server-cache";
 
 type StudioIdRow = { studio_id?: string | null };
 type OwnedStudioRow = { uuid?: string | null };
@@ -36,68 +37,77 @@ export async function GET(req: NextRequest) {
   }
 
   const studioIdsParam = req.nextUrl.searchParams.get("studioIds");
-  const allowedStudioIds = await resolveStudios(auth);
-  const requestedIds = studioIdsParam
-    ? studioIdsParam.split(",").map((id) => id.trim()).filter(Boolean)
-    : allowedStudioIds;
-  const studioIds = requestedIds.filter((id) => allowedStudioIds.includes(id));
 
-  if (studioIds.length === 0) {
-    return NextResponse.json({ bookingCount: 0, rentalCount: 0 });
-  }
+  const data = await withServerCache(
+    `owner:requests:summary:${auth.userId}:${studioIdsParam || "all"}`,
+    10000,
+    async () => {
+      const allowedStudioIds = await resolveStudios(auth);
+      const requestedIds = studioIdsParam
+        ? studioIdsParam.split(",").map((id) => id.trim()).filter(Boolean)
+        : allowedStudioIds;
+      const studioIds = requestedIds.filter((id) => allowedStudioIds.includes(id));
 
-  const { data: slotRows, error: slotError } = await auth.supabase
-    .from("slots")
-    .select("uuid")
-    .in("studio_id", studioIds);
+      if (studioIds.length === 0) {
+        return { bookingCount: 0, rentalCount: 0 };
+      }
 
-  if (slotError) {
-    return NextResponse.json({ error: slotError.message }, { status: 500 });
-  }
+      const { data: slotRows, error: slotError } = await auth.supabase
+        .from("slots")
+        .select("uuid")
+        .in("studio_id", studioIds);
 
-  const slotIds = (slotRows as SlotRow[] | null | undefined)
-    ?.map((row) => row.uuid)
-    .filter(Boolean) as string[] | undefined;
+      if (slotError) {
+        throw new Error(slotError.message);
+      }
 
-  const { count: bookingCount, error: bookingError } = slotIds?.length
-    ? await auth.supabase
-        .from("bookings")
-        .select("uuid", { count: "exact", head: true })
-        .eq("status", "pending")
-        .in("appointment_slot", slotIds)
-    : { count: 0, error: null };
+      const slotIds = (slotRows as SlotRow[] | null | undefined)
+        ?.map((row) => row.uuid)
+        .filter(Boolean) as string[] | undefined;
 
-  if (bookingError) {
-    return NextResponse.json({ error: bookingError.message }, { status: 500 });
-  }
+      const { count: bookingCount, error: bookingError } = slotIds?.length
+        ? await auth.supabase
+            .from("bookings")
+            .select("uuid", { count: "exact", head: true })
+            .eq("status", "pending")
+            .in("appointment_slot", slotIds)
+        : { count: 0, error: null };
 
-  const { data: roomRows, error: roomError } = await auth.supabase
-    .from("rooms")
-    .select("id")
-    .in("studio_id", studioIds);
+      if (bookingError) {
+        throw new Error(bookingError.message);
+      }
 
-  if (roomError) {
-    return NextResponse.json({ error: roomError.message }, { status: 500 });
-  }
+      const { data: roomRows, error: roomError } = await auth.supabase
+        .from("rooms")
+        .select("id")
+        .in("studio_id", studioIds);
 
-  const roomIds = (roomRows as RoomRow[] | null | undefined)
-    ?.map((row) => row.id)
-    .filter(Boolean) as string[] | undefined;
+      if (roomError) {
+        throw new Error(roomError.message);
+      }
 
-  const { count: rentalCount, error: rentalError } = roomIds?.length
-    ? await auth.supabase
-        .from("room_rentals")
-        .select("id", { count: "exact", head: true })
-        .eq("status", "pending")
-        .in("room_id", roomIds)
-    : { count: 0, error: null };
+      const roomIds = (roomRows as RoomRow[] | null | undefined)
+        ?.map((row) => row.id)
+        .filter(Boolean) as string[] | undefined;
 
-  if (rentalError) {
-    return NextResponse.json({ error: rentalError.message }, { status: 500 });
-  }
+      const { count: rentalCount, error: rentalError } = roomIds?.length
+        ? await auth.supabase
+            .from("room_rentals")
+            .select("id", { count: "exact", head: true })
+            .eq("status", "pending")
+            .in("room_id", roomIds)
+        : { count: 0, error: null };
 
-  return NextResponse.json({
-    bookingCount: bookingCount ?? 0,
-    rentalCount: rentalCount ?? 0,
-  });
+      if (rentalError) {
+        throw new Error(rentalError.message);
+      }
+
+      return {
+        bookingCount: bookingCount ?? 0,
+        rentalCount: rentalCount ?? 0,
+      };
+    },
+  );
+
+  return NextResponse.json(data);
 }

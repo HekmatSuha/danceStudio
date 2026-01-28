@@ -20,3 +20,11 @@ export async function withServerCache<T>(
   cache.set(key, { value, expiresAt: now + ttlMs });
   return value;
 }
+
+export function clearServerCacheByPrefix(prefix: string) {
+  for (const key of cache.keys()) {
+    if (key.startsWith(prefix)) {
+      cache.delete(key);
+    }
+  }
+}
