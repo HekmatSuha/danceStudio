@@ -133,9 +133,9 @@ export default function InstructorSchedulePage() {
   const handleOpenRoster = async (classId: string) => {
     if (classId === "mock-1") {
         setRoster([
-            { uuid: "1", status: "confirmed", attended: true, user: { uuid: "u1", first_name: "Alice", last_name: "Smith", email: "alice@example.com" } } as BookingWithUser,
-            { uuid: "2", status: "confirmed", attended: false, user: { uuid: "u2", first_name: "Bob", last_name: "Jones", email: "bob@example.com" } } as BookingWithUser,
-            { uuid: "3", status: "cancelled", attended: false, user: { uuid: "u3", first_name: "Charlie", last_name: "Brown", email: "charlie@example.com" } } as BookingWithUser,
+            { uuid: "1", status: "confirmed", attended: true, user: { id: "u1", first_name: "Alice", last_name: "Smith", email: "alice@example.com" } },
+            { uuid: "2", status: "confirmed", attended: false, user: { id: "u2", first_name: "Bob", last_name: "Jones", email: "bob@example.com" } },
+            { uuid: "3", status: "cancelled", attended: false, user: { id: "u3", first_name: "Charlie", last_name: "Brown", email: "charlie@example.com" } },
         ]);
         setSelectedClassId(classId);
         return;

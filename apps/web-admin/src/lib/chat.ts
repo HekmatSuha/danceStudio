@@ -35,6 +35,27 @@ export type Conversation = {
   last_message?: Message;
 };
 
+type ConversationRow = {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  participants: {
+    user_id: string;
+    user:
+      | {
+          first_name: string;
+          last_name: string;
+          avatar_url?: string;
+        }
+      | {
+          first_name: string;
+          last_name: string;
+          avatar_url?: string;
+        }[];
+  }[];
+  messages?: Message[] | null;
+};
+
 export async function fetchConversations(userId: string) {
   const { data: conversations, error: convError } = await supabase
     .from("conversations")
@@ -71,16 +92,32 @@ export async function fetchConversations(userId: string) {
     throw new Error(formatSupabaseError(convError));
   }
 
-  const payload = (conversations || []).map((conv) => {
-    const lastMessage =
-      (conv as { messages?: Message[] }).messages?.[0] || null;
+  const payload = ((conversations || []) as ConversationRow[]).map((conv) => {
+    const lastMessage = conv.messages?.[0];
+    const participants = (conv.participants || []).map((participant) => {
+      const user = Array.isArray(participant.user)
+        ? participant.user[0]
+        : participant.user;
+      return {
+        user_id: participant.user_id,
+        user: {
+          first_name: user?.first_name ?? "",
+          last_name: user?.last_name ?? "",
+          avatar_url: user?.avatar_url,
+        },
+      };
+    });
+
     return {
-      ...conv,
-      last_message: lastMessage,
+      id: conv.id,
+      created_at: conv.created_at,
+      updated_at: conv.updated_at,
+      participants,
+      last_message: lastMessage ?? undefined,
     };
   });
 
-  return payload as Conversation[];
+  return payload;
 }
 
 export async function fetchMessages(conversationId: string) {
