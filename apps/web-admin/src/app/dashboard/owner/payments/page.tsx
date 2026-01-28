@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Calendar, Search, Plus } from "lucide-react";
 import { useOwnerStudiosGuard } from "../../../../lib/useOwnerStudiosGuard";
 import { supabase } from "../../../../lib/supabase";
+import useSWR from "swr";
 import {
   Dialog,
   DialogContent,
@@ -50,8 +51,6 @@ export default function OwnerPaymentsPage() {
 
   const [incomeRows, setIncomeRows] = useState<IncomeRow[]>([]);
   const [expenseRows, setExpenseRows] = useState<ExpenseRow[]>([]);
-  const [entriesLoading, setEntriesLoading] = useState(false);
-  const [entriesError, setEntriesError] = useState<string | null>(null);
 
   const [showIncomeDialog, setShowIncomeDialog] = useState(false);
   const [showExpenseDialog, setShowExpenseDialog] = useState(false);
@@ -78,22 +77,36 @@ export default function OwnerPaymentsPage() {
     }
   }, [selectedStudioId, studios]);
 
-  const loadEntries = async (studioId: string) => {
-    setEntriesLoading(true);
-    setEntriesError(null);
-    try {
+  const {
+    data: entriesPayload,
+    isLoading: entriesLoading,
+    error: entriesError,
+    mutate,
+  } = useSWR<Array<{
+    id: string;
+    entry_type: "income" | "expense";
+    amount: number;
+    date: string;
+    payer: string;
+    receiver: string;
+    source: string;
+    category: string;
+    description: string;
+  }>>(
+    selectedStudioId ? `owner:payments:${selectedStudioId}` : null,
+    async () => {
       const { data, error } = await supabase
         .from("finance_entries")
         .select(
           "id, entry_type, amount, currency, payment_date, payer_name, receiver_name, payment_source, category, description"
         )
-        .eq("studio_id", studioId)
+        .eq("studio_id", selectedStudioId)
         .order("payment_date", { ascending: false })
         .limit(500);
 
       if (error) throw error;
 
-      const rows = (data || []).map((row) => ({
+      return (data || []).map((row) => ({
         id: row.id,
         entry_type: row.entry_type,
         amount: Number(row.amount || 0),
@@ -104,44 +117,40 @@ export default function OwnerPaymentsPage() {
         category: row.category || "Other",
         description: row.description || "-",
       }));
+    },
+  );
 
-      setIncomeRows(
-        rows
-          .filter((row) => row.entry_type === "income")
-          .map((row) => ({
-            id: row.id,
-            payer: row.payer,
-            amount: row.amount,
-            date: row.date,
-            source: row.source,
-            category: row.category,
-            description: row.description,
-          }))
-      );
-      setExpenseRows(
-        rows
-          .filter((row) => row.entry_type === "expense")
-          .map((row) => ({
-            id: row.id,
-            receiver: row.receiver,
-            amount: row.amount,
-            date: row.date,
-            category: row.category,
-            description: row.description,
-          }))
-      );
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Unable to load finance entries.";
-      setEntriesError(message);
-    } finally {
-      setEntriesLoading(false);
-    }
-  };
+  const entriesErrorMessage =
+    entriesError instanceof Error ? entriesError.message : entriesError ? String(entriesError) : null;
 
   useEffect(() => {
-    if (!selectedStudioId) return;
-    loadEntries(selectedStudioId);
-  }, [selectedStudioId]);
+    if (!entriesPayload) return;
+    setIncomeRows(
+      entriesPayload
+        .filter((row) => row.entry_type === "income")
+        .map((row) => ({
+          id: row.id,
+          payer: row.payer,
+          amount: row.amount,
+          date: row.date,
+          source: row.source,
+          category: row.category,
+          description: row.description,
+        }))
+    );
+    setExpenseRows(
+      entriesPayload
+        .filter((row) => row.entry_type === "expense")
+        .map((row) => ({
+          id: row.id,
+          receiver: row.receiver,
+          amount: row.amount,
+          date: row.date,
+          category: row.category,
+          description: row.description,
+        }))
+    );
+  }, [entriesPayload]);
 
   const filteredIncome = useMemo(() => {
     const queryPayer = payerQuery.trim().toLowerCase();
@@ -228,7 +237,7 @@ export default function OwnerPaymentsPage() {
         description: "",
       });
       setShowIncomeDialog(false);
-      await loadEntries(selectedStudioId);
+      await mutate();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unable to save income.";
       setEntriesError(message);
@@ -255,7 +264,7 @@ export default function OwnerPaymentsPage() {
       if (error) throw error;
       setExpenseForm({ date: "", amount: "0", category: "", receiver: "", description: "" });
       setShowExpenseDialog(false);
-      await loadEntries(selectedStudioId);
+      await mutate();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unable to save expense.";
       setEntriesError(message);
@@ -395,8 +404,8 @@ export default function OwnerPaymentsPage() {
           </div>
 
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-            {entriesError ? (
-              <div className="px-6 py-4 text-sm text-rose-500">{entriesError}</div>
+            {entriesErrorMessage ? (
+              <div className="px-6 py-4 text-sm text-rose-500">{entriesErrorMessage}</div>
             ) : null}
             <div className="flex items-center justify-end px-6 py-4 text-sm text-slate-500">
               Total:{" "}

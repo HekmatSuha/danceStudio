@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
+import useSWR from "swr";
 import {
   Plus,
   Calendar as CalendarIcon,
@@ -35,8 +36,6 @@ export default function OwnerClassesPage() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showForm, setShowForm] = useState(false);
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
-  const [allClasses, setAllClasses] = useState<ClassEvent[]>([]);
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
   const router = useRouter();
 
   // Filters
@@ -47,36 +46,43 @@ export default function OwnerClassesPage() {
   const [showArchived, setShowArchived] = useState(false);
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
 
-  // Roster State
-  const [roster, setRoster] = useState<BookingWithUser[]>([]);
-  const [loadingRoster, setLoadingRoster] = useState(false);
-
   const { studios, loading: studiosLoading } = useOwnerStudiosGuard();
   const studioIds = studios.length ? studios.map((s) => s.uuid) : undefined;
 
-  // Load Classes
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const start = startOfDay(subDays(selectedDate, 30)).toISOString();
-        const end = endOfDay(addDays(selectedDate, 30)).toISOString();
+  // SWR: Classes
+  // We calculate the range based on selectedDate, same as before
+  const rangeStart = startOfDay(subDays(selectedDate, 30)).toISOString();
+  const rangeEnd = endOfDay(addDays(selectedDate, 30)).toISOString();
+  
+  const classesKey = studioIds && studioIds.length > 0 
+    ? ["classes", { 
+        studioIds, 
+        start_date: rangeStart, 
+        end_date: rangeEnd, 
+        orderBy: "start_time", 
+        orderAsc: true 
+      }] 
+    : null;
 
-        const data = await fetchClasses({
-          studioIds,
-          start_date: start,
-          end_date: end,
-          orderBy: "start_time",
-          orderAsc: true,
-        });
-        setAllClasses(data);
-      } catch (err) {
-        console.error(err);
-      }
-    };
-    if (studioIds && studioIds.length > 0) {
-      load();
-    }
-  }, [studioIds, refreshTrigger, selectedDate]); // Add selectedDate dependency
+  const { data: classesData, mutate: mutateClasses } = useSWR(
+    classesKey,
+    ([, params]) => fetchClasses(params as any)
+  );
+
+  const allClasses = classesData || [];
+
+  // SWR: Roster
+  const rosterKey = selectedClassId ? ["bookings", selectedClassId] : null;
+  const { 
+    data: rosterData, 
+    isLoading: loadingRoster, 
+    mutate: mutateRoster 
+  } = useSWR(
+    rosterKey,
+    ([, id]) => fetchSlotBookings(id)
+  );
+  
+  const roster = rosterData || [];
 
   // Derived Data
   const filteredAndGroupedClasses = useMemo(() => {
@@ -110,31 +116,28 @@ export default function OwnerClassesPage() {
   // Handlers
   const handleCreated = () => {
     setShowForm(false);
-    setRefreshTrigger(prev => prev + 1);
+    mutateClasses();
   };
 
-  const handleViewRoster = async (classId: string) => {
+  const handleViewRoster = (classId: string) => {
     setSelectedClassId(classId);
-    setLoadingRoster(true);
-    try {
-      const data = await fetchSlotBookings(classId);
-      setRoster(data);
-    } catch (err) {
-      setRoster([]);
-    } finally {
-      setLoadingRoster(false);
-    }
   };
 
   const handleToggleAttendance = async (booking: BookingWithUser) => {
     const next = !(booking.attended ?? false);
+    
+    // Optimistic Update
+    mutateRoster(
+      (current) => current?.map(b => b.uuid === booking.uuid ? { ...b, attended: next } : b),
+      false
+    );
+
     try {
       await markAttendance(booking.uuid, next);
-      setRoster((prev) =>
-        prev.map((item) => (item.uuid === booking.uuid ? { ...item, attended: next } : item))
-      );
+      mutateRoster(); // Revalidate to be sure
     } catch (err) {
         alert("Failed to update attendance.");
+        mutateRoster(); // Revert on error
     }
   };
 

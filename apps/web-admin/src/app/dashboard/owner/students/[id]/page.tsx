@@ -24,6 +24,7 @@ import { supabase } from "../../../../../lib/supabase";
 import { markAttendance } from "../../../../../lib/bookings";
 import { useAuthUser } from "../../../../../lib/useAuthUser";
 import { useOwnerStudiosGuard } from "../../../../../lib/useOwnerStudiosGuard";
+import useSWR from "swr";
 const incomeSources = ["Cash", "Card", "Kaspi QR", "Bank transfer"];
 const incomeCategories = ["Membership", "Class booking", "Merch", "Other"];
 
@@ -87,7 +88,6 @@ export default function OwnerStudentDetailPage() {
   const [activeTab, setActiveTab] = useState<TabKey>("classes");
   const [showSeasonForm, setShowSeasonForm] = useState(false);
   const [showPaymentForm, setShowPaymentForm] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [student, setStudent] = useState<StudentProfile | null>(null);
   const [bookings, setBookings] = useState<BookingRow[]>([]);
   const [slotMap, setSlotMap] = useState<Map<string, SlotRow>>(new Map());
@@ -98,8 +98,6 @@ export default function OwnerStudentDetailPage() {
   const [paymentStudioId, setPaymentStudioId] = useState<string | null>(null);
   const [paymentCurrency, setPaymentCurrency] = useState("KZT");
   const [financeEntries, setFinanceEntries] = useState<FinanceEntryRow[]>([]);
-  const [financeLoading, setFinanceLoading] = useState(false);
-  const [financeError, setFinanceError] = useState<string | null>(null);
   const [paymentForm, setPaymentForm] = useState({
     date: "",
     amount: "0",
@@ -111,8 +109,6 @@ export default function OwnerStudentDetailPage() {
   const [seasonError, setSeasonError] = useState<string | null>(null);
   const [seasonStudioId, setSeasonStudioId] = useState<string | null>(null);
   const [seasonClasses, setSeasonClasses] = useState<Array<{ id: string; title: string }>>([]);
-  const [seasonClassesLoading, setSeasonClassesLoading] = useState(false);
-  const [seasonClassesError, setSeasonClassesError] = useState<string | null>(null);
   const [seasonForm, setSeasonForm] = useState({
     subscriptionType: "multiple",
     classId: "",
@@ -128,6 +124,109 @@ export default function OwnerStudentDetailPage() {
   const { user } = useAuthUser();
   const searchParams = useSearchParams();
 
+  const {
+    data: studentPayload,
+    isLoading: studentLoading,
+  } = useSWR<{ student: StudentProfile | null; bookings: BookingRow[]; slots: SlotRow[] }>(
+    studentId ? `owner:student:${studentId}` : null,
+    async () => {
+      const { data: profileData, error: profileError } = await supabase
+        .from("profiles")
+        .select("id, first_name, last_name, email, phone_number, gender, created_at, avatar_url")
+        .eq("id", studentId)
+        .single();
+      if (profileError) throw profileError;
+
+      const { data: bookingRows, error: bookingError } = await supabase
+        .from("bookings")
+        .select("uuid, appointment_slot, status, attended, booking_date")
+        .eq("user_id", studentId)
+        .order("booking_date", { ascending: false });
+      if (bookingError) throw bookingError;
+
+      const slotIds = (bookingRows || [])
+        .map((row) => row.appointment_slot)
+        .filter(Boolean);
+
+      let slots: SlotRow[] = [];
+      if (slotIds.length > 0) {
+        const { data: slotRows, error: slotError } = await supabase
+          .from("slots")
+          .select(`
+            studio_id,
+            uuid,
+            title,
+            start_time,
+            end_time,
+            price,
+            currency,
+            max_participants,
+            trainer:profiles(first_name, last_name),
+            studio:studios(uuid, name, address, city)
+          `)
+          .in("uuid", slotIds);
+        if (slotError) throw slotError;
+        slots = (slotRows as SlotRow[]) || [];
+      }
+
+      return {
+        student: (profileData as StudentProfile) || null,
+        bookings: (bookingRows as BookingRow[]) || [],
+        slots,
+      };
+    },
+  );
+
+  const {
+    data: financePayload,
+    isLoading: financeLoading,
+    error: financeError,
+    mutate: mutateFinance,
+  } = useSWR<FinanceEntryRow[]>(
+    studentId ? `owner:student:finance:${studentId}` : null,
+    async () => {
+      const { data, error } = await supabase
+        .from("finance_entries")
+        .select("id, entry_type, amount, currency, payment_date, booking_id, payment_source, category, description")
+        .eq("student_id", studentId)
+        .order("payment_date", { ascending: false });
+
+      if (error) throw error;
+      return (data as FinanceEntryRow[]) || [];
+    },
+  );
+
+  const {
+    data: seasonPayload,
+    isLoading: seasonClassesLoading,
+    error: seasonClassesError,
+  } = useSWR<Array<{ id: string; title: string }>>(
+    seasonStudioId ? `owner:season-classes:${seasonStudioId}` : null,
+    async () => {
+      const { data, error } = await supabase
+        .from("slots")
+        .select("uuid, title")
+        .eq("studio_id", seasonStudioId)
+        .order("start_time", { ascending: false })
+        .limit(200);
+      if (error) throw error;
+      return (data || []).map((row) => ({
+        id: row.uuid,
+        title: row.title || "Class",
+      }));
+    },
+  );
+
+  const loading = studentLoading;
+  const financeErrorMessage =
+    financeError instanceof Error ? financeError.message : financeError ? String(financeError) : null;
+  const seasonClassesErrorMessage =
+    seasonClassesError instanceof Error
+      ? seasonClassesError.message
+      : seasonClassesError
+        ? String(seasonClassesError)
+        : null;
+
   const handleMessage = () => {
     const phone = (student?.phone_number || "").trim();
     if (!phone) return;
@@ -137,108 +236,32 @@ export default function OwnerStudentDetailPage() {
   };
 
   useEffect(() => {
-    if (!studentId) return;
-    let active = true;
-    const load = async () => {
-      setLoading(true);
-      try {
-        const { data: profileData, error: profileError } = await supabase
-          .from("profiles")
-          .select("id, first_name, last_name, email, phone_number, gender, created_at, avatar_url")
-          .eq("id", studentId)
-          .single();
-        if (profileError) throw profileError;
-
-        const { data: bookingRows, error: bookingError } = await supabase
-          .from("bookings")
-          .select("uuid, appointment_slot, status, attended, booking_date")
-          .eq("user_id", studentId)
-          .order("booking_date", { ascending: false });
-        if (bookingError) throw bookingError;
-
-        const slotIds = (bookingRows || [])
-          .map((row) => row.appointment_slot)
-          .filter(Boolean);
-
-        let slots: SlotRow[] = [];
-        if (slotIds.length > 0) {
-          const { data: slotRows, error: slotError } = await supabase
-            .from("slots")
-            .select(`
-              studio_id,
-              uuid,
-              title,
-              start_time,
-              end_time,
-              price,
-              currency,
-              max_participants,
-              trainer:profiles(first_name, last_name),
-              studio:studios(uuid, name, address, city)
-            `)
-            .in("uuid", slotIds);
-          if (slotError) throw slotError;
-          slots = (slotRows as SlotRow[]) || [];
+    if (!studentPayload) return;
+    setStudent(studentPayload.student);
+    setBookings(studentPayload.bookings);
+    setSlotMap(new Map(studentPayload.slots.map((slot) => [slot.uuid, slot])));
+    setVisitsStatus((prev) => {
+      const next = { ...prev };
+      studentPayload.bookings.forEach((row) => {
+        const key = row.uuid;
+        if (next[key]) return;
+        if (row.attended) {
+          next[key] = "Visited";
+        } else if (row.status === "cancelled") {
+          next[key] = "Missed";
+        } else {
+          next[key] = "Pending";
         }
-
-        if (!active) return;
-        setStudent(profileData as StudentProfile);
-        setBookings((bookingRows as BookingRow[]) || []);
-        setSlotMap(new Map(slots.map((slot) => [slot.uuid, slot])));
-        setVisitsStatus(
-          (bookingRows as BookingRow[] | undefined)?.reduce((acc, row) => {
-            const key = row.uuid;
-            if (row.attended) {
-              acc[key] = "Visited";
-            } else if (row.status === "cancelled") {
-              acc[key] = "Missed";
-            } else {
-              acc[key] = "Pending";
-            }
-            return acc;
-          }, {} as Record<string, string>) || {},
-        );
-      } catch (err) {
-        console.error(err);
-      } finally {
-        if (active) setLoading(false);
-      }
-    };
-    load();
-    return () => {
-      active = false;
-    };
-  }, [studentId]);
+      });
+      return next;
+    });
+  }, [studentPayload]);
 
   useEffect(() => {
-    if (!studentId) return;
-    let active = true;
-    const loadFinance = async () => {
-      setFinanceLoading(true);
-      setFinanceError(null);
-      try {
-        const { data, error } = await supabase
-          .from("finance_entries")
-          .select("id, entry_type, amount, currency, payment_date, booking_id, payment_source, category, description")
-          .eq("student_id", studentId)
-          .order("payment_date", { ascending: false });
-
-        if (error) throw error;
-        if (!active) return;
-        setFinanceEntries((data as FinanceEntryRow[]) || []);
-      } catch (err) {
-        if (!active) return;
-        setFinanceError(err instanceof Error ? err.message : "Failed to load payments.");
-      } finally {
-        if (active) setFinanceLoading(false);
-      }
-    };
-
-    loadFinance();
-    return () => {
-      active = false;
-    };
-  }, [studentId]);
+    if (financePayload) {
+      setFinanceEntries(financePayload);
+    }
+  }, [financePayload]);
 
   useEffect(() => {
     const tabParam = searchParams.get("tab");
@@ -281,38 +304,10 @@ export default function OwnerStudentDetailPage() {
       setSeasonClasses([]);
       return;
     }
-    let active = true;
-    const loadClasses = async () => {
-      setSeasonClassesLoading(true);
-      setSeasonClassesError(null);
-      try {
-        const { data, error } = await supabase
-          .from("slots")
-          .select("uuid, title")
-          .eq("studio_id", seasonStudioId)
-          .order("start_time", { ascending: false })
-          .limit(200);
-        if (error) throw error;
-        if (!active) return;
-        setSeasonClasses(
-          (data || []).map((row) => ({
-            id: row.uuid,
-            title: row.title || "Class",
-          }))
-        );
-      } catch (err) {
-        if (!active) return;
-        setSeasonClassesError(err instanceof Error ? err.message : "Failed to load classes.");
-      } finally {
-        if (active) setSeasonClassesLoading(false);
-      }
-    };
-
-    loadClasses();
-    return () => {
-      active = false;
-    };
-  }, [seasonStudioId]);
+    if (seasonPayload) {
+      setSeasonClasses(seasonPayload);
+    }
+  }, [seasonPayload, seasonStudioId]);
 
   const studentName = `${student?.first_name || ""} ${student?.last_name || ""}`.trim() || "Student";
   const incomeTotal = useMemo(() => {
@@ -426,6 +421,7 @@ export default function OwnerStudentDetailPage() {
             },
             ...prev,
           ]);
+          await mutateFinance();
         }
 
         if (!attended && existing?.id) {
@@ -435,6 +431,7 @@ export default function OwnerStudentDetailPage() {
             .eq("id", existing.id);
           if (error) throw error;
           setFinanceEntries((prev) => prev.filter((entry) => entry.id !== existing.id));
+          await mutateFinance();
         }
       }
     } catch (err) {
@@ -505,6 +502,7 @@ export default function OwnerStudentDetailPage() {
         },
         ...prev,
       ]);
+      await mutateFinance();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to save payment.";
       setPaymentError(message);
@@ -581,6 +579,7 @@ export default function OwnerStudentDetailPage() {
         },
         ...prev,
       ]);
+      await mutateFinance();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to save season ticket.";
       setSeasonError(message);
@@ -735,8 +734,8 @@ export default function OwnerStudentDetailPage() {
           </div>
 
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-            {financeError && (
-              <div className="px-6 py-4 text-sm text-rose-500">{financeError}</div>
+            {financeErrorMessage && (
+              <div className="px-6 py-4 text-sm text-rose-500">{financeErrorMessage}</div>
             )}
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm text-slate-600">
@@ -1225,8 +1224,8 @@ export default function OwnerStudentDetailPage() {
                 <Calendar size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-indigo-500" />
               </div>
             </div>
-            {seasonClassesError && (
-              <div className="text-sm text-rose-500">{seasonClassesError}</div>
+            {seasonClassesErrorMessage && (
+              <div className="text-sm text-rose-500">{seasonClassesErrorMessage}</div>
             )}
             <textarea
               placeholder="Add a comment"
