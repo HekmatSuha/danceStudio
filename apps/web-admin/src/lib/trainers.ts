@@ -72,10 +72,9 @@ export async function fetchTrainers(studioIdOrOptions?: string | FetchTrainersOp
   const cacheKey = `trainers:${JSON.stringify({ studioId, studioIds })}`;
   return withCache(cacheKey, 20000, async () => {
     const { data, error } = await query;
-
     if (error) throw error;
 
-    return (data as unknown as TrainerRow[]).map((item) => ({
+    const trainers = (data as unknown as TrainerRow[]).map((item) => ({
       uuid: item.user.id, // The User/Profile ID is the primary "Trainer" ID
       first_name: item.user.first_name || "",
       last_name: item.user.last_name || "",
@@ -85,6 +84,48 @@ export async function fetchTrainers(studioIdOrOptions?: string | FetchTrainersOp
       studio: item.studio_id,
       studio_details: item.studio ?? undefined,
     })) as Trainer[];
+
+    // If specific studios are requested, also fetch the owners of these studios
+    const targetStudioIds = studioIds || (studioId ? [studioId] : []);
+
+    if (targetStudioIds.length > 0) {
+      const { data: ownersData, error: ownersError } = await supabase
+        .from('studios')
+        .select(`
+          uuid, name, city, address,
+          owner:profiles!owner_id(id, first_name, last_name, avatar_url, bio, is_active)
+        `)
+        .in('uuid', targetStudioIds);
+
+      if (!ownersError && ownersData) {
+        // Map owners to Trainer format
+        const owners = (ownersData as any[]).map((s) => ({
+          uuid: s.owner?.id,
+          first_name: s.owner?.first_name || "",
+          last_name: s.owner?.last_name || "",
+          bio: s.owner?.bio || undefined,
+          photo: s.owner?.avatar_url || null,
+          is_active: s.owner?.is_active ?? true,
+          studio: s.uuid,
+          studio_details: {
+            uuid: s.uuid,
+            name: s.name,
+            city: s.city,
+            address: s.address
+          }
+        })).filter(t => t.uuid);
+
+        // Merge owners into trainers list, avoiding duplicates
+        for (const owner of owners) {
+          const exists = trainers.some(t => t.uuid === owner.uuid && t.studio === owner.studio);
+          if (!exists) {
+            trainers.push(owner as Trainer);
+          }
+        }
+      }
+    }
+
+    return trainers;
   });
 }
 
