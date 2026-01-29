@@ -9,6 +9,7 @@ export type Notification = {
   created_at: string;
 };
 
+// Helper to create a new notification
 export async function createNotification(notification: {
   studio_id: string;
   title: string;

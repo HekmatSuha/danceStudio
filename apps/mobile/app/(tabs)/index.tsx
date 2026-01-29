@@ -383,7 +383,7 @@ export default function ExploreScreen() {
             <Ionicons name="chevron-down" size={14} color="#6b7280" />
           </Pressable>
           <View style={styles.topActions}>
-            <Pressable style={styles.iconBtn}>
+            <Pressable style={styles.iconBtn} onPress={() => router.push("/notifications")}>
               <Ionicons name="notifications-outline" size={18} color="#111827" />
             </Pressable>
             <Pressable style={styles.iconBtn}>
