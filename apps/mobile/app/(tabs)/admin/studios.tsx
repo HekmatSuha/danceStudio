@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -186,15 +186,16 @@ export default function AdminStudiosScreen() {
     );
   }
 
-  const filtered = studios.filter((studio) => {
+  const filtered = useMemo(() => {
     const needle = search.trim().toLowerCase();
-    if (!needle) return true;
-    return (
+    if (!needle) return studios;
+
+    return studios.filter((studio) =>
       studio.name?.toLowerCase().includes(needle) ||
       studio.city?.toLowerCase().includes(needle) ||
       studio.address?.toLowerCase().includes(needle)
     );
-  });
+  }, [studios, search]);
 
   return (
     <SafeAreaView style={styles.safe}>
