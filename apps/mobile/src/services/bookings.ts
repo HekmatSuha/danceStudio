@@ -27,6 +27,16 @@ export async function createBooking(slotId: string, notes?: string) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("User not authenticated");
 
+  const { data: slot, error: slotError } = await supabase
+    .from("slots")
+    .select("start_time")
+    .eq("uuid", slotId)
+    .single();
+
+  if (slotError || !slot) {
+    throw new Error("Slot not found");
+  }
+
   const { data, error } = await supabase
     .from('bookings')
     .insert({
@@ -34,7 +44,7 @@ export async function createBooking(slotId: string, notes?: string) {
       appointment_slot: slotId,
       client_notes: notes ?? "",
       status: 'pending',
-      booking_date: new Date().toISOString(), // This should ideally come from the slot, but for now using current time or we need to fetch slot details
+      booking_date: slot.start_time,
     })
     .select()
     .single();
