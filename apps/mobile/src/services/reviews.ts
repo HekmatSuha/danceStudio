@@ -60,10 +60,6 @@ export async function createReview(data: {
 
   if (bookingError) throw bookingError;
 
-  // Note: if bookings table doesn't have a direct link to studio (via slot), we'd need to fetch that.
-  // The 'bookings' table I defined in SQL has 'appointment_slot' as text. Ideally it should reference the 'slots' table.
-  // Assuming 'appointment_slot' in bookings table is the UUID of the slot.
-  
   const studioId = (bookingData as any).slot?.studio_id;
 
   const { data: review, error } = await supabase
