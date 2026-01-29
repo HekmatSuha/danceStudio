@@ -61,12 +61,16 @@ export function ClassForm({ onSuccess, onCancel }: ClassFormProps) {
     const loadData = async () => {
       setLoadingData(true);
       try {
-        const [studiosData, trainersData, stylesData] = await Promise.all([
-          fetchMyStudios(),
-          fetchTrainers(),
+        const studiosData = await fetchMyStudios();
+        setStudios(studiosData);
+
+        const studioIds = studiosData.map(s => s.uuid);
+
+        const [trainersData, stylesData] = await Promise.all([
+          fetchTrainers({ studioIds }),
           fetchDanceStyles(),
         ]);
-        setStudios(studiosData);
+
         setTrainers(trainersData);
         setStyles(stylesData);
         
@@ -80,7 +84,7 @@ export function ClassForm({ onSuccess, onCancel }: ClassFormProps) {
       }
     };
     loadData();
-  }, [formData.studioId]);
+  }, []);
 
   useEffect(() => {
     const loadRooms = async () => {
