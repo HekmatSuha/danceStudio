@@ -30,9 +30,17 @@ export default function WebMap({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any | null>(null);
   const markersRef = useRef<any | null>(null);
+  const studioMarkersRef = useRef<Map<string, any>>(new Map());
+  const userMarkerRef = useRef<any | null>(null);
   const leafletRef = useRef<any | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const isMounted = useRef(false);
+
+  // Keep callback fresh without triggering effects
+  const onStudioSelectRef = useRef(onStudioSelect);
+  useEffect(() => {
+    onStudioSelectRef.current = onStudioSelect;
+  }, [onStudioSelect]);
 
   useEffect(() => {
     isMounted.current = true;
@@ -81,6 +89,10 @@ export default function WebMap({
         mapRef.current = null;
       }
       leafletRef.current = null;
+      // Clear refs
+      studioMarkersRef.current.clear();
+      userMarkerRef.current = null;
+      markersRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Run only once on mount
@@ -98,12 +110,21 @@ export default function WebMap({
     }
   }, [center, mapReady]);
 
+  // Handle studios and counts updates (Optimized)
   useEffect(() => {
     const L = leafletRef.current;
     const map = mapRef.current;
     if (!map || !L || !mapReady) return;
 
-    const layer = L.layerGroup();
+    // Ensure layer group exists
+    if (!markersRef.current) {
+      markersRef.current = L.layerGroup().addTo(map);
+    }
+    const layer = markersRef.current;
+    const studioMarkers = studioMarkersRef.current;
+
+    const activeIds = new Set<string>();
+
     studios.forEach((studio) => {
       if (
         typeof studio.latitude !== "number" ||
@@ -111,56 +132,93 @@ export default function WebMap({
       )
         return;
 
+      activeIds.add(studio.uuid);
       const count = counts[studio.uuid] || 0;
-      const marker = L.circleMarker([studio.latitude, studio.longitude], {
-        radius: 12,
-        color: "#111827",
-        fillColor: "#111827",
-        fillOpacity: 1,
-        weight: 1,
-      });
+      const popupContent = `<strong>${studio.name}</strong><br/>${studio.city || "Almaty"} · ${count} classes`;
 
-      marker.bindPopup(
-        `<strong>${studio.name}</strong><br/>${studio.city || "Almaty"} · ${count} classes`
-      );
-      marker.on("click", () => {
-        if (onStudioSelect) {
-          onStudioSelect(studio.uuid);
+      let marker = studioMarkers.get(studio.uuid);
+
+      if (marker) {
+        // Update existing marker
+        const currentLatLng = marker.getLatLng();
+        if (currentLatLng.lat !== studio.latitude || currentLatLng.lng !== studio.longitude) {
+           marker.setLatLng([studio.latitude, studio.longitude]);
         }
-      });
 
-      marker.addTo(layer);
+        // Update popup content
+        if (marker.getPopup()) {
+             marker.setPopupContent(popupContent);
+        } else {
+             marker.bindPopup(popupContent);
+        }
+      } else {
+        // Create new marker
+        marker = L.circleMarker([studio.latitude, studio.longitude], {
+          radius: 12,
+          color: "#111827",
+          fillColor: "#111827",
+          fillOpacity: 1,
+          weight: 1,
+        });
+
+        marker.bindPopup(popupContent);
+        marker.on("click", () => {
+          if (onStudioSelectRef.current) {
+            onStudioSelectRef.current(studio.uuid);
+          }
+        });
+
+        marker.addTo(layer);
+        studioMarkers.set(studio.uuid, marker);
+      }
     });
+
+    // Remove old markers
+    for (const [uuid, marker] of studioMarkers.entries()) {
+      if (!activeIds.has(uuid)) {
+        layer.removeLayer(marker);
+        studioMarkers.delete(uuid);
+      }
+    }
+  }, [studios, counts, mapReady]);
+
+  // Handle user location updates
+  useEffect(() => {
+    const L = leafletRef.current;
+    const map = mapRef.current;
+    if (!map || !L || !mapReady) return;
+
+    if (!markersRef.current) {
+      markersRef.current = L.layerGroup().addTo(map);
+    }
+    const layer = markersRef.current;
 
     if (
       userLocation &&
       typeof userLocation[0] === "number" &&
       typeof userLocation[1] === "number"
     ) {
-      const userMarker = L.circleMarker(userLocation, {
-        radius: 10,
-        color: "#2563eb",
-        fillColor: "#3b82f6",
-        fillOpacity: 1,
-        weight: 2,
-      });
-      userMarker.bindPopup("You are here");
-      userMarker.addTo(layer);
-    }
-
-    layer.addTo(map);
-    markersRef.current = layer;
-
-    return () => {
-      try {
-        if (mapRef.current && mapRef.current === map) {
-           map.removeLayer(layer);
-        }
-      } catch (e) {
-        // Map might be destroyed already
+      if (userMarkerRef.current) {
+        userMarkerRef.current.setLatLng(userLocation);
+      } else {
+        const userMarker = L.circleMarker(userLocation, {
+          radius: 10,
+          color: "#2563eb",
+          fillColor: "#3b82f6",
+          fillOpacity: 1,
+          weight: 2,
+        });
+        userMarker.bindPopup("You are here");
+        userMarker.addTo(layer);
+        userMarkerRef.current = userMarker;
       }
-    };
-  }, [studios, counts, userLocation, mapReady]);
+    } else {
+      if (userMarkerRef.current) {
+        layer.removeLayer(userMarkerRef.current);
+        userMarkerRef.current = null;
+      }
+    }
+  }, [userLocation, mapReady]);
 
   return <View ref={containerRef as any} style={styles.map} />;
 }
