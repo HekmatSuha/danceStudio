@@ -10,7 +10,7 @@ create policy "Instructors can view class bookings"
       select 1
       from public.slots
       where slots.uuid = bookings.appointment_slot::uuid
-        and slots.trainer_id = auth.uid()
+        and slots.trainer_id = (select auth.uid())
     )
   );
 
@@ -23,6 +23,6 @@ create policy "Instructors can update class bookings"
       select 1
       from public.slots
       where slots.uuid = bookings.appointment_slot::uuid
-        and slots.trainer_id = auth.uid()
+        and slots.trainer_id = (select auth.uid())
     )
   );

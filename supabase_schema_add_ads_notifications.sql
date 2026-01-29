@@ -25,19 +25,101 @@ alter table public.notifications enable row level security;
 
 -- Policies for Advertisements
 
--- Owners can manage their ads
-create policy "Owners can manage their advertisements" on public.advertisements for all
-  using ( exists (select 1 from public.studios where uuid = advertisements.studio_id and owner_id = auth.uid()) );
+-- Owners can manage their ads (insert/update/delete only)
+drop policy if exists "Owners can manage their advertisements" on public.advertisements;
+create policy "Owners can manage their advertisements" on public.advertisements for insert
+  with check (
+    exists (
+      select 1 from public.studios
+      where uuid = advertisements.studio_id and owner_id = (select auth.uid())
+    )
+  );
+create policy "Owners can manage their advertisements (update)" on public.advertisements for update
+  using (
+    exists (
+      select 1 from public.studios
+      where uuid = advertisements.studio_id and owner_id = (select auth.uid())
+    )
+  )
+  with check (
+    exists (
+      select 1 from public.studios
+      where uuid = advertisements.studio_id and owner_id = (select auth.uid())
+    )
+  );
+create policy "Owners can manage their advertisements (delete)" on public.advertisements for delete
+  using (
+    exists (
+      select 1 from public.studios
+      where uuid = advertisements.studio_id and owner_id = (select auth.uid())
+    )
+  );
 
--- Public read for active ads (or authenticated users)
+-- Public read for active ads, owners can see all
+drop policy if exists "Everyone can view active advertisements" on public.advertisements;
 create policy "Everyone can view active advertisements" on public.advertisements for select
-  using ( is_active = true );
+  using (
+    is_active = true
+    or
+    exists (
+      select 1 from public.studios
+      where uuid = advertisements.studio_id and owner_id = (select auth.uid())
+    )
+  );
 
 -- Policies for Notifications
 
--- Owners can manage their notifications
-create policy "Owners can manage their notifications" on public.notifications for all
-  using ( exists (select 1 from public.studios where uuid = notifications.studio_id and owner_id = auth.uid()) );
+-- Staff or owners can manage notifications (insert/update/delete only)
+drop policy if exists "Staff or owners can manage notifications" on public.notifications;
+drop policy if exists "Owners can manage their notifications" on public.notifications;
+drop policy if exists "Staff can manage notifications for their studios" on public.notifications;
+create policy "Staff or owners can manage notifications" on public.notifications for insert
+  with check (
+    exists (
+      select 1 from public.studios
+      where uuid = notifications.studio_id and owner_id = (select auth.uid())
+    )
+    or
+    exists (
+      select 1 from public.tenant_staff
+      where user_id = (select auth.uid()) and studio_id = notifications.studio_id
+    )
+  );
+create policy "Staff or owners can manage notifications (update)" on public.notifications for update
+  using (
+    exists (
+      select 1 from public.studios
+      where uuid = notifications.studio_id and owner_id = (select auth.uid())
+    )
+    or
+    exists (
+      select 1 from public.tenant_staff
+      where user_id = (select auth.uid()) and studio_id = notifications.studio_id
+    )
+  )
+  with check (
+    exists (
+      select 1 from public.studios
+      where uuid = notifications.studio_id and owner_id = (select auth.uid())
+    )
+    or
+    exists (
+      select 1 from public.tenant_staff
+      where user_id = (select auth.uid()) and studio_id = notifications.studio_id
+    )
+  );
+create policy "Staff or owners can manage notifications (delete)" on public.notifications for delete
+  using (
+    exists (
+      select 1 from public.studios
+      where uuid = notifications.studio_id and owner_id = (select auth.uid())
+    )
+    or
+    exists (
+      select 1 from public.tenant_staff
+      where user_id = (select auth.uid()) and studio_id = notifications.studio_id
+    )
+  );
 
 -- Students/Instructors can view notifications for their studio
 -- This is a bit complex as we need to link student -> studio.
@@ -51,16 +133,16 @@ create policy "Users can view notifications for their studios" on public.notific
   using (
     exists (
       select 1 from public.student_studios
-      where student_id = auth.uid() and studio_id = notifications.studio_id
+      where student_id = (select auth.uid()) and studio_id = notifications.studio_id
     )
     or
     exists (
       select 1 from public.tenant_staff
-      where user_id = auth.uid() and studio_id = notifications.studio_id
+      where user_id = (select auth.uid()) and studio_id = notifications.studio_id
     )
     or
     exists (
       select 1 from public.studios
-      where uuid = notifications.studio_id and owner_id = auth.uid()
+      where uuid = notifications.studio_id and owner_id = (select auth.uid())
     )
   );
