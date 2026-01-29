@@ -71,6 +71,8 @@ export default function OwnerPaymentsPage() {
     description: "",
   });
 
+  const [mutationError, setMutationError] = useState<string | null>(null);
+
   useEffect(() => {
     if (!selectedStudioId && studios.length > 0) {
       setSelectedStudioId(studios[0].uuid);
@@ -214,7 +216,7 @@ export default function OwnerPaymentsPage() {
     if (!selectedStudioId) return;
     const amount = Number(incomeForm.amount);
     if (!incomeForm.date || !Number.isFinite(amount)) return;
-    setEntriesError(null);
+    setMutationError(null);
     try {
       const { error } = await supabase.from("finance_entries").insert({
         studio_id: selectedStudioId,
@@ -240,7 +242,7 @@ export default function OwnerPaymentsPage() {
       await mutate();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unable to save income.";
-      setEntriesError(message);
+      setMutationError(message);
     }
   };
 
@@ -249,7 +251,7 @@ export default function OwnerPaymentsPage() {
     if (!selectedStudioId) return;
     const amount = Number(expenseForm.amount);
     if (!expenseForm.date || !Number.isFinite(amount)) return;
-    setEntriesError(null);
+    setMutationError(null);
     try {
       const { error } = await supabase.from("finance_entries").insert({
         studio_id: selectedStudioId,
@@ -267,7 +269,7 @@ export default function OwnerPaymentsPage() {
       await mutate();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unable to save expense.";
-      setEntriesError(message);
+      setMutationError(message);
     }
   };
 
@@ -404,8 +406,10 @@ export default function OwnerPaymentsPage() {
           </div>
 
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-            {entriesErrorMessage ? (
-              <div className="px-6 py-4 text-sm text-rose-500">{entriesErrorMessage}</div>
+            {entriesErrorMessage || mutationError ? (
+              <div className="px-6 py-4 text-sm text-rose-500">
+                {entriesErrorMessage || mutationError}
+              </div>
             ) : null}
             <div className="flex items-center justify-end px-6 py-4 text-sm text-slate-500">
               Total:{" "}
