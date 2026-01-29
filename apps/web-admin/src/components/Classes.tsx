@@ -33,7 +33,9 @@ export function Classes() {
     : style
       ? `/api/public/classes?style=${encodeURIComponent(style)}&limit=16`
       : "/api/public/classes?limit=16";
-  const { data, isLoading } = useSWR<ClassCard[]>(url, fetcher);
+  const { data, isLoading } = useSWR<ClassCard[]>(url, fetcher, {
+    keepPreviousData: true,
+  });
   const classes = data || [];
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);

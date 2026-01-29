@@ -82,7 +82,7 @@ export async function GET(req: NextRequest) {
   const cacheKey = `public:classes:${req.nextUrl.searchParams.toString()}`;
 
   try {
-    const mapped = await withServerCache(cacheKey, 20000, async () => {
+    const mapped = await withServerCache(cacheKey, 60000, async () => {
       const supabase = createClient(supabaseUrl, supabaseAnonKey, {
         auth: { persistSession: false, autoRefreshToken: false },
       });
