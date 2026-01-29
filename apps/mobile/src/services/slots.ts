@@ -57,6 +57,7 @@ function extractStorageLocation(imageUrl: string): StorageLocation | null {
   return null;
 }
 
+// Kept for backward compatibility or single usage
 async function resolveImageUrl(imageUrl: string | null | undefined) {
   if (!imageUrl) return null;
   const storage = extractStorageLocation(imageUrl);
@@ -68,6 +69,59 @@ async function resolveImageUrl(imageUrl: string | null | undefined) {
   if (error || !data?.signedUrl) return imageUrl;
 
   return data.signedUrl;
+}
+
+async function resolveImageUrlsBatch(imageUrls: (string | null | undefined)[]): Promise<Record<string, string>> {
+  const imagesToSign: Record<string, string[]> = {};
+  const urlToStorageMap: Record<string, StorageLocation> = {};
+
+  imageUrls.forEach((url) => {
+    if (url) {
+      const storage = extractStorageLocation(url);
+      if (storage) {
+        if (!imagesToSign[storage.bucket]) {
+          imagesToSign[storage.bucket] = [];
+        }
+        if (!imagesToSign[storage.bucket].includes(storage.path)) {
+          imagesToSign[storage.bucket].push(storage.path);
+        }
+        urlToStorageMap[url] = storage;
+      }
+    }
+  });
+
+  const pathLookup: Record<string, string> = {};
+
+  await Promise.all(
+    Object.keys(imagesToSign).map(async (bucket) => {
+      const paths = imagesToSign[bucket];
+      if (paths.length === 0) return;
+
+      const { data } = await supabase.storage
+        .from(bucket)
+        .createSignedUrls(paths, 60 * 60);
+
+      if (data) {
+        data.forEach((item) => {
+          if (item.signedUrl) {
+            pathLookup[`${bucket}/${item.path}`] = item.signedUrl;
+          }
+        });
+      }
+    })
+  );
+
+  const result: Record<string, string> = {};
+  imageUrls.forEach((url) => {
+    if (url && urlToStorageMap[url]) {
+      const { bucket, path } = urlToStorageMap[url];
+      const signed = pathLookup[`${bucket}/${path}`];
+      result[url] = signed || url;
+    } else if (url) {
+      result[url] = url;
+    }
+  });
+  return result;
 }
 
 export async function listSlots(params?: {
@@ -99,29 +153,30 @@ export async function listSlots(params?: {
 
   if (error) throw error;
 
-  const resolved = await Promise.all(
-    data.map(async (slot: any) => {
-      const imageUrl = await resolveImageUrl(slot.image_url ?? null);
-      return {
-        uuid: slot.uuid,
-        title: slot.title,
-        description: slot.description,
-        studio: slot.studio_id,
-        studio_details: slot.studio,
-        trainer: slot.trainer_id,
-        trainer_details: { trainer_details: slot.trainer }, // Mapping to match old structure if UI expects it
-        dance_style_details: slot.dance_style,
-        image_url: imageUrl ?? null,
-        start_time: slot.start_time,
-        end_time: slot.end_time,
-        price: slot.price?.toString(),
-        max_participants: slot.max_participants,
-        current_bookings: 0, // Need a count query or separate relation for accurate count
-        spots_remaining: slot.max_participants, // Placeholder until booking count is implemented
-        status: 'active',
-      };
-    })
-  );
+  const imageUrls = data.map((s: any) => s.image_url);
+  const resolvedMap = await resolveImageUrlsBatch(imageUrls);
+
+  const resolved = data.map((slot: any) => {
+    const imageUrl = resolvedMap[slot.image_url] ?? slot.image_url ?? null;
+    return {
+      uuid: slot.uuid,
+      title: slot.title,
+      description: slot.description,
+      studio: slot.studio_id,
+      studio_details: slot.studio,
+      trainer: slot.trainer_id,
+      trainer_details: { trainer_details: slot.trainer }, // Mapping to match old structure if UI expects it
+      dance_style_details: slot.dance_style,
+      image_url: imageUrl ?? null,
+      start_time: slot.start_time,
+      end_time: slot.end_time,
+      price: slot.price?.toString(),
+      max_participants: slot.max_participants,
+      current_bookings: 0, // Need a count query or separate relation for accurate count
+      spots_remaining: slot.max_participants, // Placeholder until booking count is implemented
+      status: 'active',
+    };
+  });
 
   return resolved as Slot[];
 }
