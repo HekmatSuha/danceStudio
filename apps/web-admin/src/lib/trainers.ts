@@ -2,6 +2,7 @@
 
 import { supabase } from "./supabase";
 import { withCache } from "./cache";
+import { createInstructorAction } from "../app/actions/create-instructor";
 
 export type Trainer = {
   uuid: string;
@@ -89,34 +90,32 @@ export async function fetchTrainers(studioIdOrOptions?: string | FetchTrainersOp
 
 export async function createTrainer(data: {
   first_name: string;
-  
   last_name: string;
+  email: string;
   bio?: string;
   photo?: string | null;
   studio?: string | null;
 }) {
-  // Creating a "Trainer" usually means creating a User account. 
-  // Client-side, we can't easily create another user without signing them up.
-  // For this prototype/migration, we might just insert a Profile record 
-  // (which might fail if no matching Auth User exists, depending on FK constraints).
-  // Ideally, this should be an "Invite" feature (Supabase Auth Admin).
-  
-  // For now, attempting to insert into profiles (requires RLS policy change or this will fail).
-  // We'll assume a "fake" ID or letting the database generate one if we remove the FK constraint?
-  // No, `id` references `auth.users`. 
-  
-  // Workaround: We'll skip the actual DB insert for "creation" unless we have an Edge Function.
-  // OR: We can just return a mock success to unblock the UI if real user creation isn't critical right now.
-  
-  // Better approach for a real app: Use supabase.auth.admin.createUser (server-side only).
-  // Here, we'll throw an error explaining the limitation or try to insert if we relax the schema.
-  
-  console.warn("createTrainer: Cannot create a full user account from client-side without sign-up. Skipping DB insert.");
-  
+  const formData = new FormData();
+  formData.append("firstName", data.first_name);
+  formData.append("lastName", data.last_name);
+  formData.append("email", data.email);
+  if (data.bio) formData.append("bio", data.bio);
+  if (data.photo) formData.append("photo", data.photo);
+  if (data.studio) formData.append("studioId", data.studio);
+
+  const result = await createInstructorAction(formData);
+
+  if (!result.success || !result.userId) {
+    throw new Error(result.message || "Failed to create trainer");
+  }
+
   return {
-    uuid: "temp-id-" + Date.now(),
+    uuid: result.userId,
     first_name: data.first_name,
     last_name: data.last_name,
-    bio: data.bio
+    bio: data.bio,
+    photo: data.photo,
+    studio: data.studio,
   };
 }

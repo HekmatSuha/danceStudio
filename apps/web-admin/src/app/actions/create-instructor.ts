@@ -16,6 +16,7 @@ export async function createInstructorAction(formData: FormData): Promise<Create
   let studioId = formData.get("studioId") as string;
   const ownerUserId = formData.get("ownerUserId") as string;
   const bio = formData.get("bio") as string;
+  const photo = formData.get("photo") as string;
 
   if (!studioId) {
     if (!ownerUserId) {
@@ -82,6 +83,7 @@ export async function createInstructorAction(formData: FormData): Promise<Create
       role: "instructor",
       is_active: true,
       bio: bio || null,
+      avatar_url: photo || null,
     };
     await supabaseAdmin
       .from('profiles')
