@@ -1,38 +1,19 @@
 "use client";
 
-import React, { useState } from "react";
-import { Plus, Trash2, Megaphone, ExternalLink, Image as ImageIcon } from "lucide-react";
+import React, { useState, useMemo } from "react";
+import { Plus, Trash2, Megaphone, Image as ImageIcon } from "lucide-react";
 import { useOwnerStudiosGuard } from "../../../../lib/useOwnerStudiosGuard";
-
-type Advertisement = {
-  id: string;
-  title: string;
-  description: string;
-  imageUrl: string;
-  isActive: boolean;
-};
-
-// Mock data
-const INITIAL_ADS: Advertisement[] = [
-  {
-    id: "1",
-    title: "Summer Dance Camp",
-    description: "Join us for a week of intensive training!",
-    imageUrl: "https://images.unsplash.com/photo-1547153760-18fc86324498?auto=format&fit=crop&q=80&w=300",
-    isActive: true,
-  },
-  {
-    id: "2",
-    title: "New Salsa Beginners Class",
-    description: "Starting next Monday. Sign up now!",
-    imageUrl: "https://images.unsplash.com/photo-1517457373958-b7bdd4587205?auto=format&fit=crop&q=80&w=300",
-    isActive: true,
-  }
-];
+import {
+  createAdvertisement,
+  deleteAdvertisement,
+  fetchAdvertisements,
+  updateAdvertisement,
+  type Advertisement
+} from "../../../../lib/ads";
+import useSWR from "swr";
 
 export default function AdvertisementsPage() {
-  const { studios, loading, role } = useOwnerStudiosGuard();
-  const [ads, setAds] = useState<Advertisement[]>(INITIAL_ADS);
+  const { studios, loading: studiosLoading, role } = useOwnerStudiosGuard();
   const [showForm, setShowForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -41,41 +22,75 @@ export default function AdvertisementsPage() {
   const [description, setDescription] = useState("");
   const [imageUrl, setImageUrl] = useState("");
 
+  const studioIdsKey = useMemo(
+    () => studios.map((studio) => studio.uuid).join(","),
+    [studios],
+  );
+
+  const { data: ads = [], isLoading: adsLoading, mutate } = useSWR<Advertisement[]>(
+    studioIdsKey ? ["owner:ads", studioIdsKey] : null,
+    async () => {
+      const studioIds = studioIdsKey ? studioIdsKey.split(",") : [];
+      if (studioIds.length === 0) return [];
+      return fetchAdvertisements(studioIds);
+    }
+  );
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (studios.length === 0) {
+      alert("No studios available.");
+      return;
+    }
     setSubmitting(true);
 
-    // Mock API call
-    setTimeout(() => {
-      const newAd: Advertisement = {
-        id: Math.random().toString(36).substring(7),
+    try {
+      await createAdvertisement({
+        studio_id: studios[0].uuid, // Default to first studio for now, or add studio selector if needed
         title,
         description,
-        imageUrl: imageUrl || "https://images.unsplash.com/photo-1504609773096-104ff2c73ba4?auto=format&fit=crop&q=80&w=300",
-        isActive: true,
-      };
-      setAds([newAd, ...ads]);
+        image_url: imageUrl || "https://images.unsplash.com/photo-1504609773096-104ff2c73ba4?auto=format&fit=crop&q=80&w=300",
+      });
+      await mutate();
       
       // Reset form
       setTitle("");
       setDescription("");
       setImageUrl("");
       setShowForm(false);
+    } catch (err) {
+      console.error(err);
+      alert("Failed to create advertisement.");
+    } finally {
       setSubmitting(false);
-    }, 800);
+    }
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (!confirm("Are you sure you want to delete this ad?")) return;
-    setAds(ads.filter(ad => ad.id !== id));
+    try {
+      await deleteAdvertisement(id);
+      await mutate();
+    } catch (err) {
+      console.error(err);
+      alert("Failed to delete advertisement.");
+    }
   };
 
-  const toggleActive = (id: string) => {
-    setAds(ads.map(ad => ad.id === id ? { ...ad, isActive: !ad.isActive } : ad));
+  const toggleActive = async (ad: Advertisement) => {
+    try {
+      await updateAdvertisement(ad.id, { is_active: !ad.is_active });
+      await mutate();
+    } catch (err) {
+      console.error(err);
+      alert("Failed to update advertisement.");
+    }
   };
 
-  if (loading) {
-    return <div className="p-6 text-slate-500">Loading...</div>;
+  const isLoading = studiosLoading || adsLoading;
+
+  if (studiosLoading) {
+    return <div className="p-6 text-slate-500">Loading studios...</div>;
   }
   if (role === "owner" && studios.length === 0) {
     return null;
@@ -157,7 +172,9 @@ export default function AdvertisementsPage() {
         </div>
       )}
 
-      {ads.length === 0 ? (
+      {isLoading ? (
+        <div className="p-6 text-center text-slate-500">Loading advertisements...</div>
+      ) : ads.length === 0 ? (
         <div className="text-center py-16 bg-white rounded-2xl border border-dashed border-slate-300">
           <ImageIcon className="mx-auto h-12 w-12 text-slate-300 mb-3" />
           <h3 className="text-lg font-medium text-slate-900">No advertisements yet</h3>
@@ -168,16 +185,22 @@ export default function AdvertisementsPage() {
           {ads.map((ad) => (
             <div key={ad.id} className="group bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden hover:shadow-md transition-all">
               <div className="aspect-video w-full bg-slate-100 relative overflow-hidden">
-                <img 
-                  src={ad.imageUrl} 
-                  alt={ad.title} 
-                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
-                />
+                {ad.image_url ? (
+                  <img
+                    src={ad.image_url}
+                    alt={ad.title}
+                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                  />
+                ) : (
+                   <div className="w-full h-full bg-slate-200 flex items-center justify-center">
+                     <ImageIcon className="text-slate-400" />
+                   </div>
+                )}
                 <div className="absolute top-3 right-3">
                   <span className={`px-2.5 py-1 rounded-full text-xs font-semibold shadow-sm backdrop-blur-md ${
-                    ad.isActive ? "bg-emerald-500/90 text-white" : "bg-slate-500/90 text-white"
+                    ad.is_active ? "bg-emerald-500/90 text-white" : "bg-slate-500/90 text-white"
                   }`}>
-                    {ad.isActive ? "Active" : "Inactive"}
+                    {ad.is_active ? "Active" : "Inactive"}
                   </span>
                 </div>
               </div>
@@ -190,10 +213,10 @@ export default function AdvertisementsPage() {
                 
                 <div className="mt-5 flex items-center justify-between border-t border-slate-100 pt-4">
                   <button
-                    onClick={() => toggleActive(ad.id)}
+                    onClick={() => toggleActive(ad)}
                     className="text-sm font-medium text-slate-600 hover:text-purple-600 transition-colors"
                   >
-                    {ad.isActive ? "Deactivate" : "Activate"}
+                    {ad.is_active ? "Deactivate" : "Activate"}
                   </button>
                   
                   <button

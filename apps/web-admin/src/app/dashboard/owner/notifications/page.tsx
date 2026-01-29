@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { Send, CheckCircle, AlertCircle, Bell } from "lucide-react";
 import { useOwnerStudiosGuard } from "../../../../lib/useOwnerStudiosGuard";
+import { createNotification } from "../../../../lib/notifications";
 
 export default function PushNotificationsPage() {
   const { studios, loading, role } = useOwnerStudiosGuard();
@@ -14,12 +15,21 @@ export default function PushNotificationsPage() {
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (studios.length === 0) {
+      alert("No studios available.");
+      return;
+    }
     setSending(true);
     setStatus(null);
 
-    // Mock sending notification
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      await createNotification({
+        studio_id: studios[0].uuid, // Default to first studio
+        title,
+        body,
+        target_audience: targetAudience,
+      });
+
       setStatus("success");
       setTitle("");
       setBody("");
