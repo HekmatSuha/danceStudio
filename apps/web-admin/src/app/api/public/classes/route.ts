@@ -70,6 +70,50 @@ async function resolveImageUrl(
   return pickImage(index);
 }
 
+export async function fetchRelatedEntities(supabase: SupabaseClient, queryText: string) {
+  const [stylesResult, studiosResult, trainersResult] = await Promise.all([
+    supabase
+      .from("dance_styles")
+      .select("uuid")
+      .ilike("name", `%${queryText}%`)
+      .limit(10),
+    supabase
+      .from("studios")
+      .select("uuid")
+      .ilike("name", `%${queryText}%`)
+      .limit(20),
+    supabase
+      .from("profiles")
+      .select("id")
+      .eq("role", "instructor")
+      .or(`first_name.ilike.%${queryText}%,last_name.ilike.%${queryText}%`)
+      .limit(20),
+  ]);
+
+  const { data: styles, error: stylesError } = stylesResult;
+  if (stylesError) {
+    throw new Error(stylesError.message);
+  }
+  const styleIds =
+    (styles as Array<{ uuid: string }> | null | undefined)?.map((s) => s.uuid) ?? [];
+
+  const { data: studios, error: studiosError } = studiosResult;
+  if (studiosError) {
+    throw new Error(studiosError.message);
+  }
+  const studioIds =
+    (studios as Array<{ uuid: string }> | null | undefined)?.map((s) => s.uuid) ?? [];
+
+  const { data: trainers, error: trainersError } = trainersResult;
+  if (trainersError) {
+    throw new Error(trainersError.message);
+  }
+  const trainerIds =
+    (trainers as Array<{ id: string }> | null | undefined)?.map((t) => t.id) ?? [];
+
+  return { styleIds, studioIds, trainerIds };
+}
+
 export async function GET(req: NextRequest) {
   if (!supabaseUrl || !supabaseAnonKey) {
     return NextResponse.json({ error: "Supabase env missing" }, { status: 500 });
@@ -99,45 +143,10 @@ export async function GET(req: NextRequest) {
       let trainerIds: string[] = [];
 
       if (queryText) {
-        const { data: styles, error: stylesError } = await supabase
-          .from("dance_styles")
-          .select("uuid")
-          .ilike("name", `%${queryText}%`)
-          .limit(10);
-
-        if (stylesError) {
-          throw new Error(stylesError.message);
-        }
-
-        styleIds =
-          (styles as Array<{ uuid: string }> | null | undefined)?.map((s) => s.uuid) ?? [];
-
-        const { data: studios, error: studiosError } = await supabase
-          .from("studios")
-          .select("uuid")
-          .ilike("name", `%${queryText}%`)
-          .limit(20);
-
-        if (studiosError) {
-          throw new Error(studiosError.message);
-        }
-
-        studioIds =
-          (studios as Array<{ uuid: string }> | null | undefined)?.map((s) => s.uuid) ?? [];
-
-        const { data: trainers, error: trainersError } = await supabase
-          .from("profiles")
-          .select("id")
-          .eq("role", "instructor")
-          .or(`first_name.ilike.%${queryText}%,last_name.ilike.%${queryText}%`)
-          .limit(20);
-
-        if (trainersError) {
-          throw new Error(trainersError.message);
-        }
-
-        trainerIds =
-          (trainers as Array<{ id: string }> | null | undefined)?.map((t) => t.id) ?? [];
+        const result = await fetchRelatedEntities(supabase, queryText);
+        styleIds = result.styleIds;
+        studioIds = result.studioIds;
+        trainerIds = result.trainerIds;
 
         const hasNameQuery = queryToken.length > 0;
         if (
