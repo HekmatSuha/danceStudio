@@ -8,8 +8,7 @@ import {
   ChevronRight,
   Calendar as CalendarIcon,
   MapPin,
-  AlertCircle,
-  Info
+  AlertCircle
 } from "lucide-react";
 
 import { fetchClasses, markClassLocked, type ClassEvent } from "../../../../lib/classes";
@@ -37,7 +36,6 @@ export default function InstructorSchedulePage() {
   const [roster, setRoster] = useState<BookingWithUser[]>([]);
   const [loadingRoster, setLoadingRoster] = useState(false);
   const [locking, setLocking] = useState(false);
-  const [isMockData, setIsMockData] = useState(false);
   
   // Initialize week start to the most recent Monday
   const [weekStart, setWeekStart] = useState<Date>(() => {
@@ -56,40 +54,7 @@ export default function InstructorSchedulePage() {
       setLoading(true);
       try {
         const data = await fetchClasses({ trainer: user?.uuid });
-        
-        if (data.length === 0) {
-            // Generate a mock class for demonstration if no real data exists
-            const today = new Date();
-            const startMock = new Date(today);
-            startMock.setHours(10, 0, 0, 0);
-            const endMock = new Date(today);
-            endMock.setHours(11, 30, 0, 0);
-
-            const mockClass: ClassEvent = {
-                id: "mock-1",
-                studioId: "mock-studio",
-                title: "Demo Class (No DB Data)",
-                teacherId: user.uuid,
-                teacherName: user.first_name,
-                locationName: "Main Studio • Room A",
-                level: "all",
-                price: 25,
-                currency: "USD",
-                capacity: 20,
-                reservedCount: 12,
-                waitlistCount: 2,
-                startAt: startMock.getTime(),
-                endAt: endMock.getTime(),
-                createdAt: Date.now(),
-                duration: 90,
-                isLocked: false
-            };
-            setSlots([mockClass]);
-            setIsMockData(true);
-        } else {
-            setSlots(data);
-            setIsMockData(false);
-        }
+        setSlots(data);
       } catch (err) {
         console.warn("Failed to load instructor slots", err);
       } finally {
@@ -131,16 +96,6 @@ export default function InstructorSchedulePage() {
   }, [classesByDay]);
 
   const handleOpenRoster = async (classId: string) => {
-    if (classId === "mock-1") {
-        setRoster([
-            { uuid: "1", status: "confirmed", attended: true, user: { id: "u1", first_name: "Alice", last_name: "Smith", email: "alice@example.com" } },
-            { uuid: "2", status: "confirmed", attended: false, user: { id: "u2", first_name: "Bob", last_name: "Jones", email: "bob@example.com" } },
-            { uuid: "3", status: "cancelled", attended: false, user: { id: "u3", first_name: "Charlie", last_name: "Brown", email: "charlie@example.com" } },
-        ]);
-        setSelectedClassId(classId);
-        return;
-    }
-
     setSelectedClassId(classId);
     setLoadingRoster(true);
     try {
@@ -155,11 +110,6 @@ export default function InstructorSchedulePage() {
   };
 
   const handleToggleAttendance = async (booking: BookingWithUser) => {
-    if (selectedClass?.id === "mock-1") {
-        setRoster(prev => prev.map(b => b.uuid === booking.uuid ? { ...b, attended: !b.attended } : b));
-        return;
-    }
-
     if (selectedClass?.isLocked) return;
     try {
       await markAttendance(booking.uuid, !(booking.attended ?? false));
@@ -177,11 +127,6 @@ export default function InstructorSchedulePage() {
   };
 
   const handleLockClass = async () => {
-    if (selectedClass?.id === "mock-1") {
-        alert("This is a demo class. Locking is simulated.");
-        return;
-    }
-
     if (!selectedClass) return;
     if (!confirm("Lock attendance for this class? You will not be able to edit after locking.")) return;
     setLocking(true);
@@ -275,18 +220,7 @@ export default function InstructorSchedulePage() {
         </div>
       </div>
 
-      {isMockData && (
-          <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-4 text-sm text-blue-900 flex items-center gap-3">
-              <div className="p-2 bg-blue-100 text-blue-700 rounded-full">
-                  <Info size={18} />
-              </div>
-              <span>
-                  <strong>Demo Mode:</strong> No real classes found for your account, so we added a sample class for you to test the schedule view.
-              </span>
-          </div>
-      )}
-
-      {!loading && slots.length > 0 && totalVisibleClasses === 0 && !isMockData && (
+      {!loading && slots.length > 0 && totalVisibleClasses === 0 && (
          <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-4 text-sm text-amber-900 flex flex-col sm:flex-row gap-3 items-center justify-between">
             <div className="flex items-center gap-3">
                  <div className="p-2 bg-amber-100 text-amber-700 rounded-full">

@@ -84,6 +84,24 @@ create policy "Users can insert messages in their conversations"
     )
   );
 
+-- Users can update messages (read status) in conversations they belong to
+create policy "Users can update messages in their conversations"
+  on messages for update
+  using (
+    exists (
+      select 1 from conversation_participants
+      where conversation_participants.conversation_id = messages.conversation_id
+      and conversation_participants.user_id = auth.uid()
+    )
+  )
+  with check (
+    exists (
+      select 1 from conversation_participants
+      where conversation_participants.conversation_id = messages.conversation_id
+      and conversation_participants.user_id = auth.uid()
+    )
+  );
+
 -- 5. Realtime
 -- Add tables to the publication to enable listening to changes
 begin;

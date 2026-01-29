@@ -22,6 +22,7 @@ drop policy if exists "Users can view their conversations" on conversations;
 drop policy if exists "Users can view participants of their conversations" on conversation_participants;
 drop policy if exists "Users can view messages in their conversations" on messages;
 drop policy if exists "Users can insert messages in their conversations" on messages;
+drop policy if exists "Users can update messages in their conversations" on messages;
 
 -- 3. Re-create policies using the helper function
 
@@ -48,6 +49,12 @@ create policy "Users can insert messages in their conversations"
     auth.uid() = sender_id and
     public.is_conversation_participant(conversation_id)
   );
+
+-- Messages: Update read status if you are a participant
+create policy "Users can update messages in their conversations"
+  on messages for update
+  using ( public.is_conversation_participant(conversation_id) )
+  with check ( public.is_conversation_participant(conversation_id) );
 
 -- Conversations: Allow authenticated users to create new conversations
 drop policy if exists "Users can create conversations" on conversations;

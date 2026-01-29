@@ -67,9 +67,80 @@ type ConversationRow = {
   messages?: Message[] | null;
 };
 
+type StudioIdRow = { uuid?: string | null };
+type StaffRow = { studio_id?: string | null; user_id?: string | null };
+type StudentRow = { studio_id?: string | null; student_id?: string | null };
+type OwnerRow = { owner_id?: string | null };
+
+async function getStudioContactIds(userId: string) {
+  const studioIds = new Set<string>();
+
+  const { data: ownedStudios, error: ownedError } = await supabase
+    .from("studios")
+    .select("uuid")
+    .eq("owner_id", userId);
+
+  if (ownedError) throw ownedError;
+
+  (ownedStudios as StudioIdRow[] | null | undefined)?.forEach((row) => {
+    if (row?.uuid) studioIds.add(row.uuid);
+  });
+
+  const { data: staffRows, error: staffError } = await supabase
+    .from("tenant_staff")
+    .select("studio_id")
+    .eq("user_id", userId);
+
+  if (staffError) throw staffError;
+
+  (staffRows as StaffRow[] | null | undefined)?.forEach((row) => {
+    if (row?.studio_id) studioIds.add(row.studio_id);
+  });
+
+  if (studioIds.size === 0) {
+    return { studioIds: [], contactIds: [] };
+  }
+
+  const studioIdList = Array.from(studioIds);
+
+  const [allStaff, allStudents, allOwners] = await Promise.allSettled([
+    supabase.from("tenant_staff").select("user_id, studio_id").in("studio_id", studioIdList),
+    supabase.from("student_studios").select("student_id, studio_id").in("studio_id", studioIdList),
+    supabase.from("studios").select("owner_id").in("uuid", studioIdList),
+  ]);
+
+  const contactIds = new Set<string>();
+
+  if (allStaff.status === "fulfilled" && !allStaff.value.error) {
+    (allStaff.value.data as StaffRow[] | null | undefined)?.forEach((row) => {
+      if (row?.user_id) contactIds.add(row.user_id);
+    });
+  }
+
+  if (allStudents.status === "fulfilled" && !allStudents.value.error) {
+    (allStudents.value.data as StudentRow[] | null | undefined)?.forEach((row) => {
+      if (row?.student_id) contactIds.add(row.student_id);
+    });
+  }
+
+  if (allOwners.status === "fulfilled" && !allOwners.value.error) {
+    (allOwners.value.data as OwnerRow[] | null | undefined)?.forEach((row) => {
+      if (row?.owner_id) contactIds.add(row.owner_id);
+    });
+  }
+
+  contactIds.delete(userId);
+
+  return { studioIds: studioIdList, contactIds: Array.from(contactIds) };
+}
+
 export async function fetchConversations(userId: string) {
   const cacheKey = `chat:conversations:${userId}`;
   return withCache(cacheKey, 10000, async () => {
+    const { contactIds } = await getStudioContactIds(userId);
+    if (contactIds.length === 0) return [];
+    const allowedIds = new Set([userId, ...contactIds]);
+
     const { data: membership, error: membershipError } = await supabase
       .from("conversation_participants")
       .select("conversation_id")
@@ -135,7 +206,9 @@ export async function fetchConversations(userId: string) {
       throw new Error(formatSupabaseError(convError));
     }
 
-    const payload = ((conversations || []) as ConversationRow[]).map((conv) => {
+    const payload = ((conversations || []) as ConversationRow[])
+      .filter((conv) => (conv.participants || []).every((p) => allowedIds.has(p.user_id)))
+      .map((conv) => {
       const lastMessage = conv.messages?.[0];
       const participants = (conv.participants || []).map((participant) => {
         const user = Array.isArray(participant.user)
@@ -174,6 +247,17 @@ export async function fetchMessages(conversationId: string) {
 
   if (error) throw error;
   return data as Message[];
+}
+
+export async function markMessagesRead(conversationId: string, userId: string) {
+  const { error } = await supabase
+    .from("messages")
+    .update({ is_read: true })
+    .eq("conversation_id", conversationId)
+    .neq("sender_id", userId)
+    .eq("is_read", false);
+
+  if (error) throw error;
 }
 
 export async function sendMessage(conversationId: string, senderId: string, content: string) {
@@ -254,12 +338,16 @@ export async function createConversation(userIds: string[], creatorId?: string) 
 export async function fetchChatContacts(userId: string) {
   const cacheKey = `chat:contacts:${userId}`;
   return withCache(cacheKey, 60000, async () => {
+    const { contactIds } = await getStudioContactIds(userId);
+    if (contactIds.length === 0) return [];
+
     const { data, error } = await supabase
       .from("profiles")
       .select("id, first_name, last_name, role")
-      .neq("id", userId)
+      .in("id", contactIds)
+      .neq("role", "super_admin")
       .order("first_name", { ascending: true })
-      .limit(100);
+      .limit(200);
 
     if (error) throw error;
 

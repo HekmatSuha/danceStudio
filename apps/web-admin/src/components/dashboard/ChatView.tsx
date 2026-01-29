@@ -8,6 +8,7 @@ import {
   fetchConversations,
   fetchChatContacts,
   fetchMessages,
+  markMessagesRead,
   getOrCreateConversation,
   sendMessage,
   type Conversation,
@@ -104,11 +105,27 @@ function ChatContent() {
           const newMsg = payload.new as Message;
           setMessages((prev) => [...prev, newMsg]);
 
+          if (user && newMsg.sender_id !== user.uuid) {
+            void markMessagesRead(selectedChatId, user.uuid).then(() => {
+              setMessages((prev) =>
+                prev.map((msg) =>
+                  msg.sender_id === user.uuid ? msg : { ...msg, is_read: true }
+                )
+              );
+            });
+          }
+
           setConversations((prev) =>
             prev
               .map((conv) =>
                 conv.id === selectedChatId
-                  ? { ...conv, last_message: newMsg, updated_at: newMsg.created_at }
+                  ? {
+                      ...conv,
+                      last_message: newMsg,
+                      updated_at: newMsg.created_at,
+                      unread_count:
+                        newMsg.sender_id === user?.uuid ? conv.unread_count : 0,
+                    }
                   : conv
               )
               .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
@@ -127,9 +144,28 @@ function ChatContent() {
 
     setMessages([]);
     fetchMessages(selectedChatId)
-      .then(setMessages)
+      .then(async (rows) => {
+        setMessages(rows);
+        if (user) {
+          try {
+            await markMessagesRead(selectedChatId, user.uuid);
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.sender_id === user.uuid ? msg : { ...msg, is_read: true }
+              )
+            );
+            setConversations((prev) =>
+              prev.map((conv) =>
+                conv.id === selectedChatId ? { ...conv, unread_count: 0 } : conv
+              )
+            );
+          } catch (err) {
+            console.error("Failed to mark messages as read", err);
+          }
+        }
+      })
       .catch((err) => console.error("Failed to load messages", err));
-  }, [selectedChatId]);
+  }, [selectedChatId, user]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
