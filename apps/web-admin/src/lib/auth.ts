@@ -108,12 +108,17 @@ export async function signOut() {
 }
 
 export async function sendResetPassword(email: string) {
-  const { error } = await supabase.auth.resetPasswordForEmail(email);
+  const appUrl =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    (typeof window !== "undefined" ? window.location.origin : "http://localhost:3000");
+  const redirectTo = `${appUrl.replace(/\/$/, "")}/reset`;
+  const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
   if (error) throw error;
 }
 
-export async function confirmPasswordReset(code: string, password: string) {
-  // This assumes the user is already authenticated via the magic link
+export async function confirmPasswordReset(password: string) {
+  // Requires an authenticated recovery session from the email link
   const { error } = await supabase.auth.updateUser({ password });
   if (error) throw error;
 }

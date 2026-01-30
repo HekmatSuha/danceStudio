@@ -1,24 +1,52 @@
 "use client";
 
-import React, { Suspense, useState } from "react";
+import React, { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, KeyRound, Lock, Mail } from "lucide-react";
+import { ArrowLeft, Lock, Mail } from "lucide-react";
 import Link from "next/link";
 import { sendResetPassword, confirmPasswordReset } from "../../lib/auth";
 import { getErrorMessage } from "../../lib/errors";
+import { supabase } from "../../lib/supabase";
 
 function ResetPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const emailParam = searchParams?.get("email") || "";
   const [email, setEmail] = useState(emailParam);
-  const [code, setCode] = useState("");
   const [password, setPassword] = useState("");
   const [step, setStep] = useState<"request" | "confirm">("request");
   const [status, setStatus] = useState<{ type: "error" | "success"; text: string } | null>(
     null,
   );
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    const checkRecoverySession = async () => {
+      const { data } = await supabase.auth.getSession();
+      if (!mounted) return;
+      if (data.session) {
+        setStep("confirm");
+        return;
+      }
+      if (typeof window !== "undefined" && window.location.hash.includes("type=recovery")) {
+        setStep("confirm");
+      }
+    };
+
+    checkRecoverySession();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN") {
+        setStep("confirm");
+      }
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
 
   const handleRequest = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,7 +75,7 @@ function ResetPageInner() {
     }
     setLoading(true);
     try {
-      await confirmPasswordReset(code.trim(), password);
+      await confirmPasswordReset(password);
       setStatus({ type: "success", text: "Password updated. You can sign in now." });
       setTimeout(() => router.push("/login"), 800);
     } catch (err: unknown) {
@@ -116,19 +144,6 @@ function ResetPageInner() {
           </form>
         ) : (
           <form onSubmit={handleConfirm} className="space-y-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">Verification code</label>
-              <div className="relative">
-                <KeyRound className="absolute left-3 top-3 text-slate-400" size={18} />
-                <input
-                  value={code}
-                  onChange={(e) => setCode(e.target.value)}
-                  required
-                  className="w-full pl-10 pr-3 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white"
-                  placeholder="Enter the code from email"
-                />
-              </div>
-            </div>
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-700">New password</label>
               <div className="relative">
