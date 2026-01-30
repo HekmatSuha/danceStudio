@@ -2,11 +2,12 @@
 
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { LogOut, ArrowLeft, Loader2 } from "lucide-react";
+import { LogOut, ArrowLeft, Loader2, Upload } from "lucide-react";
 import Link from "next/link";
 import { useAuthUser } from "../../lib/useAuthUser";
 import { signOut, updateProfile } from "../../lib/auth";
 import { getErrorMessage } from "../../lib/errors";
+import { supabase } from "../../lib/supabase";
 
 export default function ProfilePage() {
   const { user, loading } = useAuthUser();
@@ -19,6 +20,9 @@ export default function ProfilePage() {
   const [interests, setInterests] = useState<string>("");
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -28,6 +32,7 @@ export default function ProfilePage() {
       setGender(user.gender || "F");
       setDanceLevel(user.dance_level || "Beginner");
       setInterests((user.interests || []).join(", "));
+      setAvatarPreview(user.avatar_url || null);
     }
   }, [user]);
 
@@ -37,19 +42,49 @@ export default function ProfilePage() {
     }
   }, [loading, user, router]);
 
+  useEffect(() => {
+    if (!avatarFile) return;
+    const url = URL.createObjectURL(avatarFile);
+    setAvatarPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [avatarFile]);
+
+  const uploadAvatar = async () => {
+    if (!user || !avatarFile) return null;
+    setAvatarUploading(true);
+    try {
+      const safeName = avatarFile.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const path = `${user.uuid}/${Date.now()}-${safeName}`;
+      const { error: uploadError } = await supabase.storage
+        .from("avatars")
+        .upload(path, avatarFile, { upsert: true });
+      if (uploadError) throw uploadError;
+      const { data } = supabase.storage.from("avatars").getPublicUrl(path);
+      return data.publicUrl;
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     setStatus(null);
     try {
+      const avatarUrl = await uploadAvatar();
       await updateProfile({
         firstName,
         lastName,
         phone,
         gender,
         danceLevel,
-        interests: interests.split(",").map(s => s.trim()).filter(Boolean)
+        interests: interests.split(",").map(s => s.trim()).filter(Boolean),
+        avatarUrl: avatarUrl ?? undefined,
       });
+      if (avatarUrl) {
+        setAvatarPreview(avatarUrl);
+        setAvatarFile(null);
+      }
       setStatus("Profile updated.");
     } catch (err: unknown) {
       setStatus(getErrorMessage(err, "Failed to update profile."));
@@ -102,6 +137,35 @@ export default function ProfilePage() {
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden p-8">
           <h1 className="text-2xl font-bold text-gray-900 mb-6">My Profile</h1>
           <form onSubmit={handleSave} className="space-y-4">
+            <div className="flex items-center gap-5">
+              <div className="h-20 w-20 rounded-full overflow-hidden bg-gray-100 border border-gray-200 flex items-center justify-center text-gray-500">
+                {avatarPreview ? (
+                  <img
+                    src={avatarPreview}
+                    alt="Profile photo"
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <span className="text-xl font-semibold">
+                    {user.first_name?.[0] || user.email?.[0] || "U"}
+                  </span>
+                )}
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-2">Profile photo</p>
+                <label className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-700 bg-white hover:bg-gray-50 cursor-pointer">
+                  <Upload size={16} />
+                  {avatarUploading ? "Uploading..." : "Upload photo"}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => setAvatarFile(e.target.files?.[0] || null)}
+                  />
+                </label>
+                <p className="text-xs text-gray-400 mt-2">PNG or JPG up to 5MB.</p>
+              </div>
+            </div>
             <div>
               <label className="text-sm font-medium text-gray-700">First Name</label>
               <input

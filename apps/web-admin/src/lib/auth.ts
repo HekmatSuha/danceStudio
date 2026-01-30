@@ -18,6 +18,7 @@ export type AccountProfile = {
   gender?: string;
   dance_level?: string;
   interests?: string[];
+  avatar_url?: string | null;
 };
 
 type RoleInput =
@@ -143,6 +144,7 @@ export async function fetchProfile(): Promise<AccountProfile> {
     gender: profile?.gender || meta.gender,
     dance_level: profile?.dance_level,
     interests: profile?.interests,
+    avatar_url: profile?.avatar_url || meta.avatar_url || null,
     is_staff: ['owner', 'instructor', 'super_admin'].includes(profile?.role || meta.role || ''),
     is_superuser: (profile?.role || meta.role) === 'super_admin',
   };
@@ -157,6 +159,7 @@ export async function updateProfile(input: {
   gender?: string;
   danceLevel?: string;
   interests?: string[];
+  avatarUrl?: string | null;
 }) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Not authenticated");
@@ -170,6 +173,7 @@ export async function updateProfile(input: {
   if (input.gender !== undefined) updates.gender = input.gender;
   if (input.danceLevel !== undefined) updates.dance_level = input.danceLevel;
   if (input.interests !== undefined) updates.interests = input.interests;
+  if (input.avatarUrl !== undefined) updates.avatar_url = input.avatarUrl;
 
   const { error } = await supabase
     .from('profiles')

@@ -202,7 +202,7 @@ export function DashboardNav({ children }: { children: React.ReactNode }) {
           <div className="px-6 py-6">
             <div className="flex items-center gap-3">
               <Avatar className="h-10 w-10 border border-gray-200">
-                <AvatarImage src="" />
+                <AvatarImage src={user?.avatar_url || ""} />
                 <AvatarFallback className="bg-purple-100 text-purple-700 font-medium">
                   {user?.first_name?.[0] || user?.email?.[0] || "U"}
                 </AvatarFallback>
