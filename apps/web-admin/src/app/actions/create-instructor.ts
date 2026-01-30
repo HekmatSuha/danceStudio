@@ -17,6 +17,7 @@ export async function createInstructorAction(formData: FormData): Promise<Create
   const ownerUserId = formData.get("ownerUserId") as string;
   const bio = formData.get("bio") as string;
   const photo = formData.get("photo") as string;
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000").replace(/\/$/, "");
 
   if (!studioId) {
     if (!ownerUserId) {
@@ -50,6 +51,7 @@ export async function createInstructorAction(formData: FormData): Promise<Create
           last_name: lastName,
           role: 'instructor',
         },
+        redirectTo: appUrl,
       }
     );
 
