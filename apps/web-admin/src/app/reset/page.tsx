@@ -23,13 +23,31 @@ function ResetPageInner() {
   useEffect(() => {
     let mounted = true;
     const checkRecoverySession = async () => {
+      if (typeof window === "undefined") return;
+      const url = new URL(window.location.href);
+      const hashParams = new URLSearchParams(url.hash.replace(/^#/, ""));
+      const code = url.searchParams.get("code");
+      const type = hashParams.get("type") || url.searchParams.get("type");
+
+      if (code) {
+        const { error } = await supabase.auth.exchangeCodeForSession(code);
+        if (error && mounted) {
+          setStatus({ type: "error", text: getErrorMessage(error, "Invalid or expired reset link.") });
+          return;
+        }
+      } else if (hashParams.get("access_token") && hashParams.get("refresh_token")) {
+        const access_token = hashParams.get("access_token") || "";
+        const refresh_token = hashParams.get("refresh_token") || "";
+        const { error } = await supabase.auth.setSession({ access_token, refresh_token });
+        if (error && mounted) {
+          setStatus({ type: "error", text: getErrorMessage(error, "Invalid or expired reset link.") });
+          return;
+        }
+      }
+
       const { data } = await supabase.auth.getSession();
       if (!mounted) return;
-      if (data.session) {
-        setStep("confirm");
-        return;
-      }
-      if (typeof window !== "undefined" && window.location.hash.includes("type=recovery")) {
+      if (data.session || type === "recovery" || type === "invite") {
         setStep("confirm");
       }
     };
@@ -54,12 +72,12 @@ function ResetPageInner() {
     setLoading(true);
     try {
       await sendResetPassword(email.trim());
-      setStatus({ type: "success", text: "Code sent. Check your email." });
+      setStatus({ type: "success", text: "Link sent. Check your email." });
       setStep("confirm");
     } catch (err: unknown) {
       setStatus({
         type: "error",
-        text: getErrorMessage(err, "Unable to send reset code."),
+        text: getErrorMessage(err, "Unable to send reset link."),
       });
     } finally {
       setLoading(false);
@@ -81,7 +99,7 @@ function ResetPageInner() {
     } catch (err: unknown) {
       setStatus({
         type: "error",
-        text: getErrorMessage(err, "Invalid code or password."),
+        text: getErrorMessage(err, "Invalid or expired reset link."),
       });
     } finally {
       setLoading(false);
@@ -99,10 +117,10 @@ function ResetPageInner() {
             Password reset
           </p>
           <h1 className="text-2xl font-bold text-slate-900 mt-2">
-            {step === "request" ? "Send reset code" : "Enter code & new password"}
+            {step === "request" ? "Send reset link" : "Set a new password"}
           </h1>
           <p className="text-sm text-slate-600 mt-2">
-            We’ll email a verification code. Paste it here to set a new password.
+            We'll email a verification link. Open it to set a new password.
           </p>
         </div>
 
@@ -139,7 +157,7 @@ function ResetPageInner() {
               disabled={loading}
               className="w-full bg-purple-600 text-white rounded-lg py-3 font-semibold shadow-md hover:bg-purple-700 transition disabled:opacity-70"
             >
-              {loading ? "Sending..." : "Send code"}
+              {loading ? "Sending..." : "Send link"}
             </button>
           </form>
         ) : (
@@ -179,3 +197,6 @@ export default function ResetPage() {
     </Suspense>
   );
 }
+
+
+

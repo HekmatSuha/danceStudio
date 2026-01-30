@@ -17,6 +17,7 @@ export async function createStudentAction(formData: FormData): Promise<CreateStu
   const gender = formData.get("gender") as string;
   const studioId = formData.get("studioId") as string;
   const appUrl = (process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000").replace(/\/$/, "");
+  const resetUrl = `${appUrl}/reset`;
 
   try {
     if (!studioId) {
@@ -32,7 +33,7 @@ export async function createStudentAction(formData: FormData): Promise<CreateStu
           phone_number: phone || "",
           gender: gender || "F",
         },
-        redirectTo: appUrl,
+        redirectTo: resetUrl,
       }
     );
 
