@@ -12,7 +12,8 @@ export type CreateStudentResult = {
 export async function createStudentAction(formData: FormData): Promise<CreateStudentResult> {
   const firstName = formData.get("firstName") as string;
   const lastName = formData.get("lastName") as string;
-  const email = formData.get("email") as string;
+  const email = (formData.get("email") as string) || "";
+  const normalizedEmail = email.trim().toLowerCase();
   const phone = formData.get("phone") as string;
   const gender = formData.get("gender") as string;
   const studioId = formData.get("studioId") as string;
@@ -24,7 +25,7 @@ export async function createStudentAction(formData: FormData): Promise<CreateStu
       return { success: false, message: "Studio ID is required to create a student." };
     }
     const { data: userData, error: userError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
-      email,
+      normalizedEmail,
       {
         data: {
           first_name: firstName,
@@ -32,6 +33,7 @@ export async function createStudentAction(formData: FormData): Promise<CreateStu
           role: 'student',
           phone_number: phone || "",
           gender: gender || "F",
+          must_reset_password: true,
         },
         redirectTo: resetUrl,
       }
@@ -48,8 +50,8 @@ export async function createStudentAction(formData: FormData): Promise<CreateStu
           id: userId,
           first_name: firstName,
           last_name: lastName,
-          email,
-          username: email,
+          email: normalizedEmail,
+          username: normalizedEmail,
           phone_number: phone || null,
           gender: gender || "F",
           role: "student",

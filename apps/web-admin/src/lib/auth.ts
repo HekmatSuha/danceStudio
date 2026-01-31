@@ -19,6 +19,7 @@ export type AccountProfile = {
   dance_level?: string;
   interests?: string[];
   avatar_url?: string | null;
+  must_reset_password?: boolean;
 };
 
 type RoleInput =
@@ -119,7 +120,10 @@ export async function sendResetPassword(email: string) {
 
 export async function confirmPasswordReset(password: string) {
   // Requires an authenticated recovery session from the email link
-  const { error } = await supabase.auth.updateUser({ password });
+  const { error } = await supabase.auth.updateUser({
+    password,
+    data: { must_reset_password: false },
+  });
   if (error) throw error;
 }
 
@@ -152,6 +156,7 @@ export async function fetchProfile(): Promise<AccountProfile> {
     avatar_url: profile?.avatar_url || meta.avatar_url || null,
     is_staff: ['owner', 'instructor', 'super_admin'].includes(profile?.role || meta.role || ''),
     is_superuser: (profile?.role || meta.role) === 'super_admin',
+    must_reset_password: Boolean(meta.must_reset_password),
   };
 
   return finalProfile;
