@@ -329,7 +329,7 @@ export default function OwnerInstructorsPage() {
                 </div>
                 
                 <div className="text-sm text-slate-500">
-                    An invite email will be sent so the instructor can set their password.
+                    The instructor will receive a login email with a temporary password.
                 </div>
 
                 {studios.length > 1 ? (
