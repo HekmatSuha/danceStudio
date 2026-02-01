@@ -65,6 +65,7 @@ export async function listBookings(params?: {
   attended?: boolean;
   booking_date_from?: string;
   booking_date_to?: string;
+  appointment_slot?: string;
 }) {
   let query = supabase
     .from('bookings')
@@ -93,6 +94,9 @@ export async function listBookings(params?: {
 
   if (params?.status) {
     query = query.eq('status', params.status);
+  }
+  if (params?.appointment_slot) {
+    query = query.eq('appointment_slot', params.appointment_slot);
   }
   if (params?.attended !== undefined) {
     query = query.eq('attended', params.attended);

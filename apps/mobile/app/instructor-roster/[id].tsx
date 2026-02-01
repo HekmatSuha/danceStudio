@@ -47,7 +47,10 @@ export default function InstructorRosterScreen() {
       // I should update listBookings to accept `appointment_slot` too.
       // For now, I will cast params or update service. 
       // I'll assume I can pass it.
-      const data = await listBookings({ appointment_slot: id as string } as any);
+      const data = await listBookings({
+        appointment_slot: id as string,
+        status: "confirmed",
+      });
       setBookings(data);
     } catch (err) {
       console.warn(err);

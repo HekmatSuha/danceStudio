@@ -34,6 +34,7 @@ export default function BookingsScreen() {
   const visibleBookings = showArchived
     ? bookings
     : bookings.filter((b) => b.status !== "cancelled");
+  const selectedIsPaid = selectedBooking?.status?.toLowerCase() === "confirmed";
 
   const renderDateLabel = (booking: Booking) => {
     const start = booking.slot?.start_time;
@@ -314,6 +315,12 @@ export default function BookingsScreen() {
                 <Text style={styles.modalLabel}>Teacher</Text>
                 <Text style={styles.modalValue}>{renderTrainerLabel(selectedBooking!)}</Text>
               </View>
+              <View style={styles.modalRow}>
+                <Text style={styles.modalLabel}>Payment</Text>
+                <Text style={styles.modalValue}>
+                  {selectedIsPaid ? "Payment done" : selectedBooking?.status || "Pending"}
+                </Text>
+              </View>
               {selectedBooking?.client_notes ? (
                 <View style={styles.modalRow}>
                   <Text style={styles.modalLabel}>Notes</Text>
@@ -334,14 +341,16 @@ export default function BookingsScreen() {
                   style={({ pressed }) => [
                     styles.modalDanger,
                     pressed && { opacity: 0.85 },
-                    workingId === selectedBooking.uuid && { opacity: 0.6 },
+                    (workingId === selectedBooking.uuid || selectedIsPaid) && { opacity: 0.6 },
                   ]}
-                  disabled={workingId === selectedBooking.uuid}
+                  disabled={workingId === selectedBooking.uuid || selectedIsPaid}
                 >
                   {workingId === selectedBooking.uuid ? (
                     <ActivityIndicator color="white" />
                   ) : (
-                    <Text style={styles.modalDangerText}>Cancel booking</Text>
+                    <Text style={styles.modalDangerText}>
+                      {selectedIsPaid ? "Payment done" : "Cancel booking"}
+                    </Text>
                   )}
                 </Pressable>
               ) : null}

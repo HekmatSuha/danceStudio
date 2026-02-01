@@ -72,59 +72,47 @@ export async function GET(req: NextRequest) {
         return [];
       }
 
-      const { data: slotRows, error: slotError } = await auth.supabase
-        .from("slots")
-        .select(
-          "uuid, title, start_time, end_time, price, currency, studio_id, studio:studios(name)",
-        )
-        .in("studio_id", studioIds);
-
-      if (slotError) {
-        throw new Error(slotError.message);
-      }
-
-      const slots = (slotRows as SlotRow[] | null | undefined) ?? [];
-      const slotIds = slots.map((slot) => slot.uuid);
-      if (slotIds.length === 0) {
-        return [];
-      }
-
       const { data: bookingRows, error: bookingError } = await auth.supabase
         .from("bookings")
-        .select("uuid, status, booking_date, appointment_slot, user_id")
+        .select(
+          `
+          uuid,
+          status,
+          booking_date,
+          appointment_slot,
+          user_id,
+          slot:slots!inner (
+            uuid,
+            title,
+            start_time,
+            end_time,
+            price,
+            currency,
+            studio_id,
+            studio:studios (
+              name
+            )
+          ),
+          student:profiles (
+            id,
+            first_name,
+            last_name,
+            email,
+            phone_number
+          )
+        `,
+        )
         .eq("status", "pending")
-        .in("appointment_slot", slotIds);
+        .in("slots.studio_id", studioIds);
 
       if (bookingError) {
         throw new Error(bookingError.message);
       }
 
-      const bookings = (bookingRows as BookingRow[] | null | undefined) ?? [];
-      const userIds = bookings.map((b) => b.user_id).filter(Boolean) as string[];
-      const { data: profileRows, error: profileError } = userIds.length
-        ? await auth.supabase
-            .from("profiles")
-            .select("id, first_name, last_name, email, phone_number")
-            .in("id", userIds)
-        : { data: [], error: null };
-
-      if (profileError) {
-        throw new Error(profileError.message);
-      }
-
-      const profileMap = new Map<string, ProfileRow>();
-      (profileRows as ProfileRow[] | null | undefined)?.forEach((profile) => {
-        profileMap.set(profile.id, profile);
-      });
-
-      const slotMap = new Map<string, SlotRow>();
-      slots.forEach((slot) => {
-        slotMap.set(slot.uuid, slot);
-      });
-
-      return bookings.map((booking) => {
-        const slot = booking.appointment_slot ? slotMap.get(booking.appointment_slot) : null;
-        const student = booking.user_id ? profileMap.get(booking.user_id) : null;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return (bookingRows as any[]).map((booking) => {
+        const slot = booking.slot;
+        const student = booking.student;
         return {
           id: booking.uuid,
           status: booking.status || "pending",

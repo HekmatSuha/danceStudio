@@ -121,6 +121,7 @@ export async function listBookings(params?: {
 
 export type BookingWithUser = {
   uuid: string;
+  user_id?: string | null;
   status: string;
   attended?: boolean;
   booking_date?: string;
@@ -128,6 +129,7 @@ export type BookingWithUser = {
     id: string;
     first_name: string;
     last_name: string;
+    username?: string | null;
     email?: string | null;
     phone_number?: string | null;
   } | null;
@@ -138,28 +140,48 @@ type BookingWithUserRow = Omit<BookingWithUser, "user"> & {
     id: string;
     first_name: string;
     last_name: string;
+    username?: string | null;
     email?: string | null;
     phone_number?: string | null;
   }[] | null;
 };
 
 export async function fetchSlotBookings(slotId: string) {
+  const mapRows = (rows: BookingWithUserRow[]) =>
+    (rows || []).map((row) => ({
+      ...row,
+      user: row.user?.[0] ?? null,
+    }));
+
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const headers: Record<string, string> = {};
+    if (session?.access_token) {
+      headers.Authorization = `Bearer ${session.access_token}`;
+    }
+    const res = await fetch(`/api/instructor/roster/${slotId}`, { headers });
+    if (res.ok) {
+      const payload = (await res.json()) as BookingWithUserRow[];
+      return mapRows(payload);
+    }
+  } catch {
+    // Fall back to client-side query below.
+  }
+
   const { data, error } = await supabase
     .from('bookings')
     .select(`
       uuid,
+      user_id,
       status,
       attended,
       booking_date,
-      user:profiles(id, first_name, last_name, email, phone_number)
+      user:profiles(id, first_name, last_name, username, email, phone_number)
     `)
     .eq('appointment_slot', slotId);
 
   if (error) throw error;
-  return ((data || []) as BookingWithUserRow[]).map((row) => ({
-    ...row,
-    user: row.user?.[0] ?? null
-  }));
+  return mapRows((data || []) as BookingWithUserRow[]);
 }
 
 export async function markAttendance(bookingId: string, attended: boolean) {

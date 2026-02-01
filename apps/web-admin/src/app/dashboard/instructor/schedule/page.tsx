@@ -118,7 +118,9 @@ export default function InstructorSchedulePage() {
     setLoadingRoster(true);
     try {
       const data = await fetchSlotBookings(classId);
-      setRoster(data);
+      setRoster(
+        data.filter((booking) => booking.status?.toLowerCase() === "confirmed")
+      );
     } catch (err) {
       console.error(err);
       setRoster([]);
@@ -464,7 +466,6 @@ export default function InstructorSchedulePage() {
                   <thead className="bg-slate-50/80 border-b border-slate-200">
                     <tr>
                       <th className="px-5 py-4 text-left font-semibold text-slate-900">Student</th>
-                      <th className="px-5 py-4 text-left font-semibold text-slate-900">Email</th>
                       <th className="px-5 py-4 text-right font-semibold text-slate-900">Status</th>
                       <th className="px-5 py-4 text-right font-semibold text-slate-900">Attendance</th>
                     </tr>
@@ -473,9 +474,12 @@ export default function InstructorSchedulePage() {
                     {roster.map((booking) => (
                       <tr key={booking.uuid} className="hover:bg-slate-50/80 transition-colors">
                         <td className="px-5 py-4 font-medium text-slate-900">
-                          {booking.user?.first_name} {booking.user?.last_name}
+                          {booking.user?.first_name || booking.user?.last_name
+                            ? `${booking.user?.first_name ?? ""} ${booking.user?.last_name ?? ""}`.trim()
+                            : booking.user?.username
+                            ? booking.user.username
+                            : "Student"}
                         </td>
-                        <td className="px-5 py-4">{booking.user?.email || "-"}</td>
                         <td className="px-5 py-4 text-right">
                           <span className={cn(
                             "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold capitalize",

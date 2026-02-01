@@ -5,7 +5,6 @@ import { withServerCache } from "../../../../lib/server-cache";
 type AuthedClient = NonNullable<Awaited<ReturnType<typeof getAuthedSupabaseClient>>>;
 type StudioIdRow = { studio_id?: string | null };
 type OwnedStudioRow = { uuid?: string | null };
-type SlotRow = { uuid: string };
 
 async function resolveStudios(auth: AuthedClient) {
   const { data: staffData } = await auth.supabase
@@ -48,20 +47,10 @@ export async function GET(req: NextRequest) {
   const data = await withServerCache(cacheKey, 10000, async () => {
     if (studioIds.length === 0) return [];
 
-    const { data: slotRows, error: slotError } = await auth.supabase
-      .from("slots")
-      .select("uuid")
-      .in("studio_id", studioIds);
-
-    if (slotError) throw slotError;
-
-    const slotIds = (slotRows as SlotRow[] | null | undefined)?.map((row) => row.uuid) ?? [];
-    if (slotIds.length === 0) return [];
-
     const { data: bookings, error } = await auth.supabase
       .from("bookings")
-      .select(select)
-      .in("appointment_slot", slotIds);
+      .select(`${select}, slots!inner(studio_id)`)
+      .in("slots.studio_id", studioIds);
 
     if (error) throw error;
     return bookings || [];

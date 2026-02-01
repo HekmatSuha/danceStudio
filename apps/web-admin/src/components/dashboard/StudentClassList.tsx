@@ -125,6 +125,10 @@ export function StudentClassList() {
   };
 
   const handleCancel = async (booking: Booking) => {
+    if (booking.status?.toLowerCase() === "confirmed") {
+      setError("Payment is already done for this class. Cancellation is disabled.");
+      return;
+    }
     const classId = booking.appointment_slot;
     setError(null);
     setBusy(classId, true);
@@ -158,14 +162,19 @@ export function StudentClassList() {
     }
 
     const isWaitlisted = booking.status?.toLowerCase() === "waitlisted";
+    const isConfirmed = booking.status?.toLowerCase() === "confirmed";
     return (
       <button
         onClick={() => handleCancel(booking)}
-        disabled={busy}
-        className="text-red-500 font-semibold text-sm hover:text-red-700 flex items-center gap-2 bg-red-50 px-3 py-2 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-60"
+        disabled={busy || isConfirmed}
+        className={
+          isConfirmed
+            ? "text-emerald-700 font-semibold text-sm flex items-center gap-2 bg-emerald-50 px-3 py-2 rounded-lg cursor-not-allowed opacity-80"
+            : "text-red-500 font-semibold text-sm hover:text-red-700 flex items-center gap-2 bg-red-50 px-3 py-2 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-60"
+        }
       >
         {busy ? <Loader2 size={16} className="animate-spin" /> : <Clock3 size={16} />}
-        {isWaitlisted ? "Leave waitlist" : "Cancel booking"}
+        {isConfirmed ? "Payment done" : isWaitlisted ? "Leave waitlist" : "Cancel booking"}
       </button>
     );
   };
@@ -277,7 +286,7 @@ export function StudentClassList() {
                         : bookingStatus === "waitlisted"
                         ? "Waitlisted"
                         : bookingStatus === "confirmed"
-                        ? "Paid"
+                        ? "Payment done"
                         : "Booked"}
                     </span>
                   )}

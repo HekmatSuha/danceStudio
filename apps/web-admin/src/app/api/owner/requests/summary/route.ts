@@ -4,8 +4,6 @@ import { withServerCache } from "../../../../../lib/server-cache";
 
 type StudioIdRow = { studio_id?: string | null };
 type OwnedStudioRow = { uuid?: string | null };
-type SlotRow = { uuid?: string | null };
-type RoomRow = { id?: string | null };
 
 async function resolveStudios(
   auth: NonNullable<Awaited<ReturnType<typeof getAuthedSupabaseClient>>>,
@@ -52,65 +50,29 @@ export async function GET(req: NextRequest) {
         return { bookingCount: 0, rentalCount: 0 };
       }
 
-      const { data: slotRows, error: slotError } = await auth.supabase
-        .from("slots")
-        .select("uuid")
-        .in("studio_id", studioIds);
+      const { count: bookingCount, error: bookingError } = await auth.supabase
+        .from("bookings")
+        .select("slots!inner(studio_id)", { count: "exact", head: true })
+        .eq("status", "pending")
+        .in("slots.studio_id", studioIds);
 
-      if (slotError) {
-        throw new Error(slotError.message);
+      if (bookingError) {
+        console.warn("Failed to load pending bookings summary", bookingError);
       }
 
-      const slotIds = (slotRows as SlotRow[] | null | undefined)
-        ?.map((row) => row.uuid)
-        .filter(Boolean) as string[] | undefined;
+      const { count: rentalCount, error: rentalError } = await auth.supabase
+        .from("room_rentals")
+        .select("rooms!inner(studio_id)", { count: "exact", head: true })
+        .eq("status", "pending")
+        .in("rooms.studio_id", studioIds);
 
-      let bookingCount = 0;
-      if (slotIds?.length) {
-        const { count, error: bookingError } = await auth.supabase
-          .from("bookings")
-          .select("uuid", { count: "exact", head: true })
-          .eq("status", "pending")
-          .in("appointment_slot", slotIds);
-
-        if (bookingError) {
-          console.warn("Failed to load pending bookings summary", bookingError);
-        } else {
-          bookingCount = count ?? 0;
-        }
-      }
-
-      const { data: roomRows, error: roomError } = await auth.supabase
-        .from("rooms")
-        .select("id")
-        .in("studio_id", studioIds);
-
-      if (roomError) {
-        throw new Error(roomError.message);
-      }
-
-      const roomIds = (roomRows as RoomRow[] | null | undefined)
-        ?.map((row) => row.id)
-        .filter(Boolean) as string[] | undefined;
-
-      let rentalCount = 0;
-      if (roomIds?.length) {
-        const { count, error: rentalError } = await auth.supabase
-          .from("room_rentals")
-          .select("id", { count: "exact", head: true })
-          .eq("status", "pending")
-          .in("room_id", roomIds);
-
-        if (rentalError) {
-          console.warn("Failed to load pending rentals summary", rentalError);
-        } else {
-          rentalCount = count ?? 0;
-        }
+      if (rentalError) {
+        console.warn("Failed to load pending rentals summary", rentalError);
       }
 
       return {
-        bookingCount,
-        rentalCount,
+        bookingCount: bookingCount ?? 0,
+        rentalCount: rentalCount ?? 0,
       };
     },
   );
