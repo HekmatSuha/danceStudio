@@ -198,12 +198,12 @@ export default function OwnerStudentDetailPage() {
     data: seasonPayload,
     isLoading: seasonClassesLoading,
     error: seasonClassesError,
-  } = useSWR<Array<{ id: string; title: string }>>(
+  } = useSWR<Array<{ id: string; title: string; startTime: string | null; endTime: string | null }>>(
     seasonStudioId ? `owner:season-classes:${seasonStudioId}` : null,
     async () => {
       const { data, error } = await supabase
         .from("slots")
-        .select("uuid, title")
+        .select("uuid, title, start_time, end_time")
         .eq("studio_id", seasonStudioId)
         .order("start_time", { ascending: false })
         .limit(200);
@@ -211,6 +211,8 @@ export default function OwnerStudentDetailPage() {
       return (data || []).map((row) => ({
         id: row.uuid,
         title: row.title || "Class",
+        startTime: row.start_time ?? null,
+        endTime: row.end_time ?? null,
       }));
     },
   );
@@ -305,6 +307,20 @@ export default function OwnerStudentDetailPage() {
     if (!seasonStudioId) return [];
     return seasonPayload || [];
   }, [seasonPayload, seasonStudioId]);
+
+  const formatSeasonSchedule = (startTime?: string | null, endTime?: string | null) => {
+    if (!startTime) return "Schedule TBD";
+    const startDate = new Date(startTime);
+    const day = startDate.toLocaleDateString(undefined, { weekday: "short" });
+    const startLabel = startDate.toLocaleTimeString(undefined, {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    const endLabel = endTime
+      ? new Date(endTime).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })
+      : null;
+    return `${day} ${startLabel}${endLabel ? ` - ${endLabel}` : ""}`;
+  };
 
   const studentName = `${student?.first_name || ""} ${student?.last_name || ""}`.trim() || "Student";
   const incomeTotal = useMemo(() => {
@@ -1114,7 +1130,7 @@ export default function OwnerStudentDetailPage() {
       ) : null}
 
       <Dialog open={showSeasonForm} onOpenChange={setShowSeasonForm}>
-        <DialogContent className="sm:max-w-3xl">
+        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>New season ticket</DialogTitle>
             <DialogDescription>
@@ -1211,7 +1227,7 @@ export default function OwnerStudentDetailPage() {
                       </button>
                     ) : null}
                   </div>
-                  <div className="max-h-44 overflow-y-auto rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-600">
+                  <div className="max-h-32 overflow-y-auto rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-600">
                     {seasonClassesLoading || !seasonStudioId ? (
                       <div className="py-2 text-slate-400">Select a studio to load classes.</div>
                     ) : seasonClasses.length === 0 ? (
@@ -1221,7 +1237,7 @@ export default function OwnerStudentDetailPage() {
                         {seasonClasses.map((item) => {
                           const checked = seasonForm.classIds.includes(item.id);
                           return (
-                            <label key={item.id} className="flex items-center gap-2">
+                            <label key={item.id} className="flex items-start gap-2">
                               <input
                                 type="checkbox"
                                 checked={checked}
@@ -1235,13 +1251,35 @@ export default function OwnerStudentDetailPage() {
                                   }));
                                 }}
                               />
-                              <span>{item.title}</span>
+                              <span className="flex flex-col">
+                                <span>{item.title}</span>
+                                <span className="text-xs text-slate-400">
+                                  {formatSeasonSchedule(item.startTime, item.endTime)}
+                                </span>
+                              </span>
                             </label>
                           );
                         })}
                       </div>
                     )}
                   </div>
+                  {seasonForm.classIds.length > 0 ? (
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                      <p className="text-slate-500">Selected classes</p>
+                      <ul className="mt-2 space-y-1">
+                        {seasonClasses
+                          .filter((item) => seasonForm.classIds.includes(item.id))
+                          .map((item) => (
+                            <li key={item.id} className="flex flex-col">
+                              <span className="font-medium text-slate-700">{item.title}</span>
+                              <span className="text-slate-400">
+                                {formatSeasonSchedule(item.startTime, item.endTime)}
+                              </span>
+                            </li>
+                          ))}
+                      </ul>
+                    </div>
+                  ) : null}
                 </div>
               )}
             </div>
