@@ -108,6 +108,7 @@ export default function OwnerStudentDetailPage() {
   const [seasonForm, setSeasonForm] = useState({
     subscriptionType: "multiple",
     classId: "",
+    classIds: [] as string[],
     issueDate: "",
     cost: "0",
     classCount: "",
@@ -557,9 +558,20 @@ export default function OwnerStudentDetailPage() {
     setSeasonError(null);
     try {
       const selectedClass = seasonClasses.find((item) => item.id === seasonForm.classId);
+      const selectedClasses = seasonClasses.filter((item) =>
+        seasonForm.classIds.includes(item.id),
+      );
+      const selectedClassesLabel =
+        seasonForm.subscriptionType === "single"
+          ? selectedClass?.title
+          : selectedClasses.length > 0
+            ? selectedClasses.map((item) => item.title).join(", ")
+            : null;
       const seasonDescriptionParts = [
         seasonForm.description?.trim(),
-        selectedClass?.title ? `Class: ${selectedClass.title}` : "",
+        selectedClassesLabel
+          ? `${seasonForm.subscriptionType === "single" ? "Class" : "Classes"}: ${selectedClassesLabel}`
+          : "",
         seasonForm.classCount ? `Classes: ${seasonForm.classCount}` : "",
         seasonForm.startDate && seasonForm.endDate
           ? `Period: ${seasonForm.startDate} to ${seasonForm.endDate}`
@@ -583,6 +595,7 @@ export default function OwnerStudentDetailPage() {
       setSeasonForm({
         subscriptionType: "multiple",
         classId: "",
+        classIds: [],
         issueDate: "",
         cost: "0",
         classCount: "",
@@ -1122,7 +1135,12 @@ export default function OwnerStudentDetailPage() {
                 className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-600"
                 value={seasonForm.subscriptionType}
                 onChange={(event) =>
-                  setSeasonForm((prev) => ({ ...prev, subscriptionType: event.target.value }))
+                  setSeasonForm((prev) => ({
+                    ...prev,
+                    subscriptionType: event.target.value,
+                    classId: "",
+                    classIds: [],
+                  }))
                 }
               >
                 <option value="multiple">For multiple classes</option>
@@ -1148,25 +1166,84 @@ export default function OwnerStudentDetailPage() {
                 </select>
               </div>
             ) : null}
-            <div className="grid gap-4 sm:grid-cols-[1fr_1.4fr] items-center">
+            <div className="grid gap-4 sm:grid-cols-[1fr_1.4fr] items-start">
               <label className="text-sm font-medium text-slate-600">Class</label>
-              <select
-                className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-600"
-                value={seasonForm.classId}
-                onChange={(event) =>
-                  setSeasonForm((prev) => ({ ...prev, classId: event.target.value }))
-                }
-                disabled={seasonClassesLoading || !seasonStudioId}
-              >
-                <option value="">
-                  {seasonClassesLoading ? "Loading classes..." : "Select class"}
-                </option>
-                {seasonClasses.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.title}
+              {seasonForm.subscriptionType === "single" ? (
+                <select
+                  className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-600"
+                  value={seasonForm.classId}
+                  onChange={(event) =>
+                    setSeasonForm((prev) => ({ ...prev, classId: event.target.value }))
+                  }
+                  disabled={seasonClassesLoading || !seasonStudioId}
+                >
+                  <option value="">
+                    {seasonClassesLoading ? "Loading classes..." : "Select class"}
                   </option>
-                ))}
-              </select>
+                  {seasonClasses.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.title}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between text-xs text-slate-500">
+                    <span>
+                      {seasonClassesLoading
+                        ? "Loading classes..."
+                        : seasonClasses.length > 0
+                          ? "Choose one or more classes"
+                          : "No classes available"}
+                    </span>
+                    {seasonForm.classIds.length > 0 ? (
+                      <button
+                        type="button"
+                        className="text-indigo-500 hover:text-indigo-600"
+                        onClick={() =>
+                          setSeasonForm((prev) => ({
+                            ...prev,
+                            classIds: [],
+                          }))
+                        }
+                      >
+                        Clear selection
+                      </button>
+                    ) : null}
+                  </div>
+                  <div className="max-h-44 overflow-y-auto rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-600">
+                    {seasonClassesLoading || !seasonStudioId ? (
+                      <div className="py-2 text-slate-400">Select a studio to load classes.</div>
+                    ) : seasonClasses.length === 0 ? (
+                      <div className="py-2 text-slate-400">No classes found for this studio.</div>
+                    ) : (
+                      <div className="space-y-2">
+                        {seasonClasses.map((item) => {
+                          const checked = seasonForm.classIds.includes(item.id);
+                          return (
+                            <label key={item.id} className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={(event) => {
+                                  const next = event.target.checked
+                                    ? [...seasonForm.classIds, item.id]
+                                    : seasonForm.classIds.filter((id) => id !== item.id);
+                                  setSeasonForm((prev) => ({
+                                    ...prev,
+                                    classIds: next,
+                                  }));
+                                }}
+                              />
+                              <span>{item.title}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
             <div className="grid gap-4 sm:grid-cols-[1fr_1.4fr] items-center">
               <label className="text-sm font-medium text-slate-600">
