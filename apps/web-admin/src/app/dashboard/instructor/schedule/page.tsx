@@ -37,16 +37,17 @@ export default function InstructorSchedulePage() {
   const [loadingRoster, setLoadingRoster] = useState(false);
   const [locking, setLocking] = useState(false);
   
-  // Initialize week start to the most recent Monday
-  const [weekStart, setWeekStart] = useState<Date>(() => {
-    const today = new Date();
-    const day = today.getDay();
+  const getWeekStart = (date: Date) => {
+    const day = date.getDay();
     const diff = (day + 6) % 7; // Monday as start
-    const start = new Date(today);
-    start.setDate(today.getDate() - diff);
+    const start = new Date(date);
+    start.setDate(date.getDate() - diff);
     start.setHours(0, 0, 0, 0);
     return start;
-  });
+  };
+
+  // Initialize week start to the most recent Monday
+  const [weekStart, setWeekStart] = useState<Date>(() => getWeekStart(new Date()));
 
   useEffect(() => {
     if (!user?.uuid) return;
@@ -94,6 +95,23 @@ export default function InstructorSchedulePage() {
     classesByDay.forEach((list) => count += list.length);
     return count;
   }, [classesByDay]);
+
+  useEffect(() => {
+    if (loading || slots.length === 0) return;
+    if (totalVisibleClasses > 0) return;
+
+    const now = Date.now();
+    const upcoming = slots.filter((slot) => slot.startAt >= now);
+    const target = (upcoming.length ? upcoming : slots)
+      .slice()
+      .sort((a, b) => a.startAt - b.startAt)[0];
+
+    if (!target) return;
+    const targetWeekStart = getWeekStart(new Date(target.startAt));
+    if (targetWeekStart.getTime() !== weekStart.getTime()) {
+      setWeekStart(targetWeekStart);
+    }
+  }, [loading, slots, totalVisibleClasses, weekStart]);
 
   const handleOpenRoster = async (classId: string) => {
     setSelectedClassId(classId);
@@ -146,19 +164,37 @@ export default function InstructorSchedulePage() {
   };
 
   const handleJumpToToday = () => {
-    const today = new Date();
-    const day = today.getDay();
-    const diff = (day + 6) % 7;
-    const start = new Date(today);
-    start.setDate(today.getDate() - diff);
-    start.setHours(0, 0, 0, 0);
-    setWeekStart(start);
+    setWeekStart(getWeekStart(new Date()));
   };
 
-  const START_HOUR = 6;
-  const END_HOUR = 23;
-  const TOTAL_HOURS = END_HOUR - START_HOUR;
-  const HOUR_HEIGHT = 80;
+  const hoursInView = useMemo(() => {
+    const visibleSlots = slots.filter((slot) => {
+      const dayKey = new Date(slot.startAt).toDateString();
+      return classesByDay.has(dayKey);
+    });
+
+    if (visibleSlots.length === 0) {
+      return { start: 6, end: 23 };
+    }
+
+    const earliest = visibleSlots.reduce((min, slot) => {
+      const hour = new Date(slot.startAt).getHours();
+      return Math.min(min, hour);
+    }, 23);
+    const latest = visibleSlots.reduce((max, slot) => {
+      const hour = new Date(slot.endAt).getHours();
+      return Math.max(max, hour);
+    }, 0);
+
+    const start = Math.max(0, earliest - 1);
+    const end = Math.min(23, latest + 1);
+    return { start, end };
+  }, [slots, classesByDay]);
+
+  const START_HOUR = hoursInView.start;
+  const END_HOUR = hoursInView.end;
+  const TOTAL_HOURS = Math.max(1, END_HOUR - START_HOUR);
+  const HOUR_HEIGHT = 70;
 
   return (
     <div className="min-h-screen bg-slate-50/30 p-6 lg:p-8 space-y-6">
