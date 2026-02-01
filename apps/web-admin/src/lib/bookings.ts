@@ -136,21 +136,34 @@ export type BookingWithUser = {
 };
 
 type BookingWithUserRow = Omit<BookingWithUser, "user"> & {
-  user: {
-    id: string;
-    first_name: string;
-    last_name: string;
-    username?: string | null;
-    email?: string | null;
-    phone_number?: string | null;
-  }[] | null;
+  user:
+    | {
+        id: string;
+        first_name: string;
+        last_name: string;
+        username?: string | null;
+        email?: string | null;
+        phone_number?: string | null;
+      }
+    | {
+        id: string;
+        first_name: string;
+        last_name: string;
+        username?: string | null;
+        email?: string | null;
+        phone_number?: string | null;
+      }[]
+    | null;
 };
 
 export async function fetchSlotBookings(slotId: string) {
+  const normalizeUser = (user: BookingWithUserRow["user"]) =>
+    Array.isArray(user) ? user[0] ?? null : user ?? null;
+
   const mapRows = (rows: BookingWithUserRow[]) =>
     (rows || []).map((row) => ({
       ...row,
-      user: row.user?.[0] ?? null,
+      user: normalizeUser(row.user),
     }));
 
   try {
