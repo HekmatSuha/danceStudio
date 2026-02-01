@@ -220,7 +220,7 @@ export default function OwnerDashboardPage() {
 
       const { data: financeRows, error: financeError } = await supabase
         .from("finance_entries")
-        .select("entry_type, amount")
+        .select("entry_type, amount, category")
         .in("studio_id", studioIds)
         .gte("payment_date", startDate)
         .lte("payment_date", endDate);
@@ -231,7 +231,7 @@ export default function OwnerDashboardPage() {
         .filter((row) => row.entry_type === "income")
         .reduce((sum, row) => sum + Number(row.amount || 0), 0);
       const expenses = (financeRows || [])
-        .filter((row) => row.entry_type === "expense")
+        .filter((row) => row.entry_type === "expense" && row.category !== "Class usage")
         .reduce((sum, row) => sum + Number(row.amount || 0), 0);
 
       const { data: slotRows, error: slotError } = await supabase
