@@ -20,6 +20,22 @@ export async function getAuthedSupabaseClient(
   if (!authHeader?.startsWith("Bearer ")) return null;
 
   const token = authHeader.slice("Bearer ".length);
+  let userId: string | null = null;
+
+  try {
+    const payload = token.split(".")[1];
+    if (payload) {
+      const decoded = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as {
+        sub?: string;
+      };
+      userId = decoded.sub ?? null;
+    }
+  } catch {
+    userId = null;
+  }
+
+  if (!userId) return null;
+
   const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     global: {
       headers: {
@@ -32,8 +48,5 @@ export async function getAuthedSupabaseClient(
     },
   });
 
-  const { data, error } = await supabase.auth.getUser(token);
-  if (error || !data?.user?.id) return null;
-
-  return { supabase, userId: data.user.id };
+  return { supabase, userId };
 }

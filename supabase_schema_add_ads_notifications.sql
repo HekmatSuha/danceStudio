@@ -19,6 +19,10 @@ create table if not exists public.notifications (
   created_at timestamp with time zone default now() not null
 );
 
+-- Indexes for foreign keys (performance)
+create index if not exists idx_advertisements_studio_id on public.advertisements(studio_id);
+create index if not exists idx_notifications_studio_id on public.notifications(studio_id);
+
 -- Enable RLS
 alter table public.advertisements enable row level security;
 alter table public.notifications enable row level security;
@@ -55,9 +59,10 @@ create policy "Owners can manage their advertisements (delete)" on public.advert
     )
   );
 
--- Public read for active ads, owners can see all
+-- Public read for active ads, owners can see all (merged select policy)
 drop policy if exists "Everyone can view active advertisements" on public.advertisements;
-create policy "Everyone can view active advertisements" on public.advertisements for select
+drop policy if exists "Advertisements select access (merged)" on public.advertisements;
+create policy "Advertisements select access (merged)" on public.advertisements for select
   using (
     is_active = true
     or
@@ -71,6 +76,8 @@ create policy "Everyone can view active advertisements" on public.advertisements
 
 -- Staff or owners can manage notifications (insert/update/delete only)
 drop policy if exists "Staff or owners can manage notifications" on public.notifications;
+drop policy if exists "Staff or owners can manage notifications (update)" on public.notifications;
+drop policy if exists "Staff or owners can manage notifications (delete)" on public.notifications;
 drop policy if exists "Owners can manage their notifications" on public.notifications;
 drop policy if exists "Staff can manage notifications for their studios" on public.notifications;
 create policy "Staff or owners can manage notifications" on public.notifications for insert
@@ -129,6 +136,7 @@ create policy "Staff or owners can manage notifications (delete)" on public.noti
 -- or we can restrict it to users who have a booking or are staff.
 
 -- Simpler approach: Allow read if you are linked to the studio via student_studios or tenant_staff
+drop policy if exists "Users can view notifications for their studios" on public.notifications;
 create policy "Users can view notifications for their studios" on public.notifications for select
   using (
     exists (

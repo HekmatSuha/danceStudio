@@ -7,13 +7,14 @@ create or replace function public.is_conversation_participant(c_id uuid)
 returns boolean
 language sql
 security definer
+set search_path = public
 stable
 as $$
   select exists (
     select 1
     from conversation_participants
     where conversation_id = c_id
-    and user_id = auth.uid()
+    and user_id = (select auth.uid())
   );
 $$;
 
@@ -46,7 +47,7 @@ create policy "Users can view messages in their conversations"
 create policy "Users can insert messages in their conversations"
   on messages for insert
   with check (
-    auth.uid() = sender_id and
+    (select auth.uid()) = sender_id and
     public.is_conversation_participant(conversation_id)
   );
 
@@ -61,7 +62,7 @@ drop policy if exists "Users can create conversations" on conversations;
 create policy "Users can create conversations"
   on conversations for insert
   to authenticated
-  with check (auth.uid() is not null);
+  with check ((select auth.uid()) is not null);
 
 -- Participants: Allow creators to add themselves and then others
 drop policy if exists "Users can add conversation participants" on conversation_participants;
@@ -69,7 +70,7 @@ create policy "Users can add conversation participants"
   on conversation_participants for insert
   to authenticated
   with check (
-    auth.uid() = user_id
+    (select auth.uid()) = user_id
     or public.is_conversation_participant(conversation_id)
   );
 
@@ -89,7 +90,7 @@ as $$
 declare
   new_conversation_id uuid;
 begin
-  if auth.uid() is null then
+  if (select auth.uid()) is null then
     raise exception 'Not authenticated';
   end if;
 
@@ -97,9 +98,9 @@ begin
   returning id into new_conversation_id;
 
   insert into conversation_participants (conversation_id, user_id)
-  values (new_conversation_id, auth.uid());
+  values (new_conversation_id, (select auth.uid()));
 
-  if target_user_id is not null and target_user_id <> auth.uid() then
+  if target_user_id is not null and target_user_id <> (select auth.uid()) then
     insert into conversation_participants (conversation_id, user_id)
     values (new_conversation_id, target_user_id);
   end if;

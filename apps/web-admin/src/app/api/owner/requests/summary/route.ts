@@ -65,16 +65,19 @@ export async function GET(req: NextRequest) {
         ?.map((row) => row.uuid)
         .filter(Boolean) as string[] | undefined;
 
-      const { count: bookingCount, error: bookingError } = slotIds?.length
-        ? await auth.supabase
-            .from("bookings")
-            .select("uuid", { count: "exact", head: true })
-            .eq("status", "pending")
-            .in("appointment_slot", slotIds)
-        : { count: 0, error: null };
+      let bookingCount = 0;
+      if (slotIds?.length) {
+        const { count, error: bookingError } = await auth.supabase
+          .from("bookings")
+          .select("uuid", { count: "exact", head: true })
+          .eq("status", "pending")
+          .in("appointment_slot", slotIds);
 
-      if (bookingError) {
-        throw new Error(bookingError.message);
+        if (bookingError) {
+          console.warn("Failed to load pending bookings summary", bookingError);
+        } else {
+          bookingCount = count ?? 0;
+        }
       }
 
       const { data: roomRows, error: roomError } = await auth.supabase
@@ -90,21 +93,24 @@ export async function GET(req: NextRequest) {
         ?.map((row) => row.id)
         .filter(Boolean) as string[] | undefined;
 
-      const { count: rentalCount, error: rentalError } = roomIds?.length
-        ? await auth.supabase
-            .from("room_rentals")
-            .select("id", { count: "exact", head: true })
-            .eq("status", "pending")
-            .in("room_id", roomIds)
-        : { count: 0, error: null };
+      let rentalCount = 0;
+      if (roomIds?.length) {
+        const { count, error: rentalError } = await auth.supabase
+          .from("room_rentals")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "pending")
+          .in("room_id", roomIds);
 
-      if (rentalError) {
-        throw new Error(rentalError.message);
+        if (rentalError) {
+          console.warn("Failed to load pending rentals summary", rentalError);
+        } else {
+          rentalCount = count ?? 0;
+        }
       }
 
       return {
-        bookingCount: bookingCount ?? 0,
-        rentalCount: rentalCount ?? 0,
+        bookingCount,
+        rentalCount,
       };
     },
   );

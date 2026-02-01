@@ -76,14 +76,10 @@ create table public.bookings (
 -- Enable RLS for Bookings
 alter table public.bookings enable row level security;
 
-create policy "Users can view own bookings."
-  on bookings for select
-  using ( auth.uid() = user_id );
+drop policy if exists "Users can view own bookings." on bookings;
 
 create policy "Users can create own bookings."
   on bookings for insert
   with check ( auth.uid() = user_id );
 
-create policy "Users can update own bookings."
-  on bookings for update
-  using ( auth.uid() = user_id );
+drop policy if exists "Users can update own bookings." on bookings;

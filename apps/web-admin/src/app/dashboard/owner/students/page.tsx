@@ -52,12 +52,16 @@ export default function OwnerStudentsPage() {
     data: studentPayload,
     isLoading,
     mutate,
-  } = useSWR<{ students: StudentRow[]; bookingCounts: Record<string, number> }>(
+  } = useSWR<{
+    students: StudentRow[];
+    bookingCounts: Record<string, number>;
+    balances: Record<string, number>;
+  }>(
     studioIdsKey ? `owner:students:${studioIdsKey}` : null,
     async () => {
       const studioIds = studioIdsKey ? studioIdsKey.split(",") : [];
       if (studioIds.length === 0) {
-        return { students: [], bookingCounts: {} };
+        return { students: [], bookingCounts: {}, balances: {} };
       }
 
       const { data: linkRows, error: linkError } = await supabase
@@ -67,7 +71,7 @@ export default function OwnerStudentsPage() {
 
       if (linkError) {
         console.warn("Failed to load studio students", linkError);
-        return { students: [], bookingCounts: {} };
+        return { students: [], bookingCounts: {}, balances: {} };
       }
 
       const studentIds = Array.from(
@@ -79,7 +83,7 @@ export default function OwnerStudentsPage() {
       );
 
       if (studentIds.length === 0) {
-        return { students: [], bookingCounts: {} };
+        return { students: [], bookingCounts: {}, balances: {} };
       }
 
       const { data: profiles, error: profileError } = await supabase
@@ -90,7 +94,7 @@ export default function OwnerStudentsPage() {
 
       if (profileError) {
         console.warn("Failed to load students", profileError);
-        return { students: [], bookingCounts: {} };
+        return { students: [], bookingCounts: {}, balances: {} };
       }
 
       const rows = (profiles || [])
@@ -102,44 +106,84 @@ export default function OwnerStudentsPage() {
 
       const { data: slotRows, error: slotError } = await supabase
         .from("slots")
-        .select("uuid")
+        .select("uuid, price")
         .in("studio_id", studioIds);
 
       if (slotError) {
         console.warn("Failed to load studio slots", slotError);
-        return { students: rows, bookingCounts: {} };
+        return { students: rows, bookingCounts: {}, balances: {} };
       }
 
-      const slotIds =
-        (slotRows as { uuid: string }[] | null | undefined)?.map((row) => row.uuid) ?? [];
+      const slotPriceMap = new Map<string, number>();
+      (slotRows as { uuid: string; price?: number | string | null }[] | null | undefined)?.forEach((row) => {
+        if (!row?.uuid) return;
+        slotPriceMap.set(row.uuid, Number(row.price || 0));
+      });
+
+      const slotIds = Array.from(slotPriceMap.keys());
       if (slotIds.length === 0) {
-        return { students: rows, bookingCounts: {} };
+        return { students: rows, bookingCounts: {}, balances: {} };
       }
 
       const { data: bookingRows, error: bookingError } = await supabase
         .from("bookings")
-        .select("user_id")
+        .select("user_id, appointment_slot, status, attended")
         .in("appointment_slot", slotIds);
 
       if (bookingError) {
         console.warn("Failed to load studio bookings", bookingError);
-        return { students: rows, bookingCounts: {} };
+        return { students: rows, bookingCounts: {}, balances: {} };
       }
 
       const counts: Record<string, number> = {};
+      const totals: Record<string, number> = {};
       const studentIdSet = new Set(studentIds);
-      (bookingRows as { user_id?: string | null }[] | null | undefined)?.forEach((row) => {
+      (bookingRows as { user_id?: string | null; appointment_slot?: string | null; status?: string | null; attended?: boolean | null }[] | null | undefined)?.forEach((row) => {
         if (!row.user_id) return;
         if (!studentIdSet.has(row.user_id)) return;
-        counts[row.user_id] = (counts[row.user_id] || 0) + 1;
+        const status = (row.status || "").toLowerCase();
+        if (status !== "cancelled") {
+          counts[row.user_id] = (counts[row.user_id] || 0) + 1;
+        }
+        const attended = row.attended === true || status === "confirmed";
+        if (!attended) return;
+        const slotId = String(row.appointment_slot || "");
+        const price = slotPriceMap.get(slotId) || 0;
+        totals[row.user_id] = (totals[row.user_id] || 0) + price;
       });
 
-      return { students: rows, bookingCounts: counts };
+      const { data: paymentRows, error: paymentError } = await supabase
+        .from("finance_entries")
+        .select("student_id, amount")
+        .in("studio_id", studioIds)
+        .in("student_id", studentIds)
+        .eq("entry_type", "income");
+
+      if (paymentError) {
+        console.warn("Failed to load student payments", paymentError);
+        return { students: rows, bookingCounts: counts, balances: {} };
+      }
+
+      const paidByStudent: Record<string, number> = {};
+      (paymentRows as { student_id?: string | null; amount?: number | string | null }[] | null | undefined)?.forEach((row) => {
+        if (!row.student_id) return;
+        paidByStudent[row.student_id] = (paidByStudent[row.student_id] || 0) + Number(row.amount || 0);
+      });
+
+      const balances: Record<string, number> = {};
+      studentIds.forEach((studentId) => {
+        const total = totals[studentId] || 0;
+        const paid = paidByStudent[studentId] || 0;
+        balances[studentId] = Math.max(0, total - paid);
+      });
+
+      return { students: rows, bookingCounts: counts, balances };
     },
   );
 
   const students = studentPayload?.students ?? [];
   const bookingCounts = studentPayload?.bookingCounts ?? {};
+  const balances = studentPayload?.balances ?? {};
 
   const filteredStudents = useMemo(() => {
     const nameQuery = nameSearch.trim().toLowerCase();
@@ -423,6 +467,8 @@ export default function OwnerStudentsPage() {
                   const studentId = student.id || student.uuid;
                   const initials = `${student.first_name?.[0] || ""}${student.last_name?.[0] || ""}`.trim() || "S";
                   const isActive = student.is_active ?? true;
+                  const classCount = studentId ? (bookingCounts[studentId] ?? 0) : 0;
+                  const balance = studentId ? (balances[studentId] ?? 0) : 0;
                   return (
                   <tr
                     key={studentId}
@@ -451,8 +497,10 @@ export default function OwnerStudentsPage() {
                     <td className="px-6 py-4">
                       {student.created_at ? new Date(student.created_at).toLocaleDateString() : "-"}
                     </td>
-                    <td className="px-6 py-4 text-slate-500">-</td>
-                    <td className="px-6 py-4 font-semibold text-slate-700">0</td>
+                    <td className="px-6 py-4 text-slate-600">{classCount}</td>
+                    <td className={`px-6 py-4 font-semibold ${balance > 0 ? "text-rose-600" : "text-slate-700"}`}>
+                      {balance.toLocaleString()}
+                    </td>
                     <td className="px-6 py-4 capitalize">{student.gender || "-"}</td>
                     <td className="px-6 py-4">
                       <span
