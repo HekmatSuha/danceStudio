@@ -106,7 +106,7 @@ export default function OwnerStudentsPage() {
 
       const { data: slotRows, error: slotError } = await supabase
         .from("slots")
-        .select("uuid, price")
+        .select("uuid")
         .in("studio_id", studioIds);
 
       if (slotError) {
@@ -114,13 +114,9 @@ export default function OwnerStudentsPage() {
         return { students: rows, bookingCounts: {}, balances: {} };
       }
 
-      const slotPriceMap = new Map<string, number>();
-      (slotRows as { uuid: string; price?: number | string | null }[] | null | undefined)?.forEach((row) => {
-        if (!row?.uuid) return;
-        slotPriceMap.set(row.uuid, Number(row.price || 0));
-      });
-
-      const slotIds = Array.from(slotPriceMap.keys());
+      const slotIds = (slotRows as { uuid?: string | null }[] | null | undefined)
+        ?.map((row) => row?.uuid)
+        .filter((id): id is string => Boolean(id)) || [];
       if (slotIds.length === 0) {
         return { students: rows, bookingCounts: {}, balances: {} };
       }
@@ -136,7 +132,6 @@ export default function OwnerStudentsPage() {
       }
 
       const counts: Record<string, number> = {};
-      const totals: Record<string, number> = {};
       const studentIdSet = new Set(studentIds);
       (bookingRows as { user_id?: string | null; appointment_slot?: string | null; status?: string | null; attended?: boolean | null }[] | null | undefined)?.forEach((row) => {
         if (!row.user_id) return;
@@ -145,19 +140,14 @@ export default function OwnerStudentsPage() {
         if (status !== "cancelled") {
           counts[row.user_id] = (counts[row.user_id] || 0) + 1;
         }
-        const attended = row.attended === true || status === "confirmed";
-        if (!attended) return;
-        const slotId = String(row.appointment_slot || "");
-        const price = slotPriceMap.get(slotId) || 0;
-        totals[row.user_id] = (totals[row.user_id] || 0) + price;
       });
 
       const { data: paymentRows, error: paymentError } = await supabase
         .from("finance_entries")
-        .select("student_id, amount")
+        .select("student_id, amount, entry_type")
         .in("studio_id", studioIds)
         .in("student_id", studentIds)
-        .eq("entry_type", "income");
+        .in("entry_type", ["income", "expense"]);
 
       if (paymentError) {
         console.warn("Failed to load student payments", paymentError);
@@ -165,16 +155,22 @@ export default function OwnerStudentsPage() {
       }
 
       const paidByStudent: Record<string, number> = {};
-      (paymentRows as { student_id?: string | null; amount?: number | string | null }[] | null | undefined)?.forEach((row) => {
+      const spentByStudent: Record<string, number> = {};
+      (paymentRows as { student_id?: string | null; amount?: number | string | null; entry_type?: string | null }[] | null | undefined)?.forEach((row) => {
         if (!row.student_id) return;
-        paidByStudent[row.student_id] = (paidByStudent[row.student_id] || 0) + Number(row.amount || 0);
+        const amount = Number(row.amount || 0);
+        if (row.entry_type === "expense") {
+          spentByStudent[row.student_id] = (spentByStudent[row.student_id] || 0) + amount;
+          return;
+        }
+        paidByStudent[row.student_id] = (paidByStudent[row.student_id] || 0) + amount;
       });
 
       const balances: Record<string, number> = {};
       studentIds.forEach((studentId) => {
-        const total = totals[studentId] || 0;
         const paid = paidByStudent[studentId] || 0;
-        balances[studentId] = Math.max(0, total - paid);
+        const spent = spentByStudent[studentId] || 0;
+        balances[studentId] = paid - spent;
       });
 
       return { students: rows, bookingCounts: counts, balances };
