@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { useParams, useSearchParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   Calendar,
   ChevronDown,
@@ -119,6 +119,7 @@ export default function OwnerStudentDetailPage() {
   const { studios } = useOwnerStudiosGuard();
   const { user } = useAuthUser();
   const searchParams = useSearchParams();
+  const router = useRouter();
 
   const {
     data: studentPayload,
@@ -258,8 +259,9 @@ export default function OwnerStudentDetailPage() {
 
   useEffect(() => {
     const tabParam = searchParams.get("tab");
-    if (tabParam === "payments") {
-      setActiveTab("payments");
+    if (!tabParam) return;
+    if (TABS.some((tab) => tab.key === tabParam)) {
+      setActiveTab(tabParam as TabKey);
     }
   }, [searchParams]);
 
@@ -317,6 +319,13 @@ export default function OwnerStudentDetailPage() {
   const totalPaid = useMemo(() => {
     return incomeTotal - expenseTotal;
   }, [incomeTotal, expenseTotal]);
+
+  const handleTabChange = (tab: TabKey) => {
+    setActiveTab(tab);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", tab);
+    router.replace(`?${params.toString()}`);
+  };
 
   const paymentsRows = useMemo(() => {
     return financeEntries
@@ -655,7 +664,7 @@ export default function OwnerStudentDetailPage() {
         {TABS.map((tab) => (
           <button
             key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
+            onClick={() => handleTabChange(tab.key)}
             className={`transition-colors ${
               activeTab === tab.key
                 ? "text-indigo-600"
@@ -770,34 +779,48 @@ export default function OwnerStudentDetailPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {seasonTickets.map((ticket) => (
-                    <tr key={ticket.id}>
-                      <td className="px-6 py-4 text-slate-500">{ticket.index}</td>
-                      <td className="px-6 py-4">{ticket.title}</td>
-                      <td className="px-6 py-4">{ticket.remaining}</td>
-                      <td className="px-6 py-4">{ticket.price}</td>
-                      <td className="px-6 py-4">
-                        <span className="inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-600">
-                          {ticket.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">{ticket.start}</td>
-                      <td className="px-6 py-4">{ticket.end}</td>
-                      <td className="px-6 py-4 text-right">
-                        <div className="inline-flex items-center gap-2">
-                          <button className="p-2 text-indigo-500 hover:bg-indigo-50 rounded-lg">
-                            <Users size={16} />
-                          </button>
-                          <button className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg">
-                            <Info size={16} />
-                          </button>
-                          <button className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg">
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
+                  {financeLoading ? (
+                    <tr>
+                      <td className="px-6 py-6 text-center text-slate-400" colSpan={8}>
+                        Loading subscriptions...
                       </td>
                     </tr>
-                  ))}
+                  ) : seasonTickets.length === 0 ? (
+                    <tr>
+                      <td className="px-6 py-6 text-center text-slate-400" colSpan={8}>
+                        No subscriptions yet.
+                      </td>
+                    </tr>
+                  ) : (
+                    seasonTickets.map((ticket) => (
+                      <tr key={ticket.id}>
+                        <td className="px-6 py-4 text-slate-500">{ticket.index}</td>
+                        <td className="px-6 py-4">{ticket.title}</td>
+                        <td className="px-6 py-4">{ticket.remaining}</td>
+                        <td className="px-6 py-4">{ticket.price}</td>
+                        <td className="px-6 py-4">
+                          <span className="inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-600">
+                            {ticket.status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">{ticket.start}</td>
+                        <td className="px-6 py-4">{ticket.end}</td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="inline-flex items-center gap-2">
+                            <button className="p-2 text-indigo-500 hover:bg-indigo-50 rounded-lg">
+                              <Users size={16} />
+                            </button>
+                            <button className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg">
+                              <Info size={16} />
+                            </button>
+                            <button className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg">
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -810,7 +833,7 @@ export default function OwnerStudentDetailPage() {
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 grid gap-4 lg:grid-cols-5 text-sm">
             {[
               { id: "total-income", label: "Total income", value: `${incomeTotal.toLocaleString()} T` },
-              { id: "total-purchases", label: "Total purchases", value: `${incomeTotal.toLocaleString()} T` },
+              { id: "total-expenses", label: "Total expenses", value: `${expenseTotal.toLocaleString()} T` },
               { id: "returns", label: "Returns", value: "0 T" },
               {
                 id: "average-bill",
@@ -975,36 +998,50 @@ export default function OwnerStudentDetailPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {visitsRows.map((visit) => (
-                    <tr key={visit.id}>
-                      <td className="px-6 py-4 text-slate-500">{visit.index}</td>
-                      <td className="px-6 py-4">{visit.title}</td>
-                      <td className="px-6 py-4">
-                        <select
-                          className="border border-slate-200 rounded-full px-3 py-1 text-sm text-emerald-600 bg-emerald-50"
-                          value={visitsStatus[visit.id] || "Pending"}
-                          onChange={(event) =>
-                            handleVisitStatusChange(visit.id, event.target.value)
-                          }
-                        >
-                          <option>Visited</option>
-                          <option>Missed</option>
-                          <option>I was sick</option>
-                          <option>Vacation</option>
-                          <option>Visited (by car)</option>
-                          <option>One-time lesson</option>
-                          <option>Pending</option>
-                        </select>
-                      </td>
-                      <td className="px-6 py-4">{visit.payment}</td>
-                      <td className="px-6 py-4">{visit.date}</td>
-                      <td className="px-6 py-4 text-right">
-                        <button className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg">
-                          <Trash2 size={16} />
-                        </button>
+                  {loading ? (
+                    <tr>
+                      <td className="px-6 py-6 text-center text-slate-400" colSpan={6}>
+                        Loading visits...
                       </td>
                     </tr>
-                  ))}
+                  ) : visitsRows.length === 0 ? (
+                    <tr>
+                      <td className="px-6 py-6 text-center text-slate-400" colSpan={6}>
+                        No visits yet.
+                      </td>
+                    </tr>
+                  ) : (
+                    visitsRows.map((visit) => (
+                      <tr key={visit.id}>
+                        <td className="px-6 py-4 text-slate-500">{visit.index}</td>
+                        <td className="px-6 py-4">{visit.title}</td>
+                        <td className="px-6 py-4">
+                          <select
+                            className="border border-slate-200 rounded-full px-3 py-1 text-sm text-emerald-600 bg-emerald-50"
+                            value={visitsStatus[visit.id] || "Pending"}
+                            onChange={(event) =>
+                              handleVisitStatusChange(visit.id, event.target.value)
+                            }
+                          >
+                            <option>Visited</option>
+                            <option>Missed</option>
+                            <option>I was sick</option>
+                            <option>Vacation</option>
+                            <option>Visited (by car)</option>
+                            <option>One-time lesson</option>
+                            <option>Pending</option>
+                          </select>
+                        </td>
+                        <td className="px-6 py-4">{visit.payment}</td>
+                        <td className="px-6 py-4">{visit.date}</td>
+                        <td className="px-6 py-4 text-right">
+                          <button className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg">
+                            <Trash2 size={16} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
