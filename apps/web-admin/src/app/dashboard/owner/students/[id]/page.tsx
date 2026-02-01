@@ -88,9 +88,6 @@ export default function OwnerStudentDetailPage() {
   const [activeTab, setActiveTab] = useState<TabKey>("classes");
   const [showSeasonForm, setShowSeasonForm] = useState(false);
   const [showPaymentForm, setShowPaymentForm] = useState(false);
-  const [student, setStudent] = useState<StudentProfile | null>(null);
-  const [bookings, setBookings] = useState<BookingRow[]>([]);
-  const [slotMap, setSlotMap] = useState<Map<string, SlotRow>>(new Map());
   const [visitsStatus, setVisitsStatus] = useState<Record<string, string>>({});
   const [paymentSaving, setPaymentSaving] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
@@ -108,7 +105,6 @@ export default function OwnerStudentDetailPage() {
   const [seasonSaving, setSeasonSaving] = useState(false);
   const [seasonError, setSeasonError] = useState<string | null>(null);
   const [seasonStudioId, setSeasonStudioId] = useState<string | null>(null);
-  const [seasonClasses, setSeasonClasses] = useState<Array<{ id: string; title: string }>>([]);
   const [seasonForm, setSeasonForm] = useState({
     subscriptionType: "multiple",
     classId: "",
@@ -237,9 +233,6 @@ export default function OwnerStudentDetailPage() {
 
   useEffect(() => {
     if (!studentPayload) return;
-    setStudent(studentPayload.student);
-    setBookings(studentPayload.bookings);
-    setSlotMap(new Map(studentPayload.slots.map((slot) => [slot.uuid, slot])));
     setVisitsStatus((prev) => {
       const next = { ...prev };
       studentPayload.bookings.forEach((row) => {
@@ -299,14 +292,15 @@ export default function OwnerStudentDetailPage() {
     setSeasonStudioId(studios[0].uuid);
   }, [seasonStudioId, studios]);
 
-  useEffect(() => {
-    if (!seasonStudioId) {
-      setSeasonClasses([]);
-      return;
-    }
-    if (seasonPayload) {
-      setSeasonClasses(seasonPayload);
-    }
+  const student = studentPayload?.student ?? null;
+  const bookings = studentPayload?.bookings ?? [];
+  const slotMap = useMemo(() => {
+    if (!studentPayload?.slots) return new Map<string, SlotRow>();
+    return new Map(studentPayload.slots.map((slot) => [slot.uuid, slot]));
+  }, [studentPayload?.slots]);
+  const seasonClasses = useMemo(() => {
+    if (!seasonStudioId) return [];
+    return seasonPayload || [];
   }, [seasonPayload, seasonStudioId]);
 
   const studentName = `${student?.first_name || ""} ${student?.last_name || ""}`.trim() || "Student";
@@ -369,6 +363,30 @@ export default function OwnerStudentDetailPage() {
       };
     });
   }, [bookings, slotMap]);
+
+  const historyRows = useMemo(() => {
+    const items = [
+      ...financeEntries.map((entry) => ({
+        id: entry.id,
+        type: entry.entry_type === "income" ? "Payment" : "Expense",
+        date: entry.payment_date,
+        description: entry.description || entry.category || "Finance entry",
+      })),
+      ...bookings.map((booking) => ({
+        id: booking.uuid,
+        type: "Booking",
+        date: booking.booking_date || "",
+        description: slotMap.get(booking.appointment_slot)?.title || "Class booking",
+      })),
+    ]
+      .filter((item) => item.date)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    return items.map((item, index) => ({
+      ...item,
+      index: index + 1,
+    }));
+  }, [bookings, financeEntries, slotMap]);
 
   const handleVisitStatusChange = async (bookingId: string, value: string) => {
     setVisitsStatus((prev) => ({ ...prev, [bookingId]: value }));
@@ -1020,48 +1038,24 @@ export default function OwnerStudentDetailPage() {
                         Loading history...
                       </td>
                     </tr>
-                  ) : (() => {
-                    const items = [
-                      ...financeEntries.map((entry) => ({
-                        id: entry.id,
-                        type: entry.entry_type === "income" ? "Payment" : "Expense",
-                        date: entry.payment_date,
-                        description: entry.description || entry.category || "Finance entry",
-                      })),
-                      ...bookings.map((booking) => ({
-                        id: booking.uuid,
-                        type: "Booking",
-                        date: booking.booking_date || "",
-                        description:
-                          slotMap.get(booking.appointment_slot)?.title || "Class booking",
-                      })),
-                    ]
-                      .filter((item) => item.date)
-                      .sort(
-                        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
-                      );
-
-                    if (items.length === 0) {
-                      return (
-                        <tr>
-                          <td className="px-6 py-6 text-center text-slate-400" colSpan={4}>
-                            There are no activities yet.
-                          </td>
-                        </tr>
-                      );
-                    }
-
-                    return items.map((item, index) => (
+                  ) : historyRows.length === 0 ? (
+                    <tr>
+                      <td className="px-6 py-6 text-center text-slate-400" colSpan={4}>
+                        There are no activities yet.
+                      </td>
+                    </tr>
+                  ) : (
+                    historyRows.map((item) => (
                       <tr key={item.id}>
-                        <td className="px-6 py-4 text-slate-500">{index + 1}</td>
+                        <td className="px-6 py-4 text-slate-500">{item.index}</td>
                         <td className="px-6 py-4">{item.type}</td>
                         <td className="px-6 py-4">
                           {new Date(item.date).toLocaleDateString()}
                         </td>
                         <td className="px-6 py-4">{item.description}</td>
                       </tr>
-                    ));
-                  })()}
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
