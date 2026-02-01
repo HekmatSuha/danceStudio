@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Filter, Plus, Search, UserX, UserCheck, Mail, MapPin, Pencil, MoreVertical } from "lucide-react";
 import { fetchTrainers, type Trainer } from "../../../../lib/trainers";
 import { createInstructorAction } from "../../../actions/create-instructor";
@@ -18,6 +19,7 @@ import {
 
 export default function OwnerInstructorsPage() {
   const { studios, loading: studiosLoading, role } = useOwnerStudiosGuard();
+  const router = useRouter();
   const [showForm, setShowForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [ownerUserId, setOwnerUserId] = useState<string>("");
@@ -232,7 +234,18 @@ export default function OwnerInstructorsPage() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredInstructors.map((instructor) => (
-                  <tr key={instructor.uuid} className="hover:bg-slate-50/50 transition-colors group">
+                  <tr
+                    key={instructor.uuid}
+                    className="hover:bg-slate-50/50 transition-colors group cursor-pointer"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => router.push(`/dashboard/owner/instructors/${instructor.uuid}`)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        router.push(`/dashboard/owner/instructors/${instructor.uuid}`);
+                      }
+                    }}
+                  >
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                          <div className="h-10 w-10 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center font-bold text-sm">
@@ -274,14 +287,20 @@ export default function OwnerInstructorsPage() {
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
-                          onClick={() => setEditingInstructor(instructor)}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setEditingInstructor(instructor);
+                          }}
                           className="p-2 text-slate-500 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
                           title="Edit Details"
                         >
                           <Pencil size={16} />
                         </button>
                         <button
-                          onClick={() => handleToggleActive(instructor)}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleToggleActive(instructor);
+                          }}
                           className={`p-2 rounded-lg transition-colors ${
                             (instructor.is_active ?? true)
                               ? "text-slate-400 hover:text-amber-600 hover:bg-amber-50"
