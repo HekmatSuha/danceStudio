@@ -18,6 +18,7 @@ export default function DashboardPage() {
           owner: "owner",
           instructor: "instructor",
           student: "student",
+          super_admin: "super-admin",
         };
         const slug = slugMap[role] || "student";
         router.replace(`/dashboard/${slug}`);
