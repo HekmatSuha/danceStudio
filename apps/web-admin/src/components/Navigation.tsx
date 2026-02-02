@@ -73,6 +73,7 @@ export function Navigation() {
       .join('')
       .slice(0, 2)
       .toUpperCase() || (user?.email ? user.email[0]?.toUpperCase() : '');
+  const avatarUrl = user?.avatar_url || null;
 
   return (
     <nav
@@ -117,8 +118,16 @@ export function Navigation() {
                     onClick={() => setIsProfileOpen((v) => !v)}
                     className="flex items-center gap-3 rounded-full px-3 py-1 hover:bg-slate-100 transition-colors"
                   >
-                    <div className="h-8 w-8 rounded-full bg-purple-600 text-white flex items-center justify-center text-sm font-semibold">
-                      {initials || 'U'}
+                    <div className="h-8 w-8 rounded-full bg-purple-600 text-white flex items-center justify-center overflow-hidden text-sm font-semibold">
+                      {avatarUrl ? (
+                        <img
+                          src={avatarUrl}
+                          alt={fullName || "Profile"}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <span>{initials || 'U'}</span>
+                      )}
                     </div>
                     <div className="text-slate-800 leading-tight text-left">
                       <div className="text-sm font-semibold">
@@ -185,8 +194,16 @@ export function Navigation() {
           <div className="px-4 py-4 space-y-3">
             {!loading && user && (
               <div className="flex items-center gap-3 pb-2 border-b border-gray-100">
-                <div className="h-10 w-10 rounded-full bg-purple-600 text-white flex items-center justify-center text-sm font-semibold">
-                  {initials || 'U'}
+                <div className="h-10 w-10 rounded-full bg-purple-600 text-white flex items-center justify-center overflow-hidden text-sm font-semibold">
+                  {avatarUrl ? (
+                    <img
+                      src={avatarUrl}
+                      alt={fullName || "Profile"}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <span>{initials || 'U'}</span>
+                  )}
                 </div>
                 <div className="leading-tight">
                   <div className="text-sm font-semibold">

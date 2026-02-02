@@ -6,6 +6,8 @@ import useSWR from 'swr';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
+import { supabase } from '../lib/supabase';
+import { useAuthUser } from '../lib/useAuthUser';
 
 type ClassCard = {
   id: string;
@@ -25,6 +27,7 @@ type ClassCard = {
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 export function Classes() {
+  const { user } = useAuthUser();
   const searchParams = useSearchParams();
   const style = (searchParams.get("style") || "").trim();
   const query = (searchParams.get("q") || "").trim();
@@ -41,6 +44,8 @@ export function Classes() {
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
+  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
+  const [favoriteLoading, setFavoriteLoading] = useState<Record<string, boolean>>({});
 
   const updateScrollState = () => {
     const el = scrollerRef.current;
@@ -86,6 +91,75 @@ export function Classes() {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    const loadFavorites = async () => {
+      if (!user?.uuid || classes.length === 0) {
+        if (active) setFavoriteIds(new Set());
+        return;
+      }
+      try {
+        const classIds = classes.map((c) => c.id);
+        const { data, error } = await supabase
+          .from("class_favorites")
+          .select("slot_id")
+          .eq("user_id", user.uuid)
+          .in("slot_id", classIds);
+        if (error) throw error;
+        const ids = new Set((data || []).map((row) => row.slot_id));
+        if (active) setFavoriteIds(ids);
+      } catch (err) {
+        console.warn("Failed to load favorites", err);
+      }
+    };
+    loadFavorites();
+    return () => {
+      active = false;
+    };
+  }, [user?.uuid, classes]);
+
+  const toggleFavorite = async (classId: string) => {
+    if (!user?.uuid) {
+      alert("Please sign in to save favorites.");
+      return;
+    }
+    if (favoriteLoading[classId]) return;
+    setFavoriteLoading((prev) => ({ ...prev, [classId]: true }));
+    const isFav = favoriteIds.has(classId);
+    setFavoriteIds((prev) => {
+      const next = new Set(prev);
+      if (isFav) next.delete(classId);
+      else next.add(classId);
+      return next;
+    });
+    try {
+      if (isFav) {
+        const { error } = await supabase
+          .from("class_favorites")
+          .delete()
+          .eq("user_id", user.uuid)
+          .eq("slot_id", classId);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("class_favorites")
+          .insert({ user_id: user.uuid, slot_id: classId });
+        if (error) throw error;
+      }
+    } catch (err) {
+      console.error("Failed to update favorite", err);
+      // revert on error
+      setFavoriteIds((prev) => {
+        const next = new Set(prev);
+        if (isFav) next.add(classId);
+        else next.delete(classId);
+        return next;
+      });
+    } finally {
+      setFavoriteLoading((prev) => ({ ...prev, [classId]: false }));
+    }
+  };
+
   return (
     <section id="classes" className="py-10 bg-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -128,6 +202,7 @@ export function Classes() {
               const imageUrl = failedImages[classItem.id]
                 ? fallbackUrl
                 : classItem.imageUrl || fallbackUrl;
+              const isFavorite = favoriteIds.has(classItem.id);
               return (
               <Link
                 key={classItem.id}
@@ -151,11 +226,15 @@ export function Classes() {
                     type="button"
                     onClick={(event) => {
                       event.preventDefault();
+                      toggleFavorite(classItem.id);
                     }}
-                    className="absolute right-3 top-3 rounded-full bg-white/90 p-2 text-slate-600 shadow-sm hover:text-rose-500"
-                    aria-label="Save class"
+                    className={`absolute right-3 top-3 rounded-full bg-white/90 p-2 shadow-sm transition-colors ${
+                      isFavorite ? "text-rose-500" : "text-slate-600 hover:text-rose-500"
+                    }`}
+                    aria-label={isFavorite ? "Remove from favorites" : "Save class"}
+                    disabled={!!favoriteLoading[classItem.id]}
                   >
-                    <Heart size={16} />
+                    <Heart size={16} className={isFavorite ? "fill-rose-500" : undefined} />
                   </button>
                 </div>
                 <div className="p-4 space-y-2">
