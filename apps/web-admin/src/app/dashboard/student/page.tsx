@@ -1,20 +1,73 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { Compass, Heart, CalendarDays } from "lucide-react";
+import { Compass, Heart, CalendarDays, Bell } from "lucide-react";
 import { StudentClassList } from "../../../components/dashboard/StudentClassList";
 import { listBookings, type Booking } from "../../../lib/bookings";
+import { type Notification } from "../../../lib/notifications";
+import { supabase } from "../../../lib/supabase";
+import { useAuthUser } from "../../../lib/useAuthUser";
 
 
 export default function StudentDashboardPage() {
+  const { user } = useAuthUser();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [now] = useState(() => Date.now());
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
+  const [notificationsError, setNotificationsError] = useState<string | null>(null);
 
   useEffect(() => {
     listBookings()
       .then(setBookings)
       .catch((err) => console.warn("Failed to load bookings", err));
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    const loadNotifications = async () => {
+      if (!user?.uuid) return;
+      setNotificationsLoading(true);
+      setNotificationsError(null);
+      try {
+        const { data: studioLinks, error: linkError } = await supabase
+          .from("student_studios")
+          .select("studio_id")
+          .eq("student_id", user.uuid);
+
+        if (linkError) throw linkError;
+        const studioIds = (studioLinks || [])
+          .map((row) => row.studio_id)
+          .filter(Boolean) as string[];
+
+        if (studioIds.length === 0) {
+          if (active) setNotifications([]);
+          return;
+        }
+
+        const { data, error } = await supabase
+          .from("notifications")
+          .select("id, studio_id, title, body, target_audience, created_at")
+          .in("studio_id", studioIds)
+          .or("target_audience.eq.all,target_audience.eq.students")
+          .order("created_at", { ascending: false })
+          .limit(6);
+
+        if (error) throw error;
+        if (active) setNotifications((data || []) as Notification[]);
+      } catch (err: unknown) {
+        console.warn("Failed to load notifications", err);
+        if (active) setNotificationsError("Unable to load notifications.");
+      } finally {
+        if (active) setNotificationsLoading(false);
+      }
+    };
+
+    loadNotifications();
+    return () => {
+      active = false;
+    };
+  }, [user?.uuid]);
 
   const stats = useMemo(() => {
     const upcoming = bookings.filter((b) =>
@@ -95,6 +148,47 @@ export default function StudentDashboardPage() {
                 </div>
               </div>
             ))}
+          </section>
+
+          <section className="mt-8">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Notifications</p>
+                <h2 className="text-2xl font-bold text-slate-900">Updates from your studio</h2>
+              </div>
+              <button className="text-sm text-slate-500 hover:text-slate-700">
+                View all
+              </button>
+            </div>
+            <div className="rounded-2xl border border-slate-100 bg-white/80 p-5 shadow-sm">
+              {notificationsLoading ? (
+                <div className="text-sm text-slate-500">Loading notifications...</div>
+              ) : notificationsError ? (
+                <div className="text-sm text-rose-500">{notificationsError}</div>
+              ) : notifications.length === 0 ? (
+                <div className="flex items-center gap-2 text-sm text-slate-500">
+                  <Bell size={16} />
+                  No notifications yet.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {notifications.map((notif) => (
+                    <div key={notif.id} className="flex items-start gap-3">
+                      <div className="mt-1 h-8 w-8 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center">
+                        <Bell size={14} />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">{notif.title}</p>
+                        <p className="text-sm text-slate-600">{notif.body}</p>
+                        <p className="text-xs text-slate-400 mt-1">
+                          {new Date(notif.created_at).toLocaleDateString()}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </section>
 
           <section className="mt-12">
