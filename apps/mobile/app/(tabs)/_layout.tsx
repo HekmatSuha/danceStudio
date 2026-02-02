@@ -86,7 +86,7 @@ export default function TabLayout() {
       />
       {isAdmin && !loadingRole ? (
         <Tabs.Screen
-          name="admin/index"
+          name="admin"
           options={{
             title: 'Admin',
             tabBarIcon: ({ color }) => <IconSymbol size={28} name="briefcase.fill" color={color} />,
@@ -95,72 +95,12 @@ export default function TabLayout() {
         />
       ) : (
         <Tabs.Screen
-          name="admin/index"
+          name="admin"
           options={{
             href: null,
           }}
         />
       )}
-      <Tabs.Screen
-        name="admin/studios"
-        options={{
-          href: null,
-        }}
-      />
-      <Tabs.Screen
-        name="admin/users"
-        options={{
-          href: null,
-        }}
-      />
-      <Tabs.Screen
-        name="admin/owner/overview"
-        options={{
-          href: null,
-        }}
-      />
-      <Tabs.Screen
-        name="admin/owner/classes"
-        options={{
-          href: null,
-        }}
-      />
-      <Tabs.Screen
-        name="admin/owner/rooms"
-        options={{
-          href: null,
-        }}
-      />
-      <Tabs.Screen
-        name="admin/owner/instructors"
-        options={{
-          href: null,
-        }}
-      />
-      <Tabs.Screen
-        name="admin/owner/students"
-        options={{
-          href: null,
-        }}
-      />
-      <Tabs.Screen
-        name="admin/owner/requests"
-        options={{
-          href: null,
-        }}
-      />
-      <Tabs.Screen
-        name="admin/owner/payments"
-        options={{
-          href: null,
-        }}
-      />
-      <Tabs.Screen
-        name="admin/owner/studios"
-        options={{
-          href: null,
-        }}
-      />
     </Tabs>
   );
 }

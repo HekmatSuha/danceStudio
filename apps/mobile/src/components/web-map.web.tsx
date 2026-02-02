@@ -1,4 +1,3 @@
-import "leaflet/dist/leaflet.css";
 import React, { useEffect, useRef, useState } from "react";
 import { StyleSheet, View } from "react-native";
 
@@ -50,6 +49,17 @@ export default function WebMap({
 
     let canceled = false;
     const initMap = async () => {
+      if (typeof document !== "undefined") {
+        const existing = document.querySelector('link[data-leaflet-css="true"]');
+        if (!existing) {
+          const link = document.createElement("link");
+          link.rel = "stylesheet";
+          link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+          link.setAttribute("data-leaflet-css", "true");
+          document.head.appendChild(link);
+        }
+      }
+
       const mod = await import("leaflet");
       if (canceled || !isMounted.current) return;
       const L = mod.default ?? mod;

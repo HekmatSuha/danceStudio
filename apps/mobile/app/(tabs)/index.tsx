@@ -11,6 +11,7 @@ import {
   Platform,
   Alert,
   Keyboard,
+  NativeModules,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Image } from "expo-image";
@@ -61,11 +62,25 @@ export default function ExploreScreen() {
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
   const mapRef = useRef<any>(null);
   const isWeb = Platform.OS === "web";
-  const useLeaflet = isWeb || Constants.appOwnership === "expo";
-  const [mapComponents, setMapComponents] = useState<{
-    MapView: React.ComponentType<any>;
-    Marker: React.ComponentType<any>;
-  } | null>(null);
+  const hasNativeMapsModule =
+    !isWeb && Boolean((NativeModules as any)?.RNMapsAirModule);
+
+  let MapView: any = null;
+  let Marker: any = null;
+  if (hasNativeMapsModule) {
+    try {
+      const maps = require("react-native-maps");
+      MapView = maps.default ?? maps;
+      Marker = maps.Marker;
+    } catch (err) {
+      MapView = null;
+      Marker = null;
+    }
+  }
+
+  const useNativeMaps = Boolean(MapView && Marker);
+  const useWebMap = !useNativeMaps;
+  const useWebViewMap = useWebMap && !isWeb;
 
   useEffect(() => {
     let mounted = true;
@@ -87,26 +102,10 @@ export default function ExploreScreen() {
       }
     };
     loadData();
-    if (!useLeaflet && !isWeb) {
-      import("react-native-maps")
-        .then((maps) => {
-          if (!mounted) return;
-          setMapComponents({
-            MapView: maps.default,
-            Marker: maps.Marker,
-          });
-        })
-        .catch(() => {
-          if (!mounted) return;
-          setMapComponents(null);
-        });
-    } else {
-      setMapComponents(null);
-    }
     return () => {
       mounted = false;
     };
-  }, [isWeb, useLeaflet]);
+  }, []);
 
   const studioCounts = useMemo(() => {
     return slots.reduce<Record<string, number>>((acc, slot) => {
@@ -173,20 +172,19 @@ export default function ExploreScreen() {
     const map = mapRef.current;
     if (!map) return;
     
-    if (isWeb) {
-      const delta = direction === "in" ? 1 : -1;
-      if (!map._loaded || !map._mapPane || !map._container) return;
-      try {
-        map.setZoom(map.getZoom() + delta);
-      } catch (err) {
-        console.warn("Map zoom failed", err);
+    if (useWebMap) {
+      if (isWeb) {
+        const delta = direction === "in" ? 1 : -1;
+        if (!map._loaded || !map._mapPane || !map._container) return;
+        try {
+          map.setZoom(map.getZoom() + delta);
+        } catch (err) {
+          console.warn("Map zoom failed", err);
+        }
+      } else if (useWebViewMap) {
+        const type = direction === "in" ? "ZOOM_IN" : "ZOOM_OUT";
+        map.postMessage(JSON.stringify({ type }));
       }
-      return;
-    }
-
-    if (useLeaflet) {
-      const type = direction === "in" ? "ZOOM_IN" : "ZOOM_OUT";
-      map.postMessage(JSON.stringify({ type }));
       return;
     }
 
@@ -212,18 +210,17 @@ export default function ExploreScreen() {
     const map = mapRef.current;
     if (!map) return;
     
-    if (isWeb) {
-      if (!map._loaded || !map._mapPane || !map._container) return;
-      try {
-        map.setView([initialRegion.latitude, initialRegion.longitude], map.getZoom());
-      } catch (err) {
-        console.warn("Map center failed", err);
+    if (useWebMap) {
+      if (isWeb) {
+        if (!map._loaded || !map._mapPane || !map._container) return;
+        try {
+          map.setView([initialRegion.latitude, initialRegion.longitude], map.getZoom());
+        } catch (err) {
+          console.warn("Map center failed", err);
+        }
+      } else if (useWebViewMap) {
+        map.postMessage(JSON.stringify({ type: "CENTER" }));
       }
-      return;
-    }
-
-    if (useLeaflet) {
-      map.postMessage(JSON.stringify({ type: "CENTER" }));
       return;
     }
 
@@ -397,7 +394,7 @@ export default function ExploreScreen() {
             <View style={styles.mapLoading}>
               <ActivityIndicator color="#111827" />
             </View>
-          ) : useLeaflet ? (
+          ) : useWebMap ? (
             <WebMap
               studios={mapStudios}
               counts={studioCounts}
@@ -408,18 +405,17 @@ export default function ExploreScreen() {
               }}
               onStudioSelect={handleStudioPress}
             />
-          ) : mapComponents?.MapView && mapComponents?.Marker ? (
-            <mapComponents.MapView
+          ) : (
+            <MapView
               ref={mapRef}
               style={StyleSheet.absoluteFillObject}
               initialRegion={initialRegion}
               showsCompass={false}
               showsPointsOfInterest={false}
               showsUserLocation
-              collapsable={false}
             >
               {mapStudios.map((studio) => (
-                <mapComponents.Marker
+                <Marker
                   key={studio.uuid}
                   coordinate={{ latitude: studio.latitude, longitude: studio.longitude }}
                   onPress={() => handleStudioPress(studio.uuid)}
@@ -427,17 +423,9 @@ export default function ExploreScreen() {
                   <View style={styles.pin}>
                     <Text style={styles.pinText}>{studioCounts[studio.uuid] || 1}</Text>
                   </View>
-                </mapComponents.Marker>
+                </Marker>
               ))}
-            </mapComponents.MapView>
-          ) : (
-            <View style={styles.mapFallback}>
-              <Image source={{ uri: MAP_FALLBACK }} style={styles.mapFallbackImage} contentFit="cover" />
-              <View style={styles.mapFallbackOverlay} />
-              <View style={styles.mapFallbackLabel}>
-                <Text style={styles.mapFallbackText}>Map requires a dev build</Text>
-              </View>
-            </View>
+            </MapView>
           )}
           <View style={styles.mapControls}>
             <Pressable style={styles.mapControlBtn} onPress={() => handleZoom("in")}>

@@ -36,7 +36,8 @@ export default function BookingsScreen() {
     : bookings.filter((b) => b.status !== "cancelled");
   const selectedIsPaid = selectedBooking?.status?.toLowerCase() === "confirmed";
 
-  const renderDateLabel = (booking: Booking) => {
+  const renderDateLabel = (booking: Booking | null) => {
+    if (!booking) return "Date TBD";
     const start = booking.slot?.start_time;
     const dateValue = start || booking.booking_date;
     if (!dateValue) return "Date TBD";
@@ -45,7 +46,8 @@ export default function BookingsScreen() {
     return date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
   };
 
-  const renderTimeLabel = (booking: Booking) => {
+  const renderTimeLabel = (booking: Booking | null) => {
+    if (!booking) return "Time TBD";
     const start = booking.slot?.start_time;
     if (!start) return "Time TBD";
     const date = new Date(start);
@@ -53,7 +55,8 @@ export default function BookingsScreen() {
     return date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
   };
 
-  const renderTrainerLabel = (booking: Booking) => {
+  const renderTrainerLabel = (booking: Booking | null) => {
+    if (!booking) return "Instructor TBA";
     const trainer = booking.slot?.trainer_details?.trainer_details;
     if (!trainer?.first_name) return "Instructor TBA";
     return `${trainer.first_name} ${trainer.last_name || ""}`.trim();
@@ -305,15 +308,15 @@ export default function BookingsScreen() {
               </View>
               <View style={styles.modalRow}>
                 <Text style={styles.modalLabel}>Date</Text>
-                <Text style={styles.modalValue}>{renderDateLabel(selectedBooking!)}</Text>
+                <Text style={styles.modalValue}>{renderDateLabel(selectedBooking)}</Text>
               </View>
               <View style={styles.modalRow}>
                 <Text style={styles.modalLabel}>Time</Text>
-                <Text style={styles.modalValue}>{renderTimeLabel(selectedBooking!)}</Text>
+                <Text style={styles.modalValue}>{renderTimeLabel(selectedBooking)}</Text>
               </View>
               <View style={styles.modalRow}>
                 <Text style={styles.modalLabel}>Teacher</Text>
-                <Text style={styles.modalValue}>{renderTrainerLabel(selectedBooking!)}</Text>
+                <Text style={styles.modalValue}>{renderTrainerLabel(selectedBooking)}</Text>
               </View>
               <View style={styles.modalRow}>
                 <Text style={styles.modalLabel}>Payment</Text>
