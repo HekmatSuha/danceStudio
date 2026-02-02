@@ -66,6 +66,9 @@ export default function TabLayout() {
   );
 
   const showAdmin = isAdmin && !loadingRole;
+  
+  // Debug logging
+  console.log('[TabLayout] role:', role, 'isAdmin:', isAdmin, 'showAdmin:', showAdmin);
 
   if (Platform.OS === 'web') {
     return (
@@ -98,15 +101,6 @@ export default function TabLayout() {
               tabBarIcon: ({ color }) => <IconSymbol size={28} name="person.crop.circle" color={color} />,
             }}
           />
-          {showAdmin ? (
-            <ExpoTabs.Screen
-              name="admin"
-              options={{
-                title: 'Admin',
-                tabBarIcon: ({ color }) => <IconSymbol size={28} name="briefcase.fill" color={color} />,
-              }}
-            />
-          ) : null}
         </ExpoTabs>
       </TabSwipeProvider>
     );
@@ -148,15 +142,6 @@ export default function TabLayout() {
             tabBarIcon: ({ color }) => <IconSymbol size={28} name="person.crop.circle" color={color} />,
           }}
         />
-        {showAdmin ? (
-          <Tabs.Screen
-            name="admin"
-            options={{
-              title: 'Admin',
-              tabBarIcon: ({ color }) => <IconSymbol size={28} name="briefcase.fill" color={color} />,
-            }}
-          />
-        ) : null}
       </Tabs>
     </TabSwipeProvider>
   );

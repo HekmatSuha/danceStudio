@@ -18,7 +18,9 @@ import {
   fetchProfile,
   logout,
   updateProfile,
+  getCurrentRole,
   type AccountProfile,
+  type MobileUserRole,
 } from "../../../src/services/auth";
 import { supabase } from "../../../src/lib/supabase";
 
@@ -34,6 +36,7 @@ type ProfileForm = {
 
 export default function ProfileScreen() {
   const [profile, setProfile] = useState<AccountProfile | null>(null);
+  const [role, setRole] = useState<MobileUserRole | null>(null);
   const [form, setForm] = useState<ProfileForm>({
     firstName: "",
     lastName: "",
@@ -55,8 +58,12 @@ export default function ProfileScreen() {
         setProfile(null);
         return;
       }
-      const data = await fetchProfile();
+      const [data, currentRole] = await Promise.all([
+        fetchProfile(),
+        getCurrentRole(),
+      ]);
       setProfile(data);
+      setRole(currentRole);
       setForm({
         firstName: data.first_name || "",
         lastName: data.last_name || "",
@@ -210,6 +217,25 @@ export default function ProfileScreen() {
 
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Account</Text>
+          
+          {(role === "owner" || role === "instructor" || role === "super_admin") && (
+            <Pressable
+              style={styles.adminButton}
+              onPress={() => router.push("/admin")}
+            >
+              <View style={styles.adminContent}>
+                <View style={styles.adminIcon}>
+                  <Ionicons name="briefcase" size={20} color="white" />
+                </View>
+                <View>
+                  <Text style={styles.adminTitle}>Admin Dashboard</Text>
+                  <Text style={styles.adminSub}>Manage studio & classes</Text>
+                </View>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#64748b" />
+            </Pressable>
+          )}
+
           <View style={styles.inputGroup}>
             <Text style={styles.label}>First Name</Text>
             <TextInput
@@ -485,5 +511,38 @@ const styles = StyleSheet.create({
     color: "white",
     fontSize: 16,
     fontWeight: "700",
+  },
+  adminButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#f8fafc",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 20,
+  },
+  adminContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  adminIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: "#0f172a",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  adminTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#0f172a",
+  },
+  adminSub: {
+    fontSize: 12,
+    color: "#64748b",
   },
 });
