@@ -3,7 +3,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Instagram, Mail } from "lucide-react";
 import Image from "next/image";
-import { supabase } from "../lib/supabase";
 
 type InstructorProfile = {
   id: string;
@@ -13,22 +12,6 @@ type InstructorProfile = {
   avatar_url?: string | null;
   studio_name?: string | null;
   studio_city?: string | null;
-};
-
-type ProfileRow = {
-  id: string;
-  first_name?: string | null;
-  last_name?: string | null;
-  bio?: string | null;
-  avatar_url?: string | null;
-};
-
-type StaffRow = {
-  user_id?: string | null;
-  studio?: {
-    name?: string | null;
-    city?: string | null;
-  } | null;
 };
 
 export function Instructors() {
@@ -43,49 +26,12 @@ export function Instructors() {
       setLoading(true);
       setError(null);
       try {
-        const { data: profiles, error: profileError } = await supabase
-          .from("profiles")
-          .select("id, first_name, last_name, bio, avatar_url")
-          .eq("role", "instructor")
-          .order("first_name", { ascending: true })
-          .limit(200);
-
-        if (profileError) throw profileError;
-
-        const rows = (profiles as ProfileRow[] | null | undefined) || [];
-        const ids = rows.map((row) => row.id).filter(Boolean);
-        const studioMap = new Map<string, { name?: string | null; city?: string | null }>();
-
-        if (ids.length > 0) {
-          const { data: staffRows, error: staffError } = await supabase
-            .from("tenant_staff")
-            .select("user_id, studio:studios(name, city)")
-            .in("user_id", ids);
-
-          if (staffError) throw staffError;
-
-          (staffRows as StaffRow[] | null | undefined)?.forEach((row) => {
-            const userId = row.user_id || "";
-            if (!userId || studioMap.has(userId)) return;
-            studioMap.set(userId, {
-              name: row.studio?.name ?? null,
-              city: row.studio?.city ?? null,
-            });
-          });
+        const res = await fetch("/api/public/instructors");
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || "Failed to load instructors.");
         }
-
-        const mapped = rows.map((row) => {
-          const studio = studioMap.get(row.id);
-          return {
-            id: row.id,
-            first_name: row.first_name ?? null,
-            last_name: row.last_name ?? null,
-            bio: row.bio ?? null,
-            avatar_url: row.avatar_url ?? null,
-            studio_name: studio?.name ?? null,
-            studio_city: studio?.city ?? null,
-          };
-        });
+        const mapped = (await res.json()) as InstructorProfile[];
 
         if (active) {
           setInstructors(mapped);

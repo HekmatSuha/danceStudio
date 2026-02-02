@@ -27,6 +27,23 @@ export async function createBooking(slotId: string) {
     .single();
 
   if (error) throw error;
+  try {
+    const { data: slotRow } = await supabase
+      .from("slots")
+      .select("studio_id")
+      .eq("uuid", slotId)
+      .single();
+    if (slotRow?.studio_id) {
+      await supabase
+        .from("student_studios")
+        .upsert(
+          { studio_id: slotRow.studio_id, student_id: user.id },
+          { onConflict: "studio_id,student_id" }
+        );
+    }
+  } catch {
+    // Non-blocking: chat contacts should still work when policy allows.
+  }
   clearCacheByPrefix("bookings:");
   return data as Booking;
 }
@@ -48,6 +65,23 @@ export async function createBookingForStudent(
     .single();
 
   if (error) throw error;
+  try {
+    const { data: slotRow } = await supabase
+      .from("slots")
+      .select("studio_id")
+      .eq("uuid", slotId)
+      .single();
+    if (slotRow?.studio_id) {
+      await supabase
+        .from("student_studios")
+        .upsert(
+          { studio_id: slotRow.studio_id, student_id: userId },
+          { onConflict: "studio_id,student_id" }
+        );
+    }
+  } catch {
+    // Non-blocking: owner policy might already cover this.
+  }
   clearCacheByPrefix("bookings:");
   return data as Booking;
 }
