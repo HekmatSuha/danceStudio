@@ -136,7 +136,8 @@ export async function updateStudio(uuid: string, data: Partial<Studio>) {
       address: data.address,
       latitude: data.latitude ?? null,
       longitude: data.longitude ?? null,
-      whatsapp: data.whatsapp ?? null
+      whatsapp: data.whatsapp ?? null,
+      image_url: data.image_url ?? undefined
     })
     .eq('uuid', uuid)
     .select();

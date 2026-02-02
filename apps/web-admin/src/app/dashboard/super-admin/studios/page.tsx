@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { Plus, MapPin, Building2, User, Pencil, Trash2 } from "lucide-react";
 import { listStudios, updateStudio, deleteStudio, type Studio } from "../../../../lib/studios";
+import { supabase } from "../../../../lib/supabase";
 import { createTenantAction } from "../../../actions/create-tenant";
 import { inviteStudioOwnerAction } from "../../../actions/invite-studio-owner";
 import { getErrorMessage } from "../../../../lib/errors";
@@ -71,6 +72,25 @@ export default function SuperAdminStudiosPage() {
     const formData = new FormData(e.currentTarget);
     
     try {
+      const imageFileEntry = formData.get("studioImage");
+      const imageFile = imageFileEntry instanceof File ? imageFileEntry : null;
+      let imageUrl: string | null | undefined = undefined;
+
+      if (imageFile && imageFile.size > 0) {
+        const safeName = imageFile.name.replace(/[^a-zA-Z0-9._-]/g, "_") || "studio.jpg";
+        const path = `${editingStudio.uuid}/${Date.now()}-${safeName}`;
+        const { error: uploadError } = await supabase.storage
+          .from("studio-images")
+          .upload(path, imageFile, { upsert: true });
+
+        if (uploadError) {
+          throw new Error(`Failed to upload image: ${uploadError.message}`);
+        }
+
+        const { data } = supabase.storage.from("studio-images").getPublicUrl(path);
+        imageUrl = data.publicUrl;
+      }
+
       await updateStudio(editingStudio.uuid, {
         name: formData.get("name") as string,
         city: formData.get("city") as string,
@@ -78,6 +98,7 @@ export default function SuperAdminStudiosPage() {
         latitude: parseOptionalNumber(formData.get("latitude")),
         longitude: parseOptionalNumber(formData.get("longitude")),
         whatsapp: (formData.get("whatsapp") as string) || null,
+        image_url: imageUrl
       });
       setEditingStudio(null);
       setRefreshTrigger((prev) => prev + 1);
@@ -321,6 +342,27 @@ export default function SuperAdminStudiosPage() {
                 required
                 className="w-full border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
               />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Studio Image</label>
+              <div className="flex items-center gap-4">
+                {editingStudio.image_url ? (
+                  <div className="h-20 w-32 overflow-hidden rounded-lg border border-gray-200 bg-slate-100">
+                    <img src={editingStudio.image_url} alt={editingStudio.name} className="h-full w-full object-cover" />
+                  </div>
+                ) : (
+                  <div className="h-20 w-32 rounded-lg border border-dashed border-slate-300 bg-slate-50 flex items-center justify-center text-xs text-slate-400">
+                    No image
+                  </div>
+                )}
+                <input
+                  name="studioImage"
+                  type="file"
+                  accept="image/*"
+                  className="w-full border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                />
+              </div>
+              <p className="text-xs text-gray-500 mt-1">Upload a new image to replace the current one.</p>
             </div>
             <div className="flex justify-end gap-2 pt-4">
               <button type="button" onClick={() => setEditingStudio(null)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button>
