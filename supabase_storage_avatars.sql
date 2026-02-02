@@ -16,7 +16,7 @@ create policy "Users can upload their own avatars"
   to authenticated
   with check (
     bucket_id = 'avatars'
-    and owner = auth.uid()
+    and (storage.foldername(name))[1] = auth.uid()::text
   );
 
 -- Allow authenticated users to update their own avatar files
@@ -27,7 +27,7 @@ create policy "Users can update their own avatars"
   to authenticated
   using (
     bucket_id = 'avatars'
-    and owner = auth.uid()
+    and (storage.foldername(name))[1] = auth.uid()::text
   );
 
 -- Allow authenticated users to delete their own avatar files
@@ -38,5 +38,5 @@ create policy "Users can delete their own avatars"
   to authenticated
   using (
     bucket_id = 'avatars'
-    and owner = auth.uid()
+    and (storage.foldername(name))[1] = auth.uid()::text
   );
