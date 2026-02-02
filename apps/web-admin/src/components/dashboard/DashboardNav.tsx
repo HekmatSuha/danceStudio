@@ -43,6 +43,47 @@ type NavItem = {
   icon: React.ReactNode;
 };
 
+const navItemsByRole: Record<UserRole, NavItem[]> = {
+  student: [
+    { label: "Overview", href: "/dashboard/student", icon: <LayoutDashboard size={20} /> },
+    { label: "My Bookings", href: "/dashboard/student/bookings", icon: <CalendarDays size={20} /> },
+    { label: "History", href: "/dashboard/student/history", icon: <History size={20} /> },
+    { label: "Messages", href: "/dashboard/student/chat", icon: <MessageCircle size={20} /> },
+  ],
+  instructor: [
+    { label: "Overview", href: "/dashboard/instructor", icon: <LayoutDashboard size={20} /> },
+    { label: "My Schedule", href: "/dashboard/instructor/schedule", icon: <CalendarDays size={20} /> },
+    { label: "Students", href: "/dashboard/instructor/students", icon: <Users size={20} /> },
+    { label: "Requests", href: "/dashboard/instructor/requests", icon: <Inbox size={20} /> },
+    { label: "Studio Rentals", href: "/dashboard/instructor/rentals", icon: <Search size={20} /> },
+    { label: "Payments", href: "/dashboard/instructor/payments", icon: <DollarSign size={20} /> },
+    { label: "Notifications", href: "/dashboard/instructor/notifications", icon: <Bell size={20} /> },
+    { label: "Activity Analytics", href: "/dashboard/instructor/analytics", icon: <BarChart3 size={20} /> },
+    { label: "Income Analytics", href: "/dashboard/instructor/income", icon: <TrendingUp size={20} /> },
+    { label: "Advertisements", href: "/dashboard/instructor/advertisements", icon: <Megaphone size={20} /> },
+    { label: "City Events", href: "/dashboard/instructor/events", icon: <MapPin size={20} /> },
+    { label: "Messages", href: "/dashboard/instructor/chat", icon: <MessageCircle size={20} /> },
+  ],
+  owner: [
+    { label: "Overview", href: "/dashboard/owner", icon: <LayoutDashboard size={20} /> },
+    { label: "Classes & Events", href: "/dashboard/owner/classes", icon: <CalendarDays size={20} /> },
+    { label: "Instructors", href: "/dashboard/owner/instructors", icon: <UserCircle size={20} /> },
+    { label: "Rooms", href: "/dashboard/owner/rooms", icon: <DoorOpen size={20} /> },
+    { label: "Students", href: "/dashboard/owner/students", icon: <Users size={20} /> },
+    { label: "Requests", href: "/dashboard/owner/requests", icon: <Inbox size={20} /> },
+    { label: "Finance", href: "/dashboard/owner/payments", icon: <DollarSign size={20} /> },
+    { label: "Notifications", href: "/dashboard/owner/notifications", icon: <Bell size={20} /> },
+    { label: "Advertisements", href: "/dashboard/owner/advertisements", icon: <Megaphone size={20} /> },
+    { label: "Messages", href: "/dashboard/owner/chat", icon: <MessageCircle size={20} /> },
+  ],
+  super_admin: [
+    { label: "Overview", href: "/dashboard/super-admin", icon: <LayoutDashboard size={20} /> },
+    { label: "Manage Studios", href: "/dashboard/super-admin/studios", icon: <Building2 size={20} /> },
+    { label: "System Users", href: "/dashboard/super-admin/users", icon: <Users size={20} /> },
+    { label: "Messages", href: "/dashboard/super-admin/chat", icon: <MessageCircle size={20} /> },
+  ],
+};
+
 export function DashboardNav({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -50,6 +91,7 @@ export function DashboardNav({ children }: { children: React.ReactNode }) {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [studioIdsParam, setStudioIdsParam] = useState("");
   const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
+  const [enableSummaries, setEnableSummaries] = useState(false);
 
   useEffect(() => {
     if (!user || role !== "owner") {
@@ -73,14 +115,32 @@ export function DashboardNav({ children }: { children: React.ReactNode }) {
     };
   }, [role, user]);
 
+  useEffect(() => {
+    if (role !== "owner") {
+      setEnableSummaries(false);
+      return;
+    }
+    let timeoutId: number | null = null;
+    if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+      const idleId = window.requestIdleCallback(() => setEnableSummaries(true), {
+        timeout: 1500,
+      });
+      return () => window.cancelIdleCallback(idleId);
+    }
+    timeoutId = window.setTimeout(() => setEnableSummaries(true), 400);
+    return () => {
+      if (timeoutId) window.clearTimeout(timeoutId);
+    };
+  }, [role]);
+
   const { data: requestSummary } = useAuthedSWR<RequestSummary>(
-    role === "owner" && studioIdsParam
+    role === "owner" && enableSummaries && studioIdsParam
       ? `/api/owner/requests/summary?studioIds=${studioIdsParam}`
       : null
   );
 
   const { data: unreadSummary } = useAuthedSWR<UnreadSummary>(
-    role === "owner" ? "/api/chat/unread" : null
+    role === "owner" && enableSummaries ? "/api/chat/unread" : null
   );
 
   const hasPendingRequests = useMemo(() => {
@@ -101,57 +161,7 @@ export function DashboardNav({ children }: { children: React.ReactNode }) {
     }
   }, [role, unreadSummary, user]);
 
-  // Define navigation items based on role
-  const getNavItems = (role: UserRole | null): NavItem[] => {
-    switch (role) {
-      case "student":
-        return [
-          { label: "Overview", href: "/dashboard/student", icon: <LayoutDashboard size={20} /> },
-          { label: "My Bookings", href: "/dashboard/student/bookings", icon: <CalendarDays size={20} /> },
-          { label: "History", href: "/dashboard/student/history", icon: <History size={20} /> },
-          { label: "Messages", href: "/dashboard/student/chat", icon: <MessageCircle size={20} /> },
-        ];
-      case "instructor":
-        return [
-          { label: "Overview", href: "/dashboard/instructor", icon: <LayoutDashboard size={20} /> },
-          { label: "My Schedule", href: "/dashboard/instructor/schedule", icon: <CalendarDays size={20} /> },
-          { label: "Students", href: "/dashboard/instructor/students", icon: <Users size={20} /> },
-          { label: "Requests", href: "/dashboard/instructor/requests", icon: <Inbox size={20} /> },
-          { label: "Studio Rentals", href: "/dashboard/instructor/rentals", icon: <Search size={20} /> },
-          { label: "Payments", href: "/dashboard/instructor/payments", icon: <DollarSign size={20} /> },
-          { label: "Notifications", href: "/dashboard/instructor/notifications", icon: <Bell size={20} /> },
-          { label: "Activity Analytics", href: "/dashboard/instructor/analytics", icon: <BarChart3 size={20} /> },
-          { label: "Income Analytics", href: "/dashboard/instructor/income", icon: <TrendingUp size={20} /> },
-          { label: "Advertisements", href: "/dashboard/instructor/advertisements", icon: <Megaphone size={20} /> },
-          { label: "City Events", href: "/dashboard/instructor/events", icon: <MapPin size={20} /> },
-          { label: "Messages", href: "/dashboard/instructor/chat", icon: <MessageCircle size={20} /> },
-        ];
-      case "owner":
-        return [
-          { label: "Overview", href: "/dashboard/owner", icon: <LayoutDashboard size={20} /> },
-          { label: "Classes & Events", href: "/dashboard/owner/classes", icon: <CalendarDays size={20} /> },
-          { label: "Instructors", href: "/dashboard/owner/instructors", icon: <UserCircle size={20} /> },
-          { label: "Rooms", href: "/dashboard/owner/rooms", icon: <DoorOpen size={20} /> },
-          { label: "Students", href: "/dashboard/owner/students", icon: <Users size={20} /> },
-          { label: "Requests", href: "/dashboard/owner/requests", icon: <Inbox size={20} /> },
-          { label: "Finance", href: "/dashboard/owner/payments", icon: <DollarSign size={20} /> },
-          { label: "Notifications", href: "/dashboard/owner/notifications", icon: <Bell size={20} /> },
-          { label: "Advertisements", href: "/dashboard/owner/advertisements", icon: <Megaphone size={20} /> },
-          { label: "Messages", href: "/dashboard/owner/chat", icon: <MessageCircle size={20} /> },
-        ];
-      case "super_admin":
-        return [
-          { label: "Overview", href: "/dashboard/super-admin", icon: <LayoutDashboard size={20} /> },
-          { label: "Manage Studios", href: "/dashboard/super-admin/studios", icon: <Building2 size={20} /> },
-          { label: "System Users", href: "/dashboard/super-admin/users", icon: <Users size={20} /> },
-          { label: "Messages", href: "/dashboard/super-admin/chat", icon: <MessageCircle size={20} /> },
-        ];
-      default:
-        return [];
-    }
-  };
-
-  const navItems = getNavItems(role);
+  const navItems = role ? navItemsByRole[role] ?? [] : [];
 
   const handleSignOut = async () => {
     await signOut();
