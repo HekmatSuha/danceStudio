@@ -8,7 +8,6 @@
   "scripts": {
     "dev:mobile": "npm --workspace apps/mobile run start",
     "dev:web": "npm --workspace apps/web-admin run dev",
-    "dev:functions": "npm --workspace firebase/functions run serve",
     "lint": "echo \"Add eslint later\"",
     "android": "expo run:android",
     "ios": "expo run:ios"
