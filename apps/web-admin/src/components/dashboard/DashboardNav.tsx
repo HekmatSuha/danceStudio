@@ -120,17 +120,21 @@ export function DashboardNav({ children }: { children: React.ReactNode }) {
       setEnableSummaries(false);
       return;
     }
-    let timeoutId: number | null = null;
-    if (typeof window !== "undefined" && "requestIdleCallback" in window) {
-      const idleId = window.requestIdleCallback(() => setEnableSummaries(true), {
+
+    const idleCallbacks = globalThis as typeof globalThis & {
+      requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number;
+      cancelIdleCallback?: (handle: number) => void;
+    };
+
+    if (idleCallbacks.requestIdleCallback) {
+      const idleId = idleCallbacks.requestIdleCallback(() => setEnableSummaries(true), {
         timeout: 1500,
       });
-      return () => window.cancelIdleCallback(idleId);
+      return () => idleCallbacks.cancelIdleCallback?.(idleId);
     }
-    timeoutId = window.setTimeout(() => setEnableSummaries(true), 400);
-    return () => {
-      if (timeoutId) window.clearTimeout(timeoutId);
-    };
+
+    const timeoutId = setTimeout(() => setEnableSummaries(true), 400);
+    return () => clearTimeout(timeoutId);
   }, [role]);
 
   const { data: requestSummary } = useAuthedSWR<RequestSummary>(
