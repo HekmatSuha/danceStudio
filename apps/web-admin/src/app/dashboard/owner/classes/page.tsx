@@ -1,18 +1,10 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import useSWR from "swr";
-import {
-  Plus,
-  Calendar as CalendarIcon,
-  LayoutList,
-  Grip,
-  Users,
-} from "lucide-react";
-import { format, addDays, subDays, startOfDay, endOfDay } from "date-fns";
+import { Plus, Search } from "lucide-react";
 import { ClassForm } from "../../../../components/dashboard/ClassForm";
-import { fetchClasses, type ClassEvent } from "../../../../lib/classes";
 import { fetchSlotBookings, markAttendance, type BookingWithUser } from "../../../../lib/bookings";
+import { ClassTable } from "../../../../components/dashboard/ClassTable";
 import {
   Dialog,
   DialogContent,
@@ -30,385 +22,190 @@ import {
 import { Switch } from "../../../../components/ui/switch";
 import { useOwnerStudiosGuard } from "../../../../lib/useOwnerStudiosGuard";
 import { useRouter } from "next/navigation";
+import useSWR from "swr";
 
 export default function OwnerClassesPage() {
-  // State
-  const [selectedDate, setSelectedDate] = useState(new Date());
-  const [showForm, setShowForm] = useState(false);
-  const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
   const router = useRouter();
-
-  // Filters
-  const [teacherFilter, setTeacherFilter] = useState("all");
-  const [roomFilter, setRoomFilter] = useState("all");
-  const [typeFilter, setTypeFilter] = useState("all");
-  const [formatFilter, setFormatFilter] = useState("all");
-  const [showArchived, setShowArchived] = useState(false);
-  const [viewMode, setViewMode] = useState<"list" | "grid">("list");
-
   const { studios, loading: studiosLoading } = useOwnerStudiosGuard();
   const studioIds = studios.length ? studios.map((s) => s.uuid) : undefined;
 
-  // SWR: Classes
-  // We calculate the range based on selectedDate, same as before
-  const rangeStart = startOfDay(subDays(selectedDate, 30)).toISOString();
-  const rangeEnd = endOfDay(addDays(selectedDate, 30)).toISOString();
-  
-  const classesKey = studioIds && studioIds.length > 0 
-    ? ["classes", { 
-        studioIds, 
-        start_date: rangeStart, 
-        end_date: rangeEnd, 
-        orderBy: "start_time", 
-        orderAsc: true 
-      }] 
-    : null;
+  const [showForm, setShowForm] = useState(false);
+  const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [filter, setFilter] = useState<"all" | "upcoming" | "past">("all");
+  const [sortBy, setSortBy] = useState<"date_desc" | "date_asc" | "title">("date_desc");
+  const [search, setSearch] = useState("");
+  const [showAll, setShowAll] = useState(true);
 
-  const { data: classesData, mutate: mutateClasses } = useSWR(
-    classesKey,
-    ([, params]) => fetchClasses(params as any)
-  );
-
-  const allClasses = classesData || [];
-
-  // SWR: Roster
   const rosterKey = selectedClassId ? ["bookings", selectedClassId] : null;
-  const { 
-    data: rosterData, 
-    isLoading: loadingRoster, 
-    mutate: mutateRoster 
-  } = useSWR(
+  const { data: rosterData, isLoading: loadingRoster, mutate: mutateRoster } = useSWR(
     rosterKey,
     ([, id]) => fetchSlotBookings(id)
   );
-  
   const roster = rosterData || [];
 
-  // Derived Data
-  const filteredAndGroupedClasses = useMemo(() => {
-    const dayStart = startOfDay(selectedDate).getTime();
-    const dayEnd = endOfDay(selectedDate).getTime();
-
-    // 1. Filter by Date & Filters
-    const filtered = allClasses.filter((c) => {
-      // Date Check
-      if (c.startAt < dayStart || c.startAt > dayEnd) return false;
-
-      // Dropdown Filters
-      if (teacherFilter !== "all" && c.teacherName !== teacherFilter) return false;
-      if (roomFilter !== "all" && c.locationName !== roomFilter) return false;
-      // Mock Type/Format checks since they aren't on the type explicitly
-      // if (typeFilter !== 'all' && c.type !== typeFilter) return false;
-
-      return true;
-    });
-
-    // 2. Sort by time
-    filtered.sort((a, b) => a.startAt - b.startAt);
-
-    return filtered;
-  }, [allClasses, selectedDate, teacherFilter, roomFilter, typeFilter]);
-
-  // Unique lists for filters
-  const teachers = useMemo(() => Array.from(new Set(allClasses.map(c => c.teacherName).filter(Boolean))), [allClasses]);
-  const rooms = useMemo(() => Array.from(new Set(allClasses.map(c => c.locationName).filter(Boolean))), [allClasses]);
-
-  // Handlers
   const handleCreated = () => {
     setShowForm(false);
-    mutateClasses();
-  };
-
-  const handleViewRoster = (classId: string) => {
-    setSelectedClassId(classId);
+    setRefreshTrigger((prev) => prev + 1);
   };
 
   const handleToggleAttendance = async (booking: BookingWithUser) => {
     const next = !(booking.attended ?? false);
-    
-    // Optimistic Update
     mutateRoster(
       (current) => current?.map(b => b.uuid === booking.uuid ? { ...b, attended: next } : b),
       false
     );
-
     try {
       await markAttendance(booking.uuid, next);
-      mutateRoster(); // Revalidate to be sure
+      mutateRoster();
     } catch (err) {
-        alert("Failed to update attendance.");
-        mutateRoster(); // Revert on error
+      alert("Failed to update attendance.");
+      mutateRoster();
     }
   };
 
-  const hasClasses = filteredAndGroupedClasses.length > 0;
-
-  if (studiosLoading) return <div className="p-10 text-center text-slate-400">Loading schedule...</div>;
+  if (studiosLoading) {
+    return <div className="p-10 text-center text-slate-400">Loading classes...</div>;
+  }
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-8 space-y-8">
-      
-      {/* Filters Bar */}
-      <section className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col xl:flex-row gap-4 justify-between items-start xl:items-center">
-        <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto">
-           {/* Teacher Filter */}
-           <Select value={teacherFilter} onValueChange={setTeacherFilter}>
-                <SelectTrigger className="w-[180px] bg-slate-50 border-slate-200">
-                    <SelectValue placeholder="Select a teacher" />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="all">All teachers</SelectItem>
-                    {teachers.map(t => <SelectItem key={t} value={t!}>{t}</SelectItem>)}
-                </SelectContent>
-           </Select>
-
-           {/* Room Filter */}
-           <Select value={roomFilter} onValueChange={setRoomFilter}>
-                <SelectTrigger className="w-[160px] bg-slate-50 border-slate-200">
-                    <SelectValue placeholder="All rooms" />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="all">All rooms</SelectItem>
-                    {rooms.map(r => <SelectItem key={r} value={r!}>{r}</SelectItem>)}
-                </SelectContent>
-           </Select>
-
-           {/* Type Filter (Mocked) */}
-           <Select value={typeFilter} onValueChange={setTypeFilter}>
-                <SelectTrigger className="w-[140px] bg-slate-50 border-slate-200">
-                    <SelectValue placeholder="Type" />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="all">All types</SelectItem>
-                    <SelectItem value="group">Group Class</SelectItem>
-                    <SelectItem value="private">Private</SelectItem>
-                </SelectContent>
-           </Select>
-
-           {/* Format Filter (Mocked) */}
-           <Select value={formatFilter} onValueChange={setFormatFilter}>
-                <SelectTrigger className="w-[140px] bg-slate-50 border-slate-200">
-                    <SelectValue placeholder="Format" />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="all">All formats</SelectItem>
-                    <SelectItem value="in_person">In Person</SelectItem>
-                    <SelectItem value="online">Online</SelectItem>
-                </SelectContent>
-           </Select>
+    <div className="max-w-7xl mx-auto px-6 py-8 space-y-6">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-slate-900">Classes & Events</h1>
+          <p className="text-sm text-slate-500 mt-1">
+            View, edit, and manage all classes in one place.
+          </p>
         </div>
+        <button
+          onClick={() => setShowForm(true)}
+          className="flex items-center gap-2 bg-indigo-600 text-white px-5 py-2.5 rounded-xl hover:bg-indigo-700 transition-colors shadow-sm font-medium"
+        >
+          <Plus size={18} />
+          Add class
+        </button>
+      </div>
 
-        <div className="flex items-center gap-6 w-full xl:w-auto justify-between xl:justify-end">
-            {/* Show Archived Toggle */}
-            <div className="flex items-center gap-2">
-                <Switch 
-                    checked={showArchived}
-                    onCheckedChange={setShowArchived}
-                    id="archived-mode"
-                />
-                <label htmlFor="archived-mode" className="text-sm text-slate-600 font-medium cursor-pointer select-none">
-                    Show archived
-                </label>
-            </div>
-
-            <div className="flex items-center gap-3">
-                 {/* View Switcher */}
-                 <div className="bg-slate-100 p-1 rounded-lg flex items-center">
-                    <button 
-                        onClick={() => setViewMode("list")}
-                        className={`p-1.5 rounded-md transition-all ${viewMode === "list" ? "bg-white shadow-sm text-slate-900" : "text-slate-400 hover:text-slate-600"}`}
-                    >
-                        <LayoutList size={18} />
-                    </button>
-                    <button 
-                        onClick={() => setViewMode("grid")}
-                        className={`p-1.5 rounded-md transition-all ${viewMode === "grid" ? "bg-white shadow-sm text-slate-900" : "text-slate-400 hover:text-slate-600"}`}
-                    >
-                        <Grip size={18} />
-                    </button>
-                 </div>
-
-                 {/* Add Button */}
-                 <button
-                    onClick={() => setShowForm(true)}
-                    className="flex items-center gap-2 bg-indigo-600 text-white px-5 py-2.5 rounded-xl hover:bg-indigo-700 transition-colors shadow-sm font-medium"
-                 >
-                    <Plus size={18} />
-                    Add
-                 </button>
-            </div>
+      <section className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-1 items-center gap-3">
+          <div className="relative w-full md:max-w-xs">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search class, instructor, room..."
+              className="w-full pl-10 pr-3 py-2.5 rounded-lg border border-slate-200 bg-slate-50 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+          <Select value={filter} onValueChange={(value) => setFilter(value as typeof filter)}>
+            <SelectTrigger className="w-[160px] bg-slate-50 border-slate-200">
+              <SelectValue placeholder="Filter" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All classes</SelectItem>
+              <SelectItem value="upcoming">Upcoming</SelectItem>
+              <SelectItem value="past">Past</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={sortBy} onValueChange={(value) => setSortBy(value as typeof sortBy)}>
+            <SelectTrigger className="w-[170px] bg-slate-50 border-slate-200">
+              <SelectValue placeholder="Sort by" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="date_desc">Newest first</SelectItem>
+              <SelectItem value="date_asc">Oldest first</SelectItem>
+              <SelectItem value="title">Title A-Z</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex items-center gap-2">
+          <Switch checked={showAll} onCheckedChange={setShowAll} id="show-all-classes" />
+          <label htmlFor="show-all-classes" className="text-sm text-slate-600 font-medium">
+            Show all classes
+          </label>
         </div>
       </section>
 
-      {/* Schedule Container */}
-      <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden min-h-[600px]">
-         {/* Navigation Header */}
-         <div className="px-6 py-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-center bg-slate-50/50">
-            <h2 className="text-xl font-bold text-indigo-900 mb-4 sm:mb-0">
-                <span className="text-indigo-600">{format(selectedDate, "dd.MM.yyyy")}</span>, {format(selectedDate, "EEEE")}
-            </h2>
+      <ClassTable
+        refreshTrigger={refreshTrigger}
+        filter={filter}
+        searchTerm={search}
+        sortBy={sortBy}
+        pageSize={20}
+        studioIds={studioIds}
+        fetchAll={showAll}
+        instructorId={null}
+        onViewRoster={(id) => setSelectedClassId(id)}
+        onEdit={(id) => router.push(`/dashboard/owner/classes/${id}?edit=1`)}
+      />
 
-            <div className="flex items-center gap-3">
-                 <div className="flex bg-white border border-slate-200 rounded-lg p-1">
-                    <button className="px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50 rounded bg-slate-100/50">Time</button>
-                    <button className="px-3 py-1.5 text-sm font-medium text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded">Rooms</button>
-                 </div>
-                 
-                 <div className="flex items-center gap-1">
-                    <button 
-                        onClick={() => setSelectedDate(subDays(selectedDate, 1))}
-                        className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 shadow-sm transition-all"
-                    >
-                        Prev
-                    </button>
-                    <button 
-                         onClick={() => setSelectedDate(new Date())}
-                         className="px-4 py-1.5 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-900 hover:bg-slate-50 shadow-sm transition-all"
-                    >
-                        Today
-                    </button>
-                    <button 
-                         onClick={() => setSelectedDate(addDays(selectedDate, 1))}
-                         className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 shadow-sm transition-all"
-                    >
-                        Next
-                    </button>
-                 </div>
-            </div>
-         </div>
-
-         {/* Classes List */}
-         <div className="p-6">
-            {!hasClasses ? (
-                <div className="flex flex-col items-center justify-center py-20 text-slate-400">
-                    <CalendarIcon size={48} className="mb-4 text-slate-200" />
-                    <p className="font-medium text-lg">No classes scheduled for this day</p>
-                    <p className="text-sm">Try changing filters or select another date</p>
-                </div>
-            ) : (
-                <div className="space-y-6">
-                    {filteredAndGroupedClasses.map((cls) => {
-                        let start = "--:--";
-                        let end = "--:--";
-                        try {
-                            if (cls.startAt) {
-                                start = format(new Date(cls.startAt), "HH:mm");
-                                const duration = cls.duration || 60;
-                                end = format(new Date(cls.startAt + duration * 60000), "HH:mm");
-                            }
-                        } catch (e) {
-                            // Invalid date, fallback to defaults
-                        }
-                        const reserved = cls.reservedCount || 0;
-                        const capacity = cls.capacity || 0;
-                        
-                        // Alternate colors slightly based on something deterministic
-                        const isBlue = cls.title.length % 2 === 0; 
-                        const barColor = isBlue ? "bg-blue-500" : "bg-emerald-500";
-                        return (
-                            <div key={cls.id} className="flex flex-col sm:flex-row gap-4 sm:gap-10 group border-b border-slate-50 pb-6 last:border-0 last:pb-0">
-                                {/* Time Column */}
-                                <div className="w-32 pt-1">
-                                    <span className="text-lg font-bold text-slate-700 block">{start} - {end}</span>
-                                    <span className="text-xs text-slate-400 font-medium">{cls.duration} min</span>
-                                </div>
-
-                                {/* Class Card */}
-                                <div 
-                                    onClick={() => router.push(`/dashboard/owner/classes/${cls.id}`)}
-                                    className="flex-1 cursor-pointer transition-transform hover:scale-[1.01]"
-                                >
-                                    <div className="flex items-start gap-4">
-                                        {/* Colored Bar Indicator */}
-                                        <div className={`w-1.5 h-12 rounded-full ${barColor}`} />
-                                        
-                                        <div className="space-y-1">
-                                            <div className="flex items-center gap-2">
-                                                <h3 className="font-bold text-slate-900 text-base">{cls.title}</h3>
-                                                <span className="text-slate-400 text-sm font-normal">-</span>
-                                                <span className="text-slate-500 text-sm">{cls.locationName}</span>
-                                            </div>
-                                            
-                                            <div className="flex items-center gap-3 text-sm text-slate-500">
-                                                <span className="font-medium text-slate-700">
-                                                    {cls.teacherName || "No instructor"}
-                                                </span>
-                                                <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-xs font-medium">
-                                                    {reserved}/{capacity} students
-                                                </span>
-                                                {/* <span className="text-slate-400 text-xs">Preparing for school</span> */}
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-            )}
-         </div>
-      </section>
-
-      {/* Roster Modal (Reused) */}
       <Dialog open={!!selectedClassId} onOpenChange={(open) => !open && setSelectedClassId(null)}>
         <DialogContent className="sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>Class Roster</DialogTitle>
-            <DialogDescription>
-              Track attendance for this class.
-            </DialogDescription>
+            <DialogDescription>Track attendance for this class.</DialogDescription>
           </DialogHeader>
-            {/* ... Existing Roster content ... */}
-            <div className="mt-4">
-                 {loadingRoster ? (
-                    <div className="text-center py-10 text-slate-400">Loading roster...</div>
-                 ) : roster.length === 0 ? (
-                    <div className="text-center py-10 text-slate-400 bg-slate-50 rounded-xl">No bookings specifically for this slot.</div>
-                 ) : (
-                    <div className="border border-slate-200 rounded-xl overflow-hidden">
-                        <table className="w-full text-sm text-left">
-                           <thead className="bg-slate-50 font-medium text-slate-500 border-b border-slate-200">
-                              <tr>
-                                <th className="px-4 py-3">Student</th>
-                                <th className="px-4 py-3">Status</th>
-                                <th className="px-4 py-3 text-right">Attendance</th>
-                              </tr>
-                           </thead>
-                           <tbody className="divide-y divide-slate-100">
-                              {roster.map(b => (
-                                <tr key={b.uuid} className="hover:bg-slate-50/50">
-                                    <td className="px-4 py-3 font-medium text-slate-900">{b.user?.first_name} {b.user?.last_name}</td>
-                                    <td className="px-4 py-3">
-                                        <span className={`px-2 py-0.5 rounded text-xs font-semibold ${b.status === 'cancelled' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                                            {b.status}
-                                        </span>
-                                    </td>
-                                    <td className="px-4 py-3 text-right">
-                                        <button 
-                                            onClick={() => handleToggleAttendance(b)}
-                                            className={`px-3 py-1 rounded-md text-xs font-medium ${b.attended ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}
-                                        >
-                                            {b.attended ? "Present" : "Mark Present"}
-                                        </button>
-                                    </td>
-                                </tr>
-                              ))}
-                           </tbody>
-                        </table>
-                    </div>
-                 )}
-            </div>
+          <div className="mt-4">
+            {loadingRoster ? (
+              <div className="text-center py-10 text-slate-400">Loading roster...</div>
+            ) : roster.length === 0 ? (
+              <div className="text-center py-10 text-slate-400 bg-slate-50 rounded-xl">
+                No bookings specifically for this slot.
+              </div>
+            ) : (
+              <div className="border border-slate-200 rounded-xl overflow-hidden">
+                <table className="w-full text-sm text-left">
+                  <thead className="bg-slate-50 font-medium text-slate-500 border-b border-slate-200">
+                    <tr>
+                      <th className="px-4 py-3">Student</th>
+                      <th className="px-4 py-3">Status</th>
+                      <th className="px-4 py-3 text-right">Attendance</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {roster.map((b) => (
+                      <tr key={b.uuid} className="hover:bg-slate-50/50">
+                        <td className="px-4 py-3 font-medium text-slate-900">
+                          {b.user?.first_name} {b.user?.last_name}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={`px-2 py-0.5 rounded text-xs font-semibold ${
+                              b.status === "cancelled"
+                                ? "bg-red-100 text-red-700"
+                                : "bg-green-100 text-green-700"
+                            }`}
+                          >
+                            {b.status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <button
+                            onClick={() => handleToggleAttendance(b)}
+                            className={`px-3 py-1 rounded-md text-xs font-medium ${
+                              b.attended ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-600"
+                            }`}
+                          >
+                            {b.attended ? "Present" : "Mark Present"}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 
-      {/* Create Modal (Reused) */}
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
+          <DialogHeader>
             <DialogTitle>Create New Class</DialogTitle>
             <DialogDescription>Add a new class to the schedule.</DialogDescription>
-            </DialogHeader>
-            <ClassForm onSuccess={handleCreated} onCancel={() => setShowForm(false)} />
+          </DialogHeader>
+          <ClassForm onSuccess={handleCreated} onCancel={() => setShowForm(false)} />
         </DialogContent>
       </Dialog>
     </div>

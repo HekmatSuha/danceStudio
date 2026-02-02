@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
-import { Calendar, MapPin, Clock, Users, Trash2, Repeat, MoreVertical, Eye } from "lucide-react";
+import { Calendar, MapPin, Clock, Users, Trash2, Repeat, MoreVertical, Eye, Pencil } from "lucide-react";
 import { fetchClasses, deleteClass, type ClassEvent } from "../../lib/classes";
 import { useAuthUser } from "../../lib/useAuthUser";
 
@@ -11,10 +11,12 @@ type ClassTableProps = {
   filter?: "all" | "upcoming" | "past";
   instructorId?: string | null;
   onViewRoster?: (classId: string) => void;
+  onEdit?: (classId: string) => void;
   searchTerm?: string;
   sortBy?: "date_asc" | "date_desc" | "title";
   pageSize?: number;
   studioIds?: string[];
+  fetchAll?: boolean;
 };
 
 export function ClassTable({
@@ -22,10 +24,12 @@ export function ClassTable({
   filter = "all",
   instructorId,
   onViewRoster,
+  onEdit,
   searchTerm,
   sortBy = "date_desc",
   pageSize = 10,
   studioIds,
+  fetchAll = false,
 }: ClassTableProps) {
   const { user } = useAuthUser();
   const [classes, setClasses] = useState<ClassEvent[]>([]);
@@ -45,7 +49,7 @@ export function ClassTable({
         const data = await fetchClasses({
           trainer: instructorId === null ? undefined : instructorId || user.uuid,
           studioIds,
-          limit: visibleCount,
+          limit: fetchAll ? undefined : visibleCount,
           orderBy: "start_time",
           orderAsc: sortBy === "date_asc",
         });
@@ -92,8 +96,8 @@ export function ClassTable({
   }, [searchedClasses, sortBy]);
 
   const displayClasses = useMemo(
-    () => sortedClasses.slice(0, visibleCount),
-    [sortedClasses, visibleCount]
+    () => (fetchAll ? sortedClasses : sortedClasses.slice(0, visibleCount)),
+    [sortedClasses, visibleCount, fetchAll]
   );
 
   const handleDelete = async (id: string) => {
@@ -235,6 +239,15 @@ export function ClassTable({
                             <Eye size={18} />
                           </button>
                         )}
+                        {onEdit && (
+                          <button
+                            onClick={() => onEdit(c.id)}
+                            className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                            title="Edit Class"
+                          >
+                            <Pencil size={18} />
+                          </button>
+                        )}
                         <button
                           onClick={() => handleDelete(c.id)}
                           disabled={!!deletingId}
@@ -253,7 +266,7 @@ export function ClassTable({
         </div>
       </div>
       
-      {sortedClasses.length > displayClasses.length && (
+      {!fetchAll && sortedClasses.length > displayClasses.length && (
         <div className="flex justify-center">
           <button
             type="button"

@@ -255,6 +255,36 @@ export async function createClass(input: CreateClassInput) {
   return data;
 }
 
+export async function updateClass(slotId: string, input: Partial<CreateClassInput>) {
+  const updates: Record<string, unknown> = {};
+  if (input.studioId !== undefined) updates.studio_id = input.studioId;
+  if (input.title !== undefined) updates.title = input.title;
+  if (input.description !== undefined) updates.description = input.description;
+  if (input.level !== undefined) updates.level = input.level;
+  if (input.price !== undefined) updates.price = input.price;
+  if (input.currency !== undefined) updates.currency = input.currency;
+  if (input.capacity !== undefined) updates.max_participants = input.capacity;
+  if (input.startAt !== undefined) updates.start_time = input.startAt.toISOString();
+  if (input.endAt !== undefined) updates.end_time = input.endAt.toISOString();
+  if (input.trainerId !== undefined) updates.trainer_id = input.trainerId || null;
+  if (input.danceStyleId !== undefined) updates.dance_style_id = input.danceStyleId || null;
+  if (input.roomId !== undefined) updates.room_id = input.roomId || null;
+  if (input.recurringRule !== undefined) updates.recurring_rule = input.recurringRule || null;
+  if (input.imageUrl !== undefined) updates.image_url = input.imageUrl || null;
+  if (input.isLocked !== undefined) updates.is_locked = input.isLocked ?? false;
+
+  const { data, error } = await supabase
+    .from("slots")
+    .update(updates)
+    .eq("uuid", slotId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  clearCacheByPrefix("classes:");
+  return data;
+}
+
 export async function markClassLocked(slotId: string, locked: boolean) {
   const { data, error } = await supabase
     .from('slots')
