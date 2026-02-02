@@ -1,3 +1,11 @@
 {
-  "java.compile.nullAnalysis.mode": "automatic"
+  "java.compile.nullAnalysis.mode": "automatic",
+  "java.import.exclusions": [
+    "**/node_modules/**",
+    "**/node_modules/**/android/**"
+  ],
+  "files.watcherExclude": {
+    "**/node_modules/**": true,
+    "**/node_modules/**/android/**": true
+  }
 }
