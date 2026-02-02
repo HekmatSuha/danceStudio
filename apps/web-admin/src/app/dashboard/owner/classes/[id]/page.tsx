@@ -60,6 +60,9 @@ export default function OwnerClassDetailPage() {
           .select(`
             uuid,
             title,
+            description,
+            level,
+            price,
             start_time,
             end_time,
             max_participants,
