@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { getCurrentRole, type MobileUserRole } from "../../src/services/auth";
+import { markAutoOpenedAdmin } from "../../src/services/admin-bridge";
 import { supabase } from "../../src/lib/supabase";
 
 export default function AdminDashboardScreen() {
@@ -83,25 +84,13 @@ export default function AdminDashboardScreen() {
     const redirectPath = path.startsWith("/") ? path : `/${path}`;
     const url = `${webAdminOrigin}${redirectPath}?access=${access}&refresh=${refresh}`;
     const encoded = encodeURIComponent(url);
+    await markAutoOpenedAdmin();
     router.push(`/admin/web-dashboard?url=${encoded}`);
   };
 
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.headerRow}>
-          <View>
-            <Text style={styles.title}>
-              {isSuperAdmin ? "Super Admin Dashboard" : "Admin Dashboard"}
-            </Text>
-            <Text style={styles.subtle}>Signed in as {role?.replace("_", " ")}</Text>
-          </View>
-          <Pressable style={styles.outlineButton} onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={18} color="#0f172a" />
-            <Text style={styles.outlineButtonText}>Back</Text>
-          </Pressable>
-        </View>
-
         {isSuperAdmin ? (
           <>
             <Pressable
@@ -170,17 +159,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: "#f8fafc",
   },
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  title: {
-    fontSize: 26,
-    fontWeight: "700",
-    color: "#0f172a",
-  },
   subtle: {
     marginTop: 4,
     color: "#64748b",
@@ -230,21 +208,5 @@ const styles = StyleSheet.create({
   primaryButtonText: {
     color: "#ffffff",
     fontWeight: "600",
-  },
-  outlineButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    backgroundColor: "#ffffff",
-  },
-  outlineButtonText: {
-    color: "#0f172a",
-    fontWeight: "600",
-    fontSize: 12,
   },
 });

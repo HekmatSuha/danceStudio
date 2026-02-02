@@ -1,10 +1,11 @@
-import { Tabs as ExpoTabs, withLayoutContext } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Tabs as ExpoTabs, withLayoutContext, router } from 'expo-router';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { getCurrentRole, type MobileUserRole } from '../../src/services/auth';
+import { markAutoOpenedAdmin, shouldAutoOpenAdmin } from '../../src/services/admin-bridge';
 import { useFocusEffect } from '@react-navigation/native';
 import { createMaterialTopTabNavigator } from '@react-navigation/material-top-tabs';
 import { Platform } from 'react-native';
@@ -18,6 +19,7 @@ export default function TabLayout() {
   const [role, setRole] = useState<MobileUserRole | null>(null);
   const [loadingRole, setLoadingRole] = useState(true);
   const [swipeEnabled, setSwipeEnabled] = useState(true);
+  const autoOpenedAdminRef = useRef(false);
 
   useEffect(() => {
     let mounted = true;
@@ -66,6 +68,18 @@ export default function TabLayout() {
   );
 
   const showAdmin = isAdmin && !loadingRole;
+
+  useEffect(() => {
+    if (loadingRole || autoOpenedAdminRef.current) return;
+    const maybeAutoOpen = async () => {
+      if (await shouldAutoOpenAdmin(role)) {
+        autoOpenedAdminRef.current = true;
+        await markAutoOpenedAdmin();
+        router.replace('/admin');
+      }
+    };
+    void maybeAutoOpen();
+  }, [loadingRole, role]);
   
   if (Platform.OS === 'web') {
     return (

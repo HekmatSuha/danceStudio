@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -23,6 +23,7 @@ import {
   type MobileUserRole,
 } from "../../../src/services/auth";
 import { supabase } from "../../../src/lib/supabase";
+import { markAutoOpenedAdmin } from "../../../src/services/admin-bridge";
 
 type ProfileForm = {
   firstName: string;
@@ -49,6 +50,17 @@ export default function ProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const webAdminBase = useMemo(() => process.env.EXPO_PUBLIC_WEB_ADMIN_URL || "", []);
+  const webAdminOrigin = useMemo(() => {
+    const raw = webAdminBase.trim();
+    if (!raw) return "";
+    try {
+      const normalized = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+      return new URL(normalized).origin;
+    } catch {
+      return raw.replace(/\/+$/, "");
+    }
+  }, [webAdminBase]);
 
   const loadProfile = async () => {
     setLoading(true);
@@ -161,6 +173,27 @@ export default function ProfileScreen() {
     router.replace("/(auth)/login");
   };
 
+  const openAdminDashboard = async () => {
+    if (!webAdminOrigin) {
+      Alert.alert(
+        "Web dashboard not configured",
+        "Set EXPO_PUBLIC_WEB_ADMIN_URL to open the web admin dashboard."
+      );
+      return;
+    }
+    const { data, error } = await supabase.auth.getSession();
+    if (error || !data.session) {
+      Alert.alert("Not signed in", "Please sign in again and retry.");
+      return;
+    }
+    const access = encodeURIComponent(data.session.access_token);
+    const refresh = encodeURIComponent(data.session.refresh_token);
+    const redirectPath = role === "super_admin" ? "/dashboard/super-admin" : "/dashboard";
+    const url = `${webAdminOrigin}${redirectPath}?access=${access}&refresh=${refresh}`;
+    await markAutoOpenedAdmin();
+    router.push(`/admin/web-dashboard?url=${encodeURIComponent(url)}`);
+  };
+
   if (loading) {
     return (
       <View style={styles.center}>
@@ -221,7 +254,7 @@ export default function ProfileScreen() {
           {(role === "owner" || role === "instructor" || role === "super_admin") && (
             <Pressable
               style={styles.adminButton}
-              onPress={() => router.push("/admin")}
+              onPress={openAdminDashboard}
             >
               <View style={styles.adminContent}>
                 <View style={styles.adminIcon}>
