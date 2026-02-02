@@ -8,12 +8,13 @@ export type Studio = {
   latitude?: number | null;
   longitude?: number | null;
   whatsapp?: string | null;
+  image_url?: string | null;
 };
 
 export async function listStudios() {
   const { data, error } = await supabase
     .from('studios')
-    .select('uuid, name, address, city, latitude, longitude, whatsapp');
+    .select('uuid, name, address, city, latitude, longitude, whatsapp, image_url');
     
   if (error) throw error;
   
@@ -28,12 +29,12 @@ export async function fetchMyStudios() {
     supabase
       .from('tenant_staff')
       .select(`
-        studio:studios(uuid, name, address, city, latitude, longitude, whatsapp)
+        studio:studios(uuid, name, address, city, latitude, longitude, whatsapp, image_url)
       `)
       .eq('user_id', user.id),
     supabase
       .from('studios')
-      .select('uuid, name, address, city, latitude, longitude, whatsapp')
+      .select('uuid, name, address, city, latitude, longitude, whatsapp, image_url')
       .eq('owner_id', user.id)
   ]);
 
@@ -88,7 +89,7 @@ export async function createStudio(input: {
 export async function getStudio(studioId: string) {
   const { data, error } = await supabase
     .from('studios')
-    .select('uuid, name, address, city, latitude, longitude, whatsapp')
+    .select('uuid, name, address, city, latitude, longitude, whatsapp, image_url')
     .eq('uuid', studioId)
     .maybeSingle();
 

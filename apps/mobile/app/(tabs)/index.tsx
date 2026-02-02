@@ -60,6 +60,7 @@ export default function ExploreScreen() {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
+  const [mapInteracting, setMapInteracting] = useState(false);
   const mapRef = useRef<any>(null);
   const isWeb = Platform.OS === "web";
   const hasNativeMapsModule =
@@ -372,6 +373,7 @@ export default function ExploreScreen() {
           keyboardDismissMode="on-drag"
           removeClippedSubviews={false}
           onScrollBeginDrag={() => Keyboard.dismiss()}
+          scrollEnabled={!mapInteracting}
         >
         <View style={styles.topBar}>
           <Pressable style={styles.locationPill}>
@@ -389,7 +391,14 @@ export default function ExploreScreen() {
           </View>
         </View>
 
-        <View style={styles.mapCard} collapsable={false}>
+        <View
+          style={styles.mapCard}
+          collapsable={false}
+          onTouchStart={() => setMapInteracting(true)}
+          onTouchEnd={() => setMapInteracting(false)}
+          onTouchCancel={() => setMapInteracting(false)}
+          onResponderRelease={() => setMapInteracting(false)}
+        >
           {loading ? (
             <View style={styles.mapLoading}>
               <ActivityIndicator color="#111827" />
@@ -499,7 +508,7 @@ export default function ExploreScreen() {
             </View>
           ) : (
             filteredStudios.map((studio, index) => {
-              const imageUrl = FALLBACK_IMAGES[index % FALLBACK_IMAGES.length];
+              const imageUrl = studio.image_url || FALLBACK_IMAGES[index % FALLBACK_IMAGES.length];
               const city = studio.city || "Almaty";
               const count = studioCounts[studio.uuid] || 0;
               return (
