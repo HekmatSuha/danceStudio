@@ -67,9 +67,6 @@ export default function TabLayout() {
 
   const showAdmin = isAdmin && !loadingRole;
   
-  // Debug logging
-  console.log('[TabLayout] role:', role, 'isAdmin:', isAdmin, 'showAdmin:', showAdmin);
-
   if (Platform.OS === 'web') {
     return (
       <TabSwipeProvider value={swipeContextValue}>

@@ -576,6 +576,54 @@ export default function ExploreScreen() {
         ) : null}
 
         <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Recommended</Text>
+          <Pressable style={styles.sectionAction}>
+            <Text style={styles.sectionActionText}>Recommended</Text>
+            <Ionicons name="swap-vertical" size={14} color="#ef4444" />
+          </Pressable>
+        </View>
+
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.cardRow}>
+          {loading ? (
+            <View style={styles.loadingRow}>
+              <ActivityIndicator color="#111827" />
+            </View>
+          ) : (
+            recommended.map((slot, index) => {
+              const imageUrl = slot.image_url || FALLBACK_IMAGES[index % FALLBACK_IMAGES.length];
+              const studioName = slot.studio_details?.name || "Studio";
+              const studioCity = slot.studio_details?.city || "Almaty";
+              const styleName = slot.dance_style_details?.name || "Style";
+              const priceLabel = formatPrice(slot.price);
+              const subtitle = [
+                studioCity,
+                priceLabel,
+              ].join(" Â· ");
+              return (
+                <Pressable
+                  key={slot.uuid}
+                  style={styles.card}
+                  onPress={() => router.push(`/class-details/${slot.uuid}`)}
+                >
+                  <Image source={{ uri: imageUrl }} style={styles.cardImage} contentFit="cover" />
+                  <View style={styles.cardBadge}>
+                    <Text style={styles.cardBadgeText}>{styleName}</Text>
+                  </View>
+                  <Pressable style={styles.cardHeart}>
+                    <Ionicons name="heart-outline" size={16} color="#111827" />
+                  </Pressable>
+                  <View style={styles.cardBody}>
+                    <Text style={styles.cardTitle}>{studioName}</Text>
+                    <Text style={styles.cardSubtitle}>{slot.title}</Text>
+                    <Text style={styles.cardMeta}>{subtitle}</Text>
+                  </View>
+                </Pressable>
+              );
+            })
+          )}
+        </ScrollView>
+
+        <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Studios</Text>
         </View>
 
