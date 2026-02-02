@@ -190,10 +190,7 @@ export default function ProfileScreen() {
     const refresh = encodeURIComponent(data.session.refresh_token);
     const redirectPath = role === "super_admin" ? "/dashboard/super-admin" : "/dashboard";
     const url = `${webAdminOrigin}${redirectPath}?access=${access}&refresh=${refresh}`;
-<<<<<<< HEAD
     await markAutoOpenedAdmin();
-=======
->>>>>>> 810b7aa34db03b6ab32db7d5652b5742eeb5d122
     router.push(`/admin/web-dashboard?url=${encodeURIComponent(url)}`);
   };
 
