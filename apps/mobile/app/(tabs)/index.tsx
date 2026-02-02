@@ -12,6 +12,7 @@ import {
   Alert,
   Keyboard,
   NativeModules,
+  Modal,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Image } from "expo-image";
@@ -61,6 +62,7 @@ export default function ExploreScreen() {
   const [loading, setLoading] = useState(true);
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
   const [mapInteracting, setMapInteracting] = useState(false);
+  const [mapFullscreen, setMapFullscreen] = useState(false);
   const mapRef = useRef<any>(null);
   const isWeb = Platform.OS === "web";
   const hasNativeMapsModule =
@@ -446,8 +448,62 @@ export default function ExploreScreen() {
             <Pressable style={styles.mapControlBtn} onPress={handleLocate}>
               <Ionicons name="locate-outline" size={18} color="#111827" />
             </Pressable>
+            <Pressable style={styles.mapControlBtn} onPress={() => setMapFullscreen(true)}>
+              <Ionicons name="expand-outline" size={18} color="#111827" />
+            </Pressable>
           </View>
         </View>
+        <Modal
+          visible={mapFullscreen}
+          animationType="slide"
+          onRequestClose={() => setMapFullscreen(false)}
+        >
+          <SafeAreaView style={styles.fullscreen}>
+            <View style={styles.fullscreenHeader}>
+              <Text style={styles.fullscreenTitle}>Map</Text>
+              <Pressable style={styles.fullscreenClose} onPress={() => setMapFullscreen(false)}>
+                <Ionicons name="close" size={20} color="#111827" />
+              </Pressable>
+            </View>
+            <View style={styles.fullscreenMap}>
+              {useWebMap ? (
+                <WebMap
+                  studios={mapStudios}
+                  counts={studioCounts}
+                  center={[initialRegion.latitude, initialRegion.longitude]}
+                  userLocation={userLocation}
+                  onMapReady={(mapInstance: any) => {
+                    mapRef.current = mapInstance;
+                  }}
+                  onStudioSelect={handleStudioPress}
+                />
+              ) : (
+                MapView && (
+                  <MapView
+                    ref={mapRef}
+                    style={StyleSheet.absoluteFillObject}
+                    initialRegion={initialRegion}
+                    showsCompass={false}
+                    showsPointsOfInterest={false}
+                    showsUserLocation
+                  >
+                    {mapStudios.map((studio) => (
+                      <Marker
+                        key={studio.uuid}
+                        coordinate={{ latitude: studio.latitude, longitude: studio.longitude }}
+                        onPress={() => handleStudioPress(studio.uuid)}
+                      >
+                        <View style={styles.pin}>
+                          <Text style={styles.pinText}>{studioCounts[studio.uuid] || 1}</Text>
+                        </View>
+                      </Marker>
+                    ))}
+                  </MapView>
+                )
+              )}
+            </View>
+          </SafeAreaView>
+        </Modal>
 
         <View style={styles.searchRow}>
           <View style={styles.searchInput}>
@@ -739,6 +795,38 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 3 },
+  },
+  fullscreen: {
+    flex: 1,
+    backgroundColor: "#f8fafc",
+  },
+  fullscreenHeader: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderBottomWidth: 1,
+    borderBottomColor: "#e5e7eb",
+    backgroundColor: "white",
+  },
+  fullscreenTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#111827",
+  },
+  fullscreenClose: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#f3f4f6",
+  },
+  fullscreenMap: {
+    flex: 1,
+    backgroundColor: "#e5e7eb",
   },
   searchRow: {
     marginTop: 16,
