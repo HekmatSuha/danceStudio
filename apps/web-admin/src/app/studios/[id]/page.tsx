@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
 import { useParams } from "next/navigation";
 import Link from "next/link";
@@ -22,13 +22,14 @@ type Studio = {
   instagram?: string | null;
   latitude?: number | null;
   longitude?: number | null;
+  image_url?: string | null;
 };
 
 type ClassCard = {
   id: string;
   title: string;
   description: string;
-  imageUrl: string;
+  imageUrl: string | null;
   duration: string;
   capacity: number;
   price: number;
@@ -68,7 +69,7 @@ export default function StudioDetailPage() {
     fetcher
   );
   const { data: classes } = useSWR<ClassCard[]>(
-    studioId ? `/api/public/classes?studioId=${studioId}&limit=50` : null,
+    studioId ? `/api/public/classes?studioId=${studioId}&limit=50&noFallback=1` : null,
     fetcher
   );
   const { data: reviews } = useSWR<Review[]>(
@@ -78,14 +79,19 @@ export default function StudioDetailPage() {
   const images = useMemo(() => {
     const items = (classes || [])
       .map((slot) => slot.imageUrl)
-      .filter(Boolean);
+      .filter((url): url is string => typeof url === "string" && url.length > 0);
     const unique = Array.from(new Set(items));
-    if (unique.length > 0) return unique.slice(0, 8);
-    return [
-      "https://images.unsplash.com/photo-1504609813442-a8924e83f76e?auto=format&fit=crop&w=1200&q=80",
-      "https://images.unsplash.com/photo-1547153760-18fc86324498?auto=format&fit=crop&w=1200&q=80",
-    ];
-  }, [classes]);
+    if (studio?.image_url && !unique.includes(studio.image_url)) {
+      unique.unshift(studio.image_url);
+    }
+    return unique.slice(0, 8);
+  }, [classes, studio]);
+
+  useEffect(() => {
+    if (activeImage >= images.length) {
+      setActiveImage(0);
+    }
+  }, [activeImage, images.length]);
 
   const stats = useMemo(() => {
     const list = reviews || [];
@@ -231,36 +237,46 @@ export default function StudioDetailPage() {
 
           <div className="space-y-6">
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
-              <div className="relative h-[240px] w-full overflow-hidden rounded-xl bg-slate-100 sm:h-[320px]">
-                <Image
-                  src={images[activeImage]}
-                  alt={studio.name}
-                  fill
-                  className="object-cover"
-                  sizes="(min-width: 1024px) 640px, 100vw"
-                />
-              </div>
-              <div className="mt-4 flex items-center gap-3 overflow-x-auto pb-1">
-                {images.map((url, index) => (
-                  <button
-                    key={url}
-                    type="button"
-                    onClick={() => setActiveImage(index)}
-                    className={`h-14 w-20 shrink-0 overflow-hidden rounded-lg border sm:h-16 sm:w-24 ${
-                      activeImage === index ? "border-slate-900" : "border-transparent"
-                    }`}
-                  >
+              {images.length > 0 ? (
+                <>
+                  <div className="relative h-[240px] w-full overflow-hidden rounded-xl bg-slate-100 sm:h-[320px]">
                     <Image
-                      src={url}
-                      alt=""
-                      width={96}
-                      height={64}
-                      className="h-full w-full object-cover"
-                      sizes="96px"
+                      src={images[activeImage]}
+                      alt={studio.name}
+                      fill
+                      className="object-cover"
+                      sizes="(min-width: 1024px) 640px, 100vw"
                     />
-                  </button>
-                ))}
-              </div>
+                  </div>
+                  {images.length > 1 && (
+                    <div className="mt-4 flex items-center gap-3 overflow-x-auto pb-1">
+                      {images.map((url, index) => (
+                        <button
+                          key={`${url}-${index}`}
+                          type="button"
+                          onClick={() => setActiveImage(index)}
+                          className={`h-14 w-20 shrink-0 overflow-hidden rounded-lg border sm:h-16 sm:w-24 ${
+                            activeImage === index ? "border-slate-900" : "border-transparent"
+                          }`}
+                        >
+                          <Image
+                            src={url}
+                            alt=""
+                            width={96}
+                            height={64}
+                            className="h-full w-full object-cover"
+                            sizes="96px"
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="flex h-[240px] w-full items-center justify-center rounded-xl bg-slate-100 text-sm text-slate-500 sm:h-[320px]">
+                  No photos yet for this studio.
+                </div>
+              )}
             </div>
 
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">

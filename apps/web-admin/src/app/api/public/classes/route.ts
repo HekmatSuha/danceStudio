@@ -35,10 +35,11 @@ function extractStoragePath(url: string) {
 async function resolveImageUrl(
   admin: SupabaseClient | null,
   rawUrl: string | null | undefined,
-  index: number
+  index: number,
+  noFallback: boolean
 ) {
   if (!rawUrl) {
-    return pickImage(index);
+    return noFallback ? null : pickImage(index);
   }
 
   // If it's already a full URL, return it
@@ -67,7 +68,7 @@ async function resolveImageUrl(
     return `${baseUrl}/storage/v1/object/public/${bucket}/${objectPath}`;
   }
 
-  return pickImage(index);
+  return noFallback ? null : pickImage(index);
 }
 
 export async function fetchRelatedEntities(supabase: SupabaseClient, queryText: string) {
@@ -122,6 +123,7 @@ export async function GET(req: NextRequest) {
   const style = (req.nextUrl.searchParams.get("style") || "").trim();
   const q = (req.nextUrl.searchParams.get("q") || "").trim();
   const studioId = (req.nextUrl.searchParams.get("studioId") || "").trim();
+  const noFallback = req.nextUrl.searchParams.get("noFallback") === "1";
   const limit = Number(req.nextUrl.searchParams.get("limit") || "12");
   const cacheKey = `public:classes:${req.nextUrl.searchParams.toString()}`;
 
@@ -231,7 +233,7 @@ export async function GET(req: NextRequest) {
             start && end
               ? Math.max(15, Math.round((end.getTime() - start.getTime()) / 60000))
               : 60;
-          const imageUrl = await resolveImageUrl(admin, slot.image_url, index);
+          const imageUrl = await resolveImageUrl(admin, slot.image_url, index, noFallback);
           return {
             id: slot.uuid,
             title: slot.title || slot.dance_style?.name || "Dance class",
