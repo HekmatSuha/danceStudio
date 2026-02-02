@@ -221,7 +221,18 @@ export async function getCurrentRole(): Promise<MobileUserRole | null> {
     profileRole = null;
   }
 
-  const normalized = normalizeRole(profileRole);
+  const meta = user.user_metadata || {};
+  const appMeta = user.app_metadata || {};
+  const metaRole =
+    meta.role ??
+    meta.roles ??
+    (meta as any).user_role ??
+    appMeta.role ??
+    appMeta.roles ??
+    (appMeta as any).user_role ??
+    null;
+
+  const normalized = normalizeRole(profileRole) ?? normalizeRole(metaRole);
   if (normalized) {
     await setStoredRole(normalized);
     return normalized;
