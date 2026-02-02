@@ -6,7 +6,7 @@ import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { getCurrentRole, type MobileUserRole } from '../../src/services/auth';
 import { useFocusEffect } from '@react-navigation/native';
-import { createMaterialTopTabNavigator, MaterialTopTabBar } from '@react-navigation/material-top-tabs';
+import { createMaterialTopTabNavigator } from '@react-navigation/material-top-tabs';
 import { Platform } from 'react-native';
 import { TabSwipeProvider } from '../../src/contexts/tab-swipe';
 
@@ -65,6 +65,8 @@ export default function TabLayout() {
     [swipeEnabled]
   );
 
+  const showAdmin = isAdmin && !loadingRole;
+
   if (Platform.OS === 'web') {
     return (
       <TabSwipeProvider value={swipeContextValue}>
@@ -96,49 +98,25 @@ export default function TabLayout() {
               tabBarIcon: ({ color }) => <IconSymbol size={28} name="person.crop.circle" color={color} />,
             }}
           />
-          <ExpoTabs.Screen
-            name="admin"
-            options={
-              isAdmin && !loadingRole
-                ? {
-                    title: 'Admin',
-                    tabBarIcon: ({ color }) => <IconSymbol size={28} name="briefcase.fill" color={color} />,
-                  }
-                : {
-                    href: null,
-                  }
-            }
-          />
+          {showAdmin ? (
+            <ExpoTabs.Screen
+              name="admin"
+              options={{
+                title: 'Admin',
+                tabBarIcon: ({ color }) => <IconSymbol size={28} name="briefcase.fill" color={color} />,
+              }}
+            />
+          ) : null}
         </ExpoTabs>
       </TabSwipeProvider>
     );
   }
-
-  const renderMaterialTabBar = (props: any) => {
-    if (isAdmin || loadingRole) {
-      return <MaterialTopTabBar {...props} />;
-    }
-
-    const filteredRoutes = props.state.routes.filter((route: any) => route.name !== 'admin');
-    const filteredState = {
-      ...props.state,
-      routes: filteredRoutes,
-      index: Math.min(props.state.index, filteredRoutes.length - 1),
-    };
-    const filteredDescriptors = filteredRoutes.reduce((acc: any, route: any) => {
-      acc[route.key] = props.descriptors[route.key];
-      return acc;
-    }, {});
-
-    return <MaterialTopTabBar {...props} state={filteredState} descriptors={filteredDescriptors} />;
-  };
 
   return (
     <TabSwipeProvider value={swipeContextValue}>
       <Tabs
         key={role ?? 'guest'}
         tabBarPosition="bottom"
-        tabBar={renderMaterialTabBar}
         screenOptions={{
           tabBarActiveTintColor: '#111827',
           tabBarInactiveTintColor: '#9ca3af',
@@ -170,19 +148,15 @@ export default function TabLayout() {
             tabBarIcon: ({ color }) => <IconSymbol size={28} name="person.crop.circle" color={color} />,
           }}
         />
-        <Tabs.Screen
-          name="admin"
-          options={
-            isAdmin && !loadingRole
-              ? {
-                  title: 'Admin',
-                  tabBarIcon: ({ color }) => <IconSymbol size={28} name="briefcase.fill" color={color} />,
-                }
-              : {
-                  tabBarItemStyle: { display: 'none' },
-                }
-          }
-        />
+        {showAdmin ? (
+          <Tabs.Screen
+            name="admin"
+            options={{
+              title: 'Admin',
+              tabBarIcon: ({ color }) => <IconSymbol size={28} name="briefcase.fill" color={color} />,
+            }}
+          />
+        ) : null}
       </Tabs>
     </TabSwipeProvider>
   );

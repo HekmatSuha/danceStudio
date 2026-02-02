@@ -207,14 +207,21 @@ export async function getCurrentRole(): Promise<MobileUserRole | null> {
     return null;
   }
 
-  let profile: AccountProfile | null = null;
+  let profileRole: unknown = null;
   try {
-    profile = await fetchProfile();
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('role, roles')
+      .eq('id', user.id)
+      .maybeSingle();
+    if (!error) {
+      profileRole = data?.role ?? data?.roles ?? null;
+    }
   } catch {
-    profile = null;
+    profileRole = null;
   }
 
-  const normalized = normalizeRole(profile?.role ?? profile?.roles);
+  const normalized = normalizeRole(profileRole);
   if (normalized) {
     await setStoredRole(normalized);
     return normalized;
