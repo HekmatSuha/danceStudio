@@ -13,6 +13,7 @@ import {
   Keyboard,
   NativeModules,
   Modal,
+  InteractionManager,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Image } from "expo-image";
@@ -24,6 +25,7 @@ import { listStudios, type Studio } from "../../src/services/studios";
 import { listSlots, type Slot } from "../../src/services/slots";
 import { fetchTrainers, type Trainer } from "../../src/services/trainers";
 import { useTabSwipe } from "../../src/contexts/tab-swipe";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 type Region = {
   latitude: number;
@@ -55,12 +57,19 @@ const FALLBACK_IMAGES = [
   "https://images.unsplash.com/photo-1609602961949-eddbb90383cc?auto=format&fit=crop&w=900&q=80",
 ];
 
+const CACHE_KEYS = {
+  studios: "dancecrm.cache.studios",
+  slots: "dancecrm.cache.slots",
+  trainers: "dancecrm.cache.trainers",
+};
+
 export default function ExploreScreen() {
   const [studios, setStudios] = useState<Studio[]>([]);
   const [slots, setSlots] = useState<Slot[]>([]);
   const [trainers, setTrainers] = useState<Trainer[]>([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
+  const [mapReady, setMapReady] = useState(false);
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
   const [mapInteracting, setMapInteracting] = useState(false);
   const [mapFullscreen, setMapFullscreen] = useState(false);
@@ -113,7 +122,34 @@ export default function ExploreScreen() {
 
   useEffect(() => {
     let mounted = true;
-    const loadData = async () => {
+    const loadCache = async () => {
+      try {
+        const [studiosRaw, slotsRaw, trainersRaw] = await Promise.all([
+          AsyncStorage.getItem(CACHE_KEYS.studios),
+          AsyncStorage.getItem(CACHE_KEYS.slots),
+          AsyncStorage.getItem(CACHE_KEYS.trainers),
+        ]);
+        if (!mounted) return;
+        let hadCache = false;
+        if (studiosRaw) {
+          setStudios(JSON.parse(studiosRaw) as Studio[]);
+          hadCache = true;
+        }
+        if (slotsRaw) {
+          setSlots(JSON.parse(slotsRaw) as Slot[]);
+          hadCache = true;
+        }
+        if (trainersRaw) {
+          setTrainers(JSON.parse(trainersRaw) as Trainer[]);
+          hadCache = true;
+        }
+        if (hadCache) setLoading(false);
+      } catch {
+        // ignore cache errors
+      }
+    };
+
+    const loadFresh = async () => {
       try {
         const [studiosData, slotsData, trainersData] = await Promise.all([
           listStudios(),
@@ -124,15 +160,31 @@ export default function ExploreScreen() {
         setStudios(studiosData);
         setSlots(slotsData);
         setTrainers(trainersData);
+        await Promise.all([
+          AsyncStorage.setItem(CACHE_KEYS.studios, JSON.stringify(studiosData)),
+          AsyncStorage.setItem(CACHE_KEYS.slots, JSON.stringify(slotsData)),
+          AsyncStorage.setItem(CACHE_KEYS.trainers, JSON.stringify(trainersData)),
+        ]);
       } catch (err) {
         console.warn("Failed to load explore data", err);
       } finally {
         if (mounted) setLoading(false);
       }
     };
-    loadData();
+
+    loadCache().finally(loadFresh);
     return () => {
       mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    InteractionManager.runAfterInteractions(() => {
+      if (active) setMapReady(true);
+    });
+    return () => {
+      active = false;
     };
   }, []);
 
@@ -421,7 +473,11 @@ export default function ExploreScreen() {
         </View>
 
         <View style={styles.mapCard} collapsable={false}>
-          {loading ? (
+          {!mapReady ? (
+            <View style={styles.mapLoading}>
+              <ActivityIndicator color="#111827" />
+            </View>
+          ) : loading ? (
             <View style={styles.mapLoading}>
               <ActivityIndicator color="#111827" />
             </View>
