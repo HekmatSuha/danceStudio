@@ -12,6 +12,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import { Image } from "expo-image";
+import * as ImagePicker from "expo-image-picker";
 import {
   fetchProfile,
   logout,
@@ -43,6 +45,7 @@ export default function ProfileScreen() {
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   const loadProfile = async () => {
     setLoading(true);
@@ -94,6 +97,58 @@ export default function ProfileScreen() {
     }
   };
 
+  const handlePickAvatar = async () => {
+    if (uploadingAvatar) return;
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (permission.status !== "granted") {
+        Alert.alert("Permission needed", "Please allow photo access to upload an avatar.");
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.85,
+        allowsEditing: true,
+        aspect: [1, 1],
+      });
+
+      if (result.canceled || !result.assets?.[0]?.uri) return;
+
+      setUploadingAvatar(true);
+      const asset = result.assets[0];
+      const uri = asset.uri;
+      const contentType = asset.mimeType || "image/jpeg";
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
+      const extFromUri = uri.split(".").pop() || "jpg";
+      const fileExt = extFromUri.includes("?") ? extFromUri.split("?")[0] : extFromUri;
+      const filePath = `${user.id}/avatar.${fileExt}`;
+
+      const response = await fetch(uri);
+      const blob = await response.blob();
+
+      const { error: uploadError } = await supabase.storage
+        .from("avatars")
+        .upload(filePath, blob, { upsert: true, contentType });
+      if (uploadError) throw uploadError;
+
+      const { data: publicUrlData } = supabase.storage
+        .from("avatars")
+        .getPublicUrl(filePath);
+      const publicUrl = publicUrlData?.publicUrl || null;
+
+      await updateProfile({ avatarUrl: publicUrl });
+      await loadProfile();
+    } catch (err: any) {
+      Alert.alert("Upload failed", err?.message || "Unable to upload avatar.");
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
   const handleLogout = async () => {
     await logout();
     router.replace("/(auth)/login");
@@ -115,11 +170,39 @@ export default function ProfileScreen() {
     );
   }
 
+  const initials =
+    `${profile.first_name?.[0] || ""}${profile.last_name?.[0] || ""}`.trim() ||
+    profile.email?.[0]?.toUpperCase() ||
+    "U";
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>My Profile</Text>
+          <View style={styles.headerLeft}>
+            <Pressable style={styles.avatar} onPress={handlePickAvatar}>
+              {profile.avatar_url ? (
+                <Image
+                  source={{ uri: profile.avatar_url }}
+                  style={styles.avatarImage}
+                  contentFit="cover"
+                />
+              ) : (
+                <Text style={styles.avatarText}>{initials}</Text>
+              )}
+              <View style={styles.avatarOverlay}>
+                {uploadingAvatar ? (
+                  <ActivityIndicator color="#111827" />
+                ) : (
+                  <Ionicons name="camera-outline" size={18} color="#111827" />
+                )}
+              </View>
+            </Pressable>
+            <View>
+              <Text style={styles.headerTitle}>My Profile</Text>
+              <Text style={styles.subtle}>{profile.roles || "Client"}</Text>
+            </View>
+          </View>
           <Pressable onPress={handleLogout} style={styles.logoutBtn}>
             <Ionicons name="log-out-outline" size={24} color="#ef4444" />
           </Pressable>
@@ -227,10 +310,6 @@ export default function ProfileScreen() {
             />
           </View>
           <View style={styles.divider} />
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Role</Text>
-            <Text style={styles.subtle}>{profile.roles || "Client"}</Text>
-          </View>
         </View>
 
         <Pressable
@@ -277,6 +356,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 20,
   },
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
   headerTitle: {
     fontSize: 28,
     fontWeight: "700",
@@ -286,6 +370,37 @@ const styles = StyleSheet.create({
     padding: 8,
     backgroundColor: "#fee2e2",
     borderRadius: 8,
+  },
+  avatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "#e2e8f0",
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  avatarImage: {
+    width: "100%",
+    height: "100%",
+  },
+  avatarText: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#475569",
+  },
+  avatarOverlay: {
+    position: "absolute",
+    right: -2,
+    bottom: -2,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: "#ffffff",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
   },
   card: {
     backgroundColor: "white",

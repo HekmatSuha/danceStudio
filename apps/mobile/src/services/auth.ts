@@ -39,6 +39,7 @@ export type AccountProfile = {
   first_name: string;
   last_name: string;
   phone_number?: string | null;
+  avatar_url?: string | null;
   roles?: string; // keeping for compatibility, mapped from role
   role?: MobileUserRole;
   dance_level?: string;
@@ -135,6 +136,7 @@ export async function fetchProfile(): Promise<AccountProfile> {
     first_name: profile?.first_name || meta.first_name || "",
     last_name: profile?.last_name || meta.last_name || "",
     phone_number: profile?.phone_number || meta.phone_number,
+    avatar_url: profile?.avatar_url || meta.avatar_url || (meta as any).avatarUrl,
     gender: profile?.gender || meta.gender,
     role: normalizeRole(rawRole) ?? undefined,
     roles: rawRole, // compatibility
@@ -152,6 +154,7 @@ export async function updateProfile(input: {
   gender?: string;
   danceLevel?: string;
   interests?: string[];
+  avatarUrl?: string | null;
 }) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Not authenticated");
@@ -163,6 +166,7 @@ export async function updateProfile(input: {
   if (input.gender !== undefined) updates.gender = input.gender;
   if (input.danceLevel !== undefined) updates.dance_level = input.danceLevel;
   if (input.interests !== undefined) updates.interests = input.interests;
+  if (input.avatarUrl !== undefined) updates.avatar_url = input.avatarUrl;
   updates.updated_at = new Date().toISOString();
 
   const { error } = await supabase
