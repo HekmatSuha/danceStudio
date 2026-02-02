@@ -82,12 +82,8 @@ export default function AdminDashboardScreen() {
     const refresh = encodeURIComponent(data.session.refresh_token);
     const redirectPath = path.startsWith("/") ? path : `/${path}`;
     const url = `${webAdminOrigin}${redirectPath}?access=${access}&refresh=${refresh}`;
-    const canOpen = await Linking.canOpenURL(url);
-    if (!canOpen) {
-      Alert.alert("Unable to open link", url);
-      return;
-    }
-    await Linking.openURL(url);
+    const encoded = encodeURIComponent(url);
+    router.push(`/admin/web-dashboard?url=${encoded}`);
   };
 
   return (
