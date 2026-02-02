@@ -17,8 +17,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Supabase env missing" }, { status: 500 });
   }
 
-  const limit = Number(req.nextUrl.searchParams.get("limit") || "8");
-  const cacheKey = `public:studios:${limit}`;
+  const limitParam = req.nextUrl.searchParams.get("limit");
+  const isAll = limitParam === "all";
+  const limit = isAll ? null : Number(limitParam || "8");
+  const cacheKey = `public:studios:${isAll ? "all" : limit}`;
 
   try {
     const mapped = await withServerCache(cacheKey, 30000, async () => {
@@ -26,11 +28,16 @@ export async function GET(req: NextRequest) {
         auth: { persistSession: false, autoRefreshToken: false },
       });
 
-      const { data, error } = await supabase
+      let query = supabase
         .from("studios")
         .select("uuid,name,city,address,image_url")
-        .order("name")
-        .limit(limit);
+        .order("name");
+
+      if (limit && Number.isFinite(limit) && limit > 0) {
+        query = query.limit(limit);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw new Error(error.message);
 

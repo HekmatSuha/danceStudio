@@ -17,7 +17,7 @@ const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 export function About() {
   const { data: studios, isLoading: studiosLoading } = useSWR<StudioCard[]>(
-    "/api/public/studios?limit=4",
+    "/api/public/studios?limit=all",
     fetcher
   );
   const studioCards = studios || [];
