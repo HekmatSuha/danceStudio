@@ -698,7 +698,7 @@ export default function ExploreScreen() {
           ) : (
             filteredStudios.map((studio, index) => {
               const imageUrl = studio.image_url || FALLBACK_IMAGES[index % FALLBACK_IMAGES.length];
-              const city = studio.city || "Almaty";
+              const address = studio.address || "Address unavailable";
               const count = studioCounts[studio.uuid] || 0;
               return (
                 <Pressable
@@ -709,7 +709,7 @@ export default function ExploreScreen() {
                   <Image source={{ uri: imageUrl }} style={styles.cardImage} contentFit="cover" />
                   <View style={styles.cardBody}>
                     <Text style={styles.cardTitle}>{studio.name}</Text>
-                    <Text style={styles.cardSubtitle}>{city}</Text>
+                    <Text style={styles.cardSubtitle}>{address}</Text>
                     <Text style={styles.cardMeta}>{count} classes</Text>
                   </View>
                 </Pressable>

@@ -24,6 +24,7 @@ import {
 } from "../../../src/services/auth";
 import { supabase } from "../../../src/lib/supabase";
 import { markAutoOpenedAdmin } from "../../../src/services/admin-bridge";
+import base64Decode from "fast-base64-decode";
 
 type ProfileForm = {
   firstName: string;
@@ -130,6 +131,7 @@ export default function ProfileScreen() {
         quality: 0.85,
         allowsEditing: true,
         aspect: [1, 1],
+        base64: true,
       });
 
       if (result.canceled || !result.assets?.[0]?.uri) return;
@@ -146,12 +148,22 @@ export default function ProfileScreen() {
       const fileExt = extFromUri.includes("?") ? extFromUri.split("?")[0] : extFromUri;
       const filePath = `${user.id}/avatar.${fileExt}`;
 
-      const response = await fetch(uri);
-      const blob = await response.blob();
+      let dataToUpload: Uint8Array | ArrayBuffer;
+      if (asset.base64) {
+        const sanitized = asset.base64.replace(/\s/g, "");
+        const padding = sanitized.endsWith("==") ? 2 : sanitized.endsWith("=") ? 1 : 0;
+        const byteLength = (sanitized.length * 3) / 4 - padding;
+        const buffer = new Uint8Array(byteLength);
+        base64Decode(sanitized, buffer);
+        dataToUpload = buffer;
+      } else {
+        const response = await fetch(uri);
+        dataToUpload = await response.arrayBuffer();
+      }
 
       const { error: uploadError } = await supabase.storage
         .from("avatars")
-        .upload(filePath, blob, { upsert: true, contentType });
+        .upload(filePath, dataToUpload, { upsert: true, contentType });
       if (uploadError) throw uploadError;
 
       const { data: publicUrlData } = supabase.storage
