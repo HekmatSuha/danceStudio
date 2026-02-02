@@ -14,22 +14,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Link, router } from "expo-router";
 import { register, type MobileUserRole, login } from "../../src/services/auth";
 
-const roleCopy: Record<MobileUserRole, { label: string; description: string }> =
-  {
-    owner: {
-      label: "Owner",
-      description: "Full control of studios, trainers, and billing.",
-    },
-    instructor: {
-      label: "Instructor",
-      description: "Create and manage classes you teach.",
-    },
-    student: {
-      label: "Student",
-      description: "Book classes and manage your profile.",
-    },
-  };
-
 export default function RegisterScreen() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -38,7 +22,7 @@ export default function RegisterScreen() {
   const [gender, setGender] = useState<"M" | "F">("F");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [role, setRole] = useState<MobileUserRole>("student");
+  const role: MobileUserRole = "student";
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
@@ -213,37 +197,6 @@ export default function RegisterScreen() {
               />
             </View>
 
-            <View style={styles.field}>
-              <Text style={styles.label}>Choose a role *</Text>
-              <View style={styles.roleGrid}>
-                {(Object.keys(roleCopy) as MobileUserRole[]).map((value) => (
-                  <Pressable
-                    key={value}
-                    onPress={() => setRole(value)}
-                    style={[
-                      styles.roleCard,
-                      role === value && styles.roleCardActive,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.roleLabel,
-                        role === value && styles.roleLabelActive,
-                      ]}
-                    >
-                      {roleCopy[value].label}
-                    </Text>
-                    <Text style={styles.roleDescription}>
-                      {roleCopy[value].description}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-              <Text style={styles.roleHint}>
-                Owners can later approve instructor access for teammates.
-              </Text>
-            </View>
-
             <Pressable
               onPress={handleRegister}
               disabled={loading}
@@ -376,16 +329,6 @@ const styles = StyleSheet.create({
   },
   roleLabelActive: {
     color: "#7c3aed",
-  },
-  roleDescription: {
-    marginTop: 4,
-    fontSize: 12,
-    color: "#6b7280",
-  },
-  roleHint: {
-    marginTop: 6,
-    fontSize: 12,
-    color: "#6b7280",
   },
   primaryButton: {
     height: 52,
