@@ -200,6 +200,30 @@ export async function clearStoredRole() {
   await AsyncStorage.removeItem(ROLE_KEY);
 }
 
+export async function getCurrentRole(): Promise<MobileUserRole | null> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    await clearStoredRole();
+    return null;
+  }
+
+  let profile: AccountProfile | null = null;
+  try {
+    profile = await fetchProfile();
+  } catch {
+    profile = null;
+  }
+
+  const normalized = normalizeRole(profile?.role ?? profile?.roles);
+  if (normalized) {
+    await setStoredRole(normalized);
+    return normalized;
+  }
+
+  await clearStoredRole();
+  return null;
+}
+
 export async function requestPasswordReset(email: string) {
   const { error } = await supabase.auth.resetPasswordForEmail(email);
   if (error) throw error;

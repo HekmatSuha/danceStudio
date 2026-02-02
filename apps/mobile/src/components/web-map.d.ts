@@ -15,6 +15,9 @@ type WebMapProps = {
   userLocation?: [number, number] | null;
   onMapReady?: (map: any) => void;
   onStudioSelect?: (studioId: string) => void;
+  onTouchStart?: () => void;
+  onTouchEnd?: () => void;
+  onTouchCancel?: () => void;
 };
 
 declare const WebMap: React.FC<WebMapProps>;

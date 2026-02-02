@@ -23,6 +23,7 @@ import WebMap from "../../src/components/web-map";
 import { listStudios, type Studio } from "../../src/services/studios";
 import { listSlots, type Slot } from "../../src/services/slots";
 import { fetchTrainers, type Trainer } from "../../src/services/trainers";
+import { useTabSwipe } from "../../src/contexts/tab-swipe";
 
 type Region = {
   latitude: number;
@@ -64,6 +65,9 @@ export default function ExploreScreen() {
   const [mapInteracting, setMapInteracting] = useState(false);
   const [mapFullscreen, setMapFullscreen] = useState(false);
   const mapRef = useRef<any>(null);
+  const tabSwipe = useTabSwipe();
+  const scrollRef = useRef<ScrollView | null>(null);
+  const mapTouchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isWeb = Platform.OS === "web";
   const hasNativeMapsModule =
     !isWeb && Boolean((NativeModules as any)?.RNMapsAirModule);
@@ -84,6 +88,28 @@ export default function ExploreScreen() {
   const useNativeMaps = Boolean(MapView && Marker);
   const useWebMap = !useNativeMaps;
   const useWebViewMap = useWebMap && !isWeb;
+
+  const handleMapTouchStart = () => {
+    if (mapTouchTimeout.current) {
+      clearTimeout(mapTouchTimeout.current);
+      mapTouchTimeout.current = null;
+    }
+    setMapInteracting(true);
+    tabSwipe?.setSwipeEnabled(false);
+    scrollRef.current?.setNativeProps({ scrollEnabled: false });
+  };
+
+  const handleMapTouchEnd = () => {
+    setMapInteracting(false);
+    if (mapTouchTimeout.current) {
+      clearTimeout(mapTouchTimeout.current);
+    }
+    mapTouchTimeout.current = setTimeout(() => {
+      tabSwipe?.setSwipeEnabled(true);
+      scrollRef.current?.setNativeProps({ scrollEnabled: true });
+      mapTouchTimeout.current = null;
+    }, 150);
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -370,6 +396,7 @@ export default function ExploreScreen() {
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <ScrollView
+          ref={scrollRef}
           contentContainerStyle={styles.page}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
@@ -393,14 +420,7 @@ export default function ExploreScreen() {
           </View>
         </View>
 
-        <View
-          style={styles.mapCard}
-          collapsable={false}
-          onTouchStart={() => setMapInteracting(true)}
-          onTouchEnd={() => setMapInteracting(false)}
-          onTouchCancel={() => setMapInteracting(false)}
-          onResponderRelease={() => setMapInteracting(false)}
-        >
+        <View style={styles.mapCard} collapsable={false}>
           {loading ? (
             <View style={styles.mapLoading}>
               <ActivityIndicator color="#111827" />
@@ -415,6 +435,9 @@ export default function ExploreScreen() {
                 mapRef.current = mapInstance;
               }}
               onStudioSelect={handleStudioPress}
+              onTouchStart={handleMapTouchStart}
+              onTouchEnd={handleMapTouchEnd}
+              onTouchCancel={handleMapTouchEnd}
             />
           ) : (
             <MapView
@@ -424,6 +447,9 @@ export default function ExploreScreen() {
               showsCompass={false}
               showsPointsOfInterest={false}
               showsUserLocation
+              onTouchStart={handleMapTouchStart}
+              onTouchEnd={handleMapTouchEnd}
+              onTouchCancel={handleMapTouchEnd}
             >
               {mapStudios.map((studio) => (
                 <Marker

@@ -16,6 +16,9 @@ type WebMapProps = {
   userLocation?: [number, number] | null;
   onMapReady?: (map: any) => void;
   onStudioSelect?: (studioId: string) => void;
+  onTouchStart?: () => void;
+  onTouchEnd?: () => void;
+  onTouchCancel?: () => void;
 };
 
 export default function WebMap({
@@ -25,6 +28,9 @@ export default function WebMap({
   userLocation,
   onMapReady,
   onStudioSelect,
+  onTouchStart,
+  onTouchEnd,
+  onTouchCancel,
 }: WebMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any | null>(null);
@@ -230,7 +236,15 @@ export default function WebMap({
     }
   }, [userLocation, mapReady]);
 
-  return <View ref={containerRef as any} style={styles.map} />;
+  return (
+    <View
+      ref={containerRef as any}
+      style={styles.map}
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
+      onTouchCancel={onTouchCancel}
+    />
+  );
 }
 
 const styles = StyleSheet.create({

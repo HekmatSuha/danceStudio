@@ -17,6 +17,9 @@ interface WebMapProps {
   userLocation?: [number, number] | null;
   onMapReady?: (map: any) => void;
   onStudioSelect?: (id: string) => void;
+  onTouchStart?: () => void;
+  onTouchEnd?: () => void;
+  onTouchCancel?: () => void;
 }
 
 export default function WebMap({
@@ -26,6 +29,9 @@ export default function WebMap({
   userLocation,
   onMapReady,
   onStudioSelect,
+  onTouchStart,
+  onTouchEnd,
+  onTouchCancel,
 }: WebMapProps) {
   const webViewRef = useRef<WebView>(null);
 
@@ -109,6 +115,17 @@ export default function WebMap({
 
             window.addEventListener('message', handleMessage);
             document.addEventListener('message', handleMessage);
+
+            function notifyTouch(type) {
+              if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+                window.ReactNativeWebView.postMessage(JSON.stringify({ type: type }));
+              }
+            }
+
+            document.addEventListener('touchstart', function() { notifyTouch('MAP_TOUCH_START'); }, { passive: true });
+            document.addEventListener('touchmove', function() { notifyTouch('MAP_TOUCH_START'); }, { passive: true });
+            document.addEventListener('touchend', function() { notifyTouch('MAP_TOUCH_END'); }, { passive: true });
+            document.addEventListener('touchcancel', function() { notifyTouch('MAP_TOUCH_END'); }, { passive: true });
           </script>
         </body>
       </html>
@@ -120,6 +137,10 @@ export default function WebMap({
       const data = JSON.parse(event.nativeEvent.data);
       if (data.type === "STUDIO_SELECT" && onStudioSelect) {
         onStudioSelect(data.id);
+      } else if (data.type === "MAP_TOUCH_START") {
+        onTouchStart?.();
+      } else if (data.type === "MAP_TOUCH_END") {
+        onTouchEnd?.();
       }
     } catch (e) {
       console.warn("Map message error", e);
@@ -127,7 +148,7 @@ export default function WebMap({
   };
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} onTouchCancel={onTouchCancel}>
       <WebView
         ref={(ref) => {
           (webViewRef as any).current = ref;
@@ -137,6 +158,9 @@ export default function WebMap({
         source={{ html: htmlContent, baseUrl: "" }}
         style={styles.map}
         onMessage={onMessage}
+        onTouchStart={onTouchStart}
+        onTouchEnd={onTouchEnd}
+        onTouchCancel={onTouchCancel}
         scrollEnabled={false}
         javaScriptEnabled
         domStorageEnabled
