@@ -1,13 +1,25 @@
-import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import React, { useEffect, useMemo, useState } from "react";
+import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { getCurrentRole, type MobileUserRole } from "../../src/services/auth";
+import { supabase } from "../../src/lib/supabase";
 
 export default function AdminDashboardScreen() {
   const [role, setRole] = useState<MobileUserRole | null>(null);
   const [loading, setLoading] = useState(true);
+  const webAdminBase = useMemo(() => process.env.EXPO_PUBLIC_WEB_ADMIN_URL || "", []);
+  const webAdminOrigin = useMemo(() => {
+    const raw = webAdminBase.trim();
+    if (!raw) return "";
+    try {
+      const normalized = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+      return new URL(normalized).origin;
+    } catch {
+      return raw.replace(/\/+$/, "");
+    }
+  }, [webAdminBase]);
 
   useEffect(() => {
     let active = true;
@@ -52,12 +64,40 @@ export default function AdminDashboardScreen() {
     );
   }
 
+  const isSuperAdmin = role === "super_admin";
+  const openWebAdmin = async (path: string) => {
+    if (!webAdminOrigin) {
+      Alert.alert(
+        "Web dashboard not configured",
+        "Set EXPO_PUBLIC_WEB_ADMIN_URL to open the web admin dashboard."
+      );
+      return;
+    }
+    const { data, error } = await supabase.auth.getSession();
+    if (error || !data.session) {
+      Alert.alert("Not signed in", "Please sign in again and retry.");
+      return;
+    }
+    const access = encodeURIComponent(data.session.access_token);
+    const refresh = encodeURIComponent(data.session.refresh_token);
+    const redirectPath = path.startsWith("/") ? path : `/${path}`;
+    const url = `${webAdminOrigin}${redirectPath}?access=${access}&refresh=${refresh}`;
+    const canOpen = await Linking.canOpenURL(url);
+    if (!canOpen) {
+      Alert.alert("Unable to open link", url);
+      return;
+    }
+    await Linking.openURL(url);
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.headerRow}>
           <View>
-            <Text style={styles.title}>Admin Dashboard</Text>
+            <Text style={styles.title}>
+              {isSuperAdmin ? "Super Admin Dashboard" : "Admin Dashboard"}
+            </Text>
             <Text style={styles.subtle}>Signed in as {role?.replace("_", " ")}</Text>
           </View>
           <Pressable style={styles.outlineButton} onPress={() => router.back()}>
@@ -66,19 +106,54 @@ export default function AdminDashboardScreen() {
           </Pressable>
         </View>
 
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Quick Actions</Text>
-          <Text style={styles.subtle}>
-            Add your admin tools here (classes, instructors, studios, reports).
-          </Text>
-        </View>
+        {isSuperAdmin ? (
+          <>
+            <Pressable
+              style={styles.card}
+              onPress={() => openWebAdmin("/dashboard/super-admin")}
+            >
+              <View style={styles.cardHeader}>
+                <View style={[styles.iconBadge, styles.iconBadgeBlue]}>
+                  <Ionicons name="business-outline" size={20} color="#2563eb" />
+                </View>
+                <Ionicons name="open-outline" size={18} color="#94a3b8" />
+              </View>
+              <Text style={styles.cardTitle}>Manage Studios</Text>
+              <Text style={styles.subtle}>
+                Create, edit, and monitor all dance studios on the platform.
+              </Text>
+            </Pressable>
 
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Coming Soon</Text>
-          <Text style={styles.subtle}>
-            This mobile admin dashboard is ready for your next set of features.
-          </Text>
-        </View>
+            <Pressable
+              style={styles.card}
+              onPress={() => openWebAdmin("/dashboard/super-admin")}
+            >
+              <View style={styles.cardHeader}>
+                <View style={[styles.iconBadge, styles.iconBadgeGreen]}>
+                  <Ionicons name="people-outline" size={20} color="#16a34a" />
+                </View>
+                <Ionicons name="open-outline" size={18} color="#94a3b8" />
+              </View>
+              <Text style={styles.cardTitle}>Manage Users</Text>
+              <Text style={styles.subtle}>
+                View and manage owner, instructor, and student accounts.
+              </Text>
+            </Pressable>
+          </>
+        ) : (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Web Dashboard</Text>
+            <Text style={styles.subtle}>
+              Open the web dashboard for advanced admin tools.
+            </Text>
+            <Pressable
+              style={styles.primaryButton}
+              onPress={() => openWebAdmin("/dashboard")}
+            >
+              <Text style={styles.primaryButtonText}>Open Web Dashboard</Text>
+            </Pressable>
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -125,6 +200,24 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
     elevation: 2,
+  },
+  cardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  iconBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  iconBadgeBlue: {
+    backgroundColor: "#dbeafe",
+  },
+  iconBadgeGreen: {
+    backgroundColor: "#dcfce7",
   },
   cardTitle: {
     fontSize: 16,

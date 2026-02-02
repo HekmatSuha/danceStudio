@@ -9,21 +9,24 @@
       "distribution": "internal",
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://eqztgdhhhhrmdfvlgnhx.supabase.co",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_xzxk7Avlv3abcYCGd00abQ_pzTl3lVa"
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_xzxk7Avlv3abcYCGd00abQ_pzTl3lVa",
+        "EXPO_PUBLIC_WEB_ADMIN_URL": "https://dancestudi.netlify.app"
       }
     },
     "preview": {
       "distribution": "internal",
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://eqztgdhhhhrmdfvlgnhx.supabase.co",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_xzxk7Avlv3abcYCGd00abQ_pzTl3lVa"
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_xzxk7Avlv3abcYCGd00abQ_pzTl3lVa",
+        "EXPO_PUBLIC_WEB_ADMIN_URL": "https://dancestudi.netlify.app"
       }
     },
     "production": {
       "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://eqztgdhhhhrmdfvlgnhx.supabase.co",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_xzxk7Avlv3abcYCGd00abQ_pzTl3lVa"
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_xzxk7Avlv3abcYCGd00abQ_pzTl3lVa",
+        "EXPO_PUBLIC_WEB_ADMIN_URL": "https://dancestudi.netlify.app"
       }
     }
   },
