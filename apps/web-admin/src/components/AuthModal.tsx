@@ -3,7 +3,6 @@
 import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { X, Mail, Lock, User, Phone } from "lucide-react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   signInWithEmail,
@@ -458,22 +457,16 @@ export function AuthModal({
           
 
           {mode === "signin" && (
-          <div className="flex justify-end">
-            <button
-              type="button"
-              onClick={handleForgotPassword}
-              disabled={isResetting || isSubmitting}
-              className="text-purple-600 hover:text-purple-700 disabled:opacity-60"
-            >
-              {isResetting ? "Sending reset..." : "Forgot password?"}
-            </button>
-            <Link
-              href={`/reset?email=${encodeURIComponent(formData.email)}`}
-              className="ml-4 text-sm text-gray-500 hover:text-purple-600"
-            >
-              Enter code
-            </Link>
-          </div>
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={handleForgotPassword}
+                disabled={isResetting || isSubmitting}
+                className="text-purple-600 hover:text-purple-700 disabled:opacity-60"
+              >
+                {isResetting ? "Sending reset..." : "Forgot password?"}
+              </button>
+            </div>
           )}
 
           <button
