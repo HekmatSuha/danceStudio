@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
 
       const { data, error } = await supabase
         .from("studios")
-        .select("uuid,name,city,address")
+        .select("uuid,name,city,address,image_url")
         .order("name")
         .limit(limit);
 
@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
         name: studio.name || "Studio",
         city: studio.city || null,
         address: studio.address || null,
-        imageUrl: fallbackImages[index % fallbackImages.length],
+        imageUrl: studio.image_url || fallbackImages[index % fallbackImages.length],
       }));
     });
 

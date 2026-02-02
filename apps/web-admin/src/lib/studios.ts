@@ -11,6 +11,7 @@ export type Studio = {
   latitude?: number | null;
   longitude?: number | null;
   whatsapp?: string | null;
+  image_url?: string | null;
 };
 
 export type Room = {
@@ -50,7 +51,7 @@ export async function listStudios() {
   return withCache("studios:all", 30000, async () => {
     const { data, error } = await supabase
       .from('studios')
-      .select('uuid, name, city, address, latitude, longitude, whatsapp');
+      .select('uuid, name, city, address, latitude, longitude, whatsapp, image_url');
 
     if (error) throw error;
     return data as Studio[];
@@ -68,12 +69,12 @@ export async function fetchMyStudios() {
       supabase
         .from('tenant_staff')
         .select(`
-          studio:studios(uuid, name, city, address, latitude, longitude, whatsapp)
+          studio:studios(uuid, name, city, address, latitude, longitude, whatsapp, image_url)
         `)
         .eq('user_id', user.id),
       supabase
         .from('studios')
-        .select('uuid, name, city, address, latitude, longitude, whatsapp')
+        .select('uuid, name, city, address, latitude, longitude, whatsapp, image_url')
         .eq('owner_id', user.id)
     ]);
 

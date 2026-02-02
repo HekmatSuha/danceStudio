@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { Plus, MapPin, Building2, User, Pencil, Trash2 } from "lucide-react";
 import { listStudios, updateStudio, deleteStudio, type Studio } from "../../../../lib/studios";
 import { createTenantAction } from "../../../actions/create-tenant";
+import { inviteStudioOwnerAction } from "../../../actions/invite-studio-owner";
 import { getErrorMessage } from "../../../../lib/errors";
 
 const parseOptionalNumber = (value: FormDataEntryValue | null) => {
@@ -21,6 +22,11 @@ export default function SuperAdminStudiosPage() {
   const [editingStudio, setEditingStudio] = useState<Studio | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [submitting, setSubmitting] = useState(false);
+  const [sendInvite, setSendInvite] = useState(false);
+  const [ownerInviteSubmitting, setOwnerInviteSubmitting] = useState(false);
+  const [ownerInviteFirstName, setOwnerInviteFirstName] = useState("");
+  const [ownerInviteLastName, setOwnerInviteLastName] = useState("");
+  const [ownerInviteEmail, setOwnerInviteEmail] = useState("");
 
   useEffect(() => {
     setLoading(true);
@@ -30,6 +36,12 @@ export default function SuperAdminStudiosPage() {
       .finally(() => setLoading(false));
   }, [refreshTrigger]);
 
+  useEffect(() => {
+    setOwnerInviteFirstName("");
+    setOwnerInviteLastName("");
+    setOwnerInviteEmail("");
+  }, [editingStudio]);
+
   const handleCreateSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setSubmitting(true);
@@ -38,8 +50,9 @@ export default function SuperAdminStudiosPage() {
     try {
       const result = await createTenantAction(formData);
       if (result.success) {
-        alert("Studio and Owner account created successfully!");
+        alert(result.message || "Studio created successfully.");
         setShowCreateForm(false);
+        setSendInvite(false);
         setRefreshTrigger((prev) => prev + 1);
       } else {
         alert("Error: " + result.message);
@@ -77,6 +90,33 @@ export default function SuperAdminStudiosPage() {
       alert(message || "Failed to update studio.");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleOwnerInvite = async () => {
+    if (!editingStudio) return;
+    setOwnerInviteSubmitting(true);
+    const formData = new FormData();
+    formData.set("studioId", editingStudio.uuid);
+    formData.set("firstName", ownerInviteFirstName);
+    formData.set("lastName", ownerInviteLastName);
+    formData.set("email", ownerInviteEmail);
+
+    try {
+      const result = await inviteStudioOwnerAction(formData);
+      if (result.success) {
+        alert(result.message || "Owner invite sent.");
+        setOwnerInviteFirstName("");
+        setOwnerInviteLastName("");
+        setOwnerInviteEmail("");
+        setRefreshTrigger((prev) => prev + 1);
+      } else {
+        alert("Error: " + result.message);
+      }
+    } catch (err: unknown) {
+      alert(getErrorMessage(err, "An unexpected error occurred."));
+    } finally {
+      setOwnerInviteSubmitting(false);
     }
   };
 
@@ -160,39 +200,77 @@ export default function SuperAdminStudiosPage() {
                   placeholder="e.g. +77011234567"
                 />
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Studio Image (Optional)</label>
+                <input
+                  name="studioImage"
+                  type="file"
+                  accept="image/*"
+                  className="w-full border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                />
+                <p className="text-xs text-gray-500 mt-1">Used on the landing page studio card.</p>
+              </div>
             </div>
 
             {/* Owner Details */}
             <div className="bg-blue-50 p-4 rounded-lg space-y-4 border border-blue-100">
               <h4 className="font-semibold text-blue-800 text-sm uppercase tracking-wide flex items-center gap-2">
                 <User size={16} />
-                2. Owner Account (Login Credentials)
+                2. Owner Account (Optional)
               </h4>
+              <label className="flex items-center gap-2 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  name="sendInvite"
+                  checked={sendInvite}
+                  onChange={(event) => setSendInvite(event.target.checked)}
+                  className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                />
+                Send password setup email now
+              </label>
+              <p className="text-xs text-slate-500">
+                If enabled, the owner will receive a link to set their own password.
+              </p>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">First Name *</label>
-                  <input name="ownerFirstName" required className="w-full border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="John" />
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    First Name {sendInvite ? "*" : ""}
+                  </label>
+                  <input
+                    name="ownerFirstName"
+                    required={sendInvite}
+                    className="w-full border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                    placeholder="John"
+                  />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Last Name *</label>
-                  <input name="ownerLastName" required className="w-full border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Doe" />
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Last Name {sendInvite ? "*" : ""}
+                  </label>
+                  <input
+                    name="ownerLastName"
+                    required={sendInvite}
+                    className="w-full border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                    placeholder="Doe"
+                  />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Email (Username) *</label>
-                  <input type="email" name="ownerEmail" required className="w-full border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="owner@studio.com" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Password *</label>
-                  <input type="password" name="ownerPassword" required minLength={8} className="w-full border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="••••••••" />
-                  <p className="text-xs text-gray-500 mt-1">Must be at least 8 characters.</p>
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Email (Username) {sendInvite ? "*" : ""}
+                </label>
+                <input
+                  type="email"
+                  name="ownerEmail"
+                  required={sendInvite}
+                  className="w-full border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                  placeholder="owner@studio.com"
+                />
               </div>
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={() => setShowCreateForm(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button>
+              <button type="button" onClick={() => { setShowCreateForm(false); setSendInvite(false); }} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button>
               <button 
                 type="submit" 
                 disabled={submitting}
@@ -207,7 +285,7 @@ export default function SuperAdminStudiosPage() {
 
       {/* EDIT FORM */}
       {editingStudio && (
-        <div className="mb-8 max-w-2xl bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+        <div className="mb-8 max-w-2xl bg-white p-6 rounded-xl border border-gray-200 shadow-sm space-y-6">
           <h3 className="text-lg font-bold mb-4">Edit Studio Details</h3>
           <form onSubmit={handleEditSubmit} className="space-y-4">
             <div>
@@ -249,6 +327,53 @@ export default function SuperAdminStudiosPage() {
               <button type="submit" disabled={submitting} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Save Changes</button>
             </div>
           </form>
+
+          <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-3">
+            <h4 className="font-semibold text-slate-800 text-sm uppercase tracking-wide">Owner Invite</h4>
+            <p className="text-xs text-slate-500">
+              Send a password setup email to the studio owner when they are ready.
+            </p>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">First Name *</label>
+                <input
+                  value={ownerInviteFirstName}
+                  onChange={(event) => setOwnerInviteFirstName(event.target.value)}
+                  className="w-full border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                  placeholder="John"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Last Name *</label>
+                <input
+                  value={ownerInviteLastName}
+                  onChange={(event) => setOwnerInviteLastName(event.target.value)}
+                  className="w-full border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                  placeholder="Doe"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
+              <input
+                type="email"
+                value={ownerInviteEmail}
+                onChange={(event) => setOwnerInviteEmail(event.target.value)}
+                className="w-full border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                placeholder="owner@studio.com"
+              />
+            </div>
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={handleOwnerInvite}
+                disabled={ownerInviteSubmitting}
+                className="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 disabled:opacity-70"
+              >
+                {ownerInviteSubmitting ? "Sending..." : "Send Invite"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

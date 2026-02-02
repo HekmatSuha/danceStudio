@@ -25,11 +25,17 @@ export async function createTenantAction(formData: FormData): Promise<CreateTena
   const latitude = parseOptionalNumber(formData.get("latitude"));
   const longitude = parseOptionalNumber(formData.get("longitude"));
   const whatsapp = (formData.get("whatsapp") as string) || null;
+  const imageFileEntry = formData.get("studioImage");
+  const imageFile = imageFileEntry instanceof File ? imageFileEntry : null;
   
-  const ownerEmail = formData.get("ownerEmail") as string;
-  const ownerPassword = formData.get("ownerPassword") as string;
-  const ownerFirstName = formData.get("ownerFirstName") as string;
-  const ownerLastName = formData.get("ownerLastName") as string;
+  const ownerEmail = (formData.get("ownerEmail") as string) || "";
+  const ownerFirstName = (formData.get("ownerFirstName") as string) || "";
+  const ownerLastName = (formData.get("ownerLastName") as string) || "";
+  const sendInviteRaw = formData.get("sendInvite");
+  const sendInvite = sendInviteRaw === "on" || sendInviteRaw === "true" || sendInviteRaw === "1";
+  const normalizedEmail = ownerEmail.trim().toLowerCase();
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000").replace(/\/$/, "");
+  const resetUrl = `${appUrl}/reset`;
 
   if (!whatsapp) {
     return { success: false, message: "WhatsApp is required for the studio." };
@@ -40,28 +46,42 @@ export async function createTenantAction(formData: FormData): Promise<CreateTena
   }
 
   try {
-    // 1. Create the Auth User (Studio Owner)
-    const { data: userData, error: userError } = await supabaseAdmin.auth.admin.createUser({
-      email: ownerEmail,
-      password: ownerPassword,
-      email_confirm: true,
-      user_metadata: {
-        first_name: ownerFirstName,
-        last_name: ownerLastName,
-        role: 'owner'
+    let newOwnerId: string | null = null;
+
+    if (sendInvite) {
+      if (!normalizedEmail) {
+        return { success: false, message: "Owner email is required to send an invite." };
       }
-    });
+      if (!ownerFirstName.trim() || !ownerLastName.trim()) {
+        return { success: false, message: "Owner first and last name are required to send an invite." };
+      }
 
-    if (userError) {
-      console.error("Create User Error:", userError);
-      return { success: false, message: `Failed to create user: ${userError.message}` };
+      // 1. Invite Auth User (sends email to set password)
+      const { data: userData, error: userError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
+        normalizedEmail,
+        {
+          data: {
+            username: normalizedEmail,
+            first_name: ownerFirstName,
+            last_name: ownerLastName,
+            role: "owner",
+            must_reset_password: true,
+          },
+          redirectTo: resetUrl,
+        }
+      );
+
+      if (userError) {
+        console.error("Invite User Error:", userError);
+        return { success: false, message: `Failed to invite owner: ${userError.message}` };
+      }
+
+      if (!userData.user) {
+        return { success: false, message: "Owner invite failed unexpectedly." };
+      }
+
+      newOwnerId = userData.user.id;
     }
-
-    if (!userData.user) {
-      return { success: false, message: "User creation failed unexpectedly." };
-    }
-
-    const newOwnerId = userData.user.id;
 
     // 2. Create the Studio
     // The profile should be created automatically by the DB trigger 'on_auth_user_created'
@@ -93,20 +113,51 @@ export async function createTenantAction(formData: FormData): Promise<CreateTena
       return { success: false, message: `Created user but failed to create studio: ${studioError.message}` };
     }
 
-    // 3. Add Owner to Tenant Staff (as 'owner')
-    await supabaseAdmin
-      .from('tenant_staff')
-      .insert({
-        studio_id: studioData.uuid,
-        user_id: newOwnerId,
-        role: 'owner'
-      });
+    // 3. Upload studio image if provided
+    if (imageFile && imageFile.size > 0) {
+      const safeName = imageFile.name.replace(/[^a-zA-Z0-9._-]/g, "_") || "studio.jpg";
+      const path = `${studioData.uuid}/${Date.now()}-${safeName}`;
+      const { error: uploadError } = await supabaseAdmin.storage
+        .from("studio-images")
+        .upload(path, imageFile, { upsert: true });
+
+      if (uploadError) {
+        console.warn("Studio image upload failed:", uploadError);
+        return {
+          success: true,
+          message: `Studio created, but image upload failed: ${uploadError.message}`,
+          studioId: studioData.uuid,
+          ownerId: newOwnerId || undefined
+        };
+      }
+
+      const { data } = supabaseAdmin.storage.from("studio-images").getPublicUrl(path);
+      const imageUrl = data.publicUrl;
+
+      await supabaseAdmin
+        .from("studios")
+        .update({ image_url: imageUrl })
+        .eq("uuid", studioData.uuid);
+    }
+
+    // 4. Add Owner to Tenant Staff (as 'owner')
+    if (newOwnerId) {
+      await supabaseAdmin
+        .from('tenant_staff')
+        .insert({
+          studio_id: studioData.uuid,
+          user_id: newOwnerId,
+          role: 'owner'
+        });
+    }
 
     return { 
       success: true, 
-      message: "Studio and Owner created successfully.",
+      message: sendInvite
+        ? "Studio created and owner invite sent."
+        : "Studio created successfully (no owner invite sent).",
       studioId: studioData.uuid,
-      ownerId: newOwnerId
+      ownerId: newOwnerId || undefined
     };
 
   } catch (err: unknown) {
