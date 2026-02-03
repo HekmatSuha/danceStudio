@@ -42,6 +42,12 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ??
         config.ios?.config?.googleMapsApiKey,
     },
+    infoPlist: {
+      NSLocationWhenInUseUsageDescription:
+        "We use your location to show nearby studios and improve map results.",
+      NSPhotoLibraryUsageDescription:
+        "We access your photo library so you can upload a profile image.",
+    },
   },
   extra: {
     ...config.extra,
