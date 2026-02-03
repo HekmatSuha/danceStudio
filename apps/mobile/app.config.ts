@@ -36,6 +36,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   ios: {
     ...config.ios,
+    bundleIdentifier: "com.hekmatsuha.dancecrm",
     config: {
       ...config.ios?.config,
       googleMapsApiKey:
