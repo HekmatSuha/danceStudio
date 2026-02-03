@@ -21,6 +21,32 @@ export function useAuthUser(): AuthUserState {
     let mounted = true;
     let inFlight = false;
 
+    const resolveEffectiveRole = async (userId: string, role: UserRole) => {
+      if (role === "owner" || role === "super_admin") return role;
+      try {
+        const [ownedResult, staffResult] = await Promise.all([
+          supabase
+            .from("studios")
+            .select("uuid")
+            .eq("owner_id", userId)
+            .limit(1),
+          supabase
+            .from("tenant_staff")
+            .select("id, role")
+            .eq("user_id", userId)
+            .in("role", ["admin", "owner"])
+            .limit(1),
+        ]);
+
+        const ownsStudio = (ownedResult.data?.length ?? 0) > 0;
+        const isStudioAdmin = (staffResult.data?.length ?? 0) > 0;
+        if (ownsStudio || isStudioAdmin) return "owner";
+      } catch {
+        // If we can't resolve extra permissions, fall back to base role.
+      }
+      return role;
+    };
+
     const loadProfile = async () => {
       if (inFlight) return;
       inFlight = true;
@@ -33,9 +59,11 @@ export function useAuthUser(): AuthUserState {
         
         const profile = await fetchProfile();
         if (mounted) {
+          const baseRole = toUserRole(profile.roles, profile);
+          const effectiveRole = await resolveEffectiveRole(profile.uuid, baseRole);
           setState({
             user: profile,
-            role: toUserRole(profile.roles, profile),
+            role: effectiveRole,
             loading: false,
           });
         }
