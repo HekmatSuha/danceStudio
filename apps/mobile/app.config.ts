@@ -4,6 +4,25 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: "Tance",
   slug: "dance-crm",
+  plugins: [
+    "expo-router",
+    [
+      "expo-splash-screen",
+      {
+        image: "./assets/images/splash-icon.png",
+        imageWidth: 200,
+        resizeMode: "contain",
+        backgroundColor: "#ffffff",
+        dark: { backgroundColor: "#000000" },
+      },
+    ],
+    [
+      "react-native-maps",
+      {
+        googleMapsApiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
+      },
+    ],
+  ],
   android: {
     ...config.android,
     config: {
@@ -13,6 +32,15 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
           process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ??
           config.android?.config?.googleMaps?.apiKey,
       },
+    },
+  },
+  ios: {
+    ...config.ios,
+    config: {
+      ...config.ios?.config,
+      googleMapsApiKey:
+        process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ??
+        config.ios?.config?.googleMapsApiKey,
     },
   },
   extra: {
