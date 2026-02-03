@@ -105,6 +105,8 @@ export default function TabLayout() {
             tabBarActiveTintColor: '#111827',
             tabBarInactiveTintColor: '#9ca3af',
             headerShown: false,
+            lazy: true,
+            lazyPreloadDistance: 1,
           }}>
           <ExpoTabs.Screen
             name="index"
@@ -139,6 +141,8 @@ export default function TabLayout() {
       <Tabs
         key={role ?? 'guest'}
         tabBarPosition="bottom"
+        lazy
+        lazyPreloadDistance={1}
         screenOptions={{
           tabBarActiveTintColor: '#111827',
           tabBarInactiveTintColor: '#9ca3af',

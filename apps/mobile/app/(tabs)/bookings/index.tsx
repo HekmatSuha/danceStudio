@@ -9,6 +9,7 @@ import {
   Alert,
   Modal,
   Switch,
+  InteractionManager,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { listBookings, cancelBooking, type Booking } from "../../../src/services/bookings";
@@ -192,7 +193,9 @@ export default function BookingsScreen() {
 
   useEffect(() => {
     isMounted.current = true;
-    load();
+    InteractionManager.runAfterInteractions(() => {
+      if (isMounted.current) load();
+    });
     return () => {
       isMounted.current = false;
     };

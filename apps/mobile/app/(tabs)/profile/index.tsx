@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Alert,
   ActivityIndicator,
+  InteractionManager,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -133,7 +134,9 @@ export default function ProfileScreen() {
 
   useEffect(() => {
     isMounted.current = true;
-    loadProfile();
+    InteractionManager.runAfterInteractions(() => {
+      if (isMounted.current) loadProfile();
+    });
     return () => {
       isMounted.current = false;
     };
