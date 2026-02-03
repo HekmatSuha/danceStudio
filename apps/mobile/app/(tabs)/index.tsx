@@ -11,7 +11,6 @@ import {
   Platform,
   Alert,
   Keyboard,
-  NativeModules,
   Modal,
   InteractionManager,
 } from "react-native";
@@ -26,6 +25,7 @@ import { listSlots, type Slot } from "../../src/services/slots";
 import { fetchTrainers, type Trainer } from "../../src/services/trainers";
 import { useTabSwipe } from "../../src/contexts/tab-swipe";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Location from "expo-location";
 
 type Region = {
   latitude: number;
@@ -73,13 +73,13 @@ export default function ExploreScreen() {
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
   const [mapInteracting, setMapInteracting] = useState(false);
   const [mapFullscreen, setMapFullscreen] = useState(false);
+  const [locationPermission, setLocationPermission] = useState<Location.PermissionStatus | null>(null);
   const mapRef = useRef<any>(null);
   const tabSwipe = useTabSwipe();
   const scrollRef = useRef<ScrollView | null>(null);
   const mapTouchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isWeb = Platform.OS === "web";
-  const hasNativeMapsModule =
-    !isWeb && Boolean((NativeModules as any)?.RNMapsAirModule);
+  const hasNativeMapsModule = !isWeb;
 
   let MapView: any = null;
   let Marker: any = null;
@@ -97,6 +97,7 @@ export default function ExploreScreen() {
   const useNativeMaps = Boolean(MapView && Marker);
   const useWebMap = !useNativeMaps;
   const useWebViewMap = useWebMap && !isWeb;
+  const hasLocationAccess = locationPermission === "granted";
 
   const handleMapTouchStart = () => {
     if (mapTouchTimeout.current) {
@@ -188,6 +189,23 @@ export default function ExploreScreen() {
     };
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    const requestPermission = async () => {
+      if (isWeb) return;
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (active) setLocationPermission(status);
+      } catch {
+        if (active) setLocationPermission("denied");
+      }
+    };
+    requestPermission();
+    return () => {
+      active = false;
+    };
+  }, [isWeb]);
+
   const studioCounts = useMemo(() => {
     return slots.reduce<Record<string, number>>((acc, slot) => {
       if (slot.studio) {
@@ -249,7 +267,7 @@ export default function ExploreScreen() {
     };
   }, [mapStudios]);
 
-  const handleZoom = (direction: "in" | "out") => {
+  const handleZoom = async (direction: "in" | "out") => {
     const map = mapRef.current;
     if (!map) return;
     
@@ -269,22 +287,33 @@ export default function ExploreScreen() {
       return;
     }
 
-    map.getMapBoundaries().then((bounds: any) => {
-      const centerLat = (bounds.northEast.latitude + bounds.southWest.latitude) / 2;
-      const centerLon = (bounds.northEast.longitude + bounds.southWest.longitude) / 2;
-      const latDelta = Math.abs(bounds.northEast.latitude - bounds.southWest.latitude);
-      const lonDelta = Math.abs(bounds.northEast.longitude - bounds.southWest.longitude);
-      const factor = direction === "in" ? 0.7 : 1.4;
-      map.animateToRegion(
-        {
-          latitude: centerLat,
-          longitude: centerLon,
-          latitudeDelta: Math.max(0.01, latDelta * factor),
-          longitudeDelta: Math.max(0.01, lonDelta * factor),
-        },
-        200
-      );
-    });
+    try {
+      if (typeof map.getMapBoundaries === "function") {
+        const bounds = await map.getMapBoundaries();
+        const centerLat = (bounds.northEast.latitude + bounds.southWest.latitude) / 2;
+        const centerLon = (bounds.northEast.longitude + bounds.southWest.longitude) / 2;
+        const latDelta = Math.abs(bounds.northEast.latitude - bounds.southWest.latitude);
+        const lonDelta = Math.abs(bounds.northEast.longitude - bounds.southWest.longitude);
+        const factor = direction === "in" ? 0.7 : 1.4;
+        map.animateToRegion(
+          {
+            latitude: centerLat,
+            longitude: centerLon,
+            latitudeDelta: Math.max(0.01, latDelta * factor),
+            longitudeDelta: Math.max(0.01, lonDelta * factor),
+          },
+          200
+        );
+        return;
+      }
+      if (typeof map.getCamera === "function" && typeof map.animateCamera === "function") {
+        const camera = await map.getCamera();
+        const nextZoom = (camera?.zoom ?? 12) + (direction === "in" ? 1 : -1);
+        map.animateCamera({ zoom: Math.max(2, nextZoom) }, { duration: 200 });
+      }
+    } catch (err) {
+      console.warn("Map zoom failed", err);
+    }
   };
 
   const handleCenter = () => {
@@ -316,9 +345,48 @@ export default function ExploreScreen() {
     Alert.alert(title, message);
   };
 
-  const handleLocate = () => {
+  const handleLocate = async () => {
     if (!isWeb) {
-      handleCenter();
+      try {
+        let status = locationPermission;
+        if (status !== "granted") {
+          const result = await Location.requestForegroundPermissionsAsync();
+          status = result.status;
+          setLocationPermission(status);
+        }
+        if (status !== "granted") {
+          notify(
+            "Location blocked",
+            "Enable location access in system settings to show your position."
+          );
+          return;
+        }
+
+        const location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+        const coords: [number, number] = [
+          location.coords.latitude,
+          location.coords.longitude,
+        ];
+        setUserLocation(coords);
+
+        const map = mapRef.current;
+        if (map && typeof map.animateToRegion === "function") {
+          map.animateToRegion(
+            {
+              latitude: coords[0],
+              longitude: coords[1],
+              latitudeDelta: 0.05,
+              longitudeDelta: 0.05,
+            },
+            250
+          );
+        }
+      } catch (err) {
+        console.warn("Failed to get current location", err);
+        notify("Location error", "Unable to get current location.");
+      }
       return;
     }
 
@@ -502,7 +570,7 @@ export default function ExploreScreen() {
               initialRegion={initialRegion}
               showsCompass={false}
               showsPointsOfInterest={false}
-              showsUserLocation
+              showsUserLocation={hasLocationAccess}
               onTouchStart={handleMapTouchStart}
               onTouchEnd={handleMapTouchEnd}
               onTouchCancel={handleMapTouchEnd}
@@ -567,7 +635,7 @@ export default function ExploreScreen() {
                     initialRegion={initialRegion}
                     showsCompass={false}
                     showsPointsOfInterest={false}
-                    showsUserLocation
+                    showsUserLocation={hasLocationAccess}
                   >
                     {mapStudios.map((studio) => (
                       <Marker
