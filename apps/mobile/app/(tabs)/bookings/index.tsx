@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import { listBookings, cancelBooking, type Booking } from "../../../src/services
 import { router } from "expo-router";
 import { supabase } from "../../../src/lib/supabase";
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const FILTER_CHIPS = [
   { id: "teacher", label: "Select a teacher" },
@@ -31,6 +32,7 @@ export default function BookingsScreen() {
   const [workingId, setWorkingId] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const isMounted = useRef(true);
   const visibleBookings = showArchived
     ? bookings
     : bookings.filter((b) => b.status !== "cancelled");
@@ -155,22 +157,45 @@ export default function BookingsScreen() {
   const load = async () => {
     setLoading(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
+      const { data } = await supabase.auth.getSession();
+      const userId = data.session?.user?.id;
+      if (!userId) {
         router.replace("/(auth)/login");
         return;
       }
-      const data = await listBookings();
-      setBookings(data);
+      const cacheKey = `dancecrm.cache.bookings.${userId}`;
+      const cached = await AsyncStorage.getItem(cacheKey);
+      if (cached && isMounted.current) {
+        try {
+          const parsed = JSON.parse(cached) as Booking[];
+          if (Array.isArray(parsed)) {
+            setBookings(parsed);
+            setLoading(false);
+          }
+        } catch {
+          // ignore cache parse errors
+        }
+      }
+
+      const dataFresh = await listBookings();
+      if (!isMounted.current) return;
+      setBookings(dataFresh);
+      await AsyncStorage.setItem(cacheKey, JSON.stringify(dataFresh));
     } catch (err: any) {
-      Alert.alert("Error", err?.message || "Failed to load bookings.");
+      if (isMounted.current) {
+        Alert.alert("Error", err?.message || "Failed to load bookings.");
+      }
     } finally {
-      setLoading(false);
+      if (isMounted.current) setLoading(false);
     }
   };
 
   useEffect(() => {
+    isMounted.current = true;
     load();
+    return () => {
+      isMounted.current = false;
+    };
   }, []);
 
   const handleCancel = async (bookingId: string) => {

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -25,6 +25,7 @@ import {
 import { supabase } from "../../../src/lib/supabase";
 import { markAutoOpenedAdmin } from "../../../src/services/admin-bridge";
 import base64Decode from "fast-base64-decode";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 type ProfileForm = {
   firstName: string;
@@ -51,6 +52,7 @@ export default function ProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const isMounted = useRef(true);
   const webAdminBase = useMemo(() => process.env.EXPO_PUBLIC_WEB_ADMIN_URL || "", []);
   const webAdminOrigin = useMemo(() => {
     const raw = webAdminBase.trim();
@@ -66,35 +68,75 @@ export default function ProfileScreen() {
   const loadProfile = async () => {
     setLoading(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
+      const { data } = await supabase.auth.getSession();
+      const userId = data.session?.user?.id;
+      if (!userId) {
         setProfile(null);
+        setRole(null);
+        setLoading(false);
         return;
       }
-      const [data, currentRole] = await Promise.all([
+      const profileCacheKey = `dancecrm.cache.profile.${userId}`;
+      const roleCacheKey = `dancecrm.cache.role.${userId}`;
+      const cachedProfile = await AsyncStorage.getItem(profileCacheKey);
+      const cachedRole = await AsyncStorage.getItem(roleCacheKey);
+      if (cachedProfile && isMounted.current) {
+        try {
+          const parsed = JSON.parse(cachedProfile) as AccountProfile;
+          setProfile(parsed);
+          setForm({
+            firstName: parsed.first_name || "",
+            lastName: parsed.last_name || "",
+            email: parsed.email || "",
+            phone: parsed.phone_number || "",
+            gender: parsed.gender || "F",
+            danceLevel: parsed.dance_level || "Beginner",
+            interests: (parsed.interests || []).join(", "),
+          });
+          if (cachedRole) {
+            setRole(cachedRole as MobileUserRole);
+          }
+          setLoading(false);
+        } catch {
+          // ignore cache parse errors
+        }
+      }
+
+      const [freshProfile, currentRole] = await Promise.all([
         fetchProfile(),
         getCurrentRole(),
       ]);
-      setProfile(data);
+      if (!isMounted.current) return;
+      setProfile(freshProfile);
       setRole(currentRole);
       setForm({
-        firstName: data.first_name || "",
-        lastName: data.last_name || "",
-        email: data.email || "",
-        phone: data.phone_number || "",
-        gender: data.gender || "F",
-        danceLevel: data.dance_level || "Beginner",
-        interests: (data.interests || []).join(", "),
+        firstName: freshProfile.first_name || "",
+        lastName: freshProfile.last_name || "",
+        email: freshProfile.email || "",
+        phone: freshProfile.phone_number || "",
+        gender: freshProfile.gender || "F",
+        danceLevel: freshProfile.dance_level || "Beginner",
+        interests: (freshProfile.interests || []).join(", "),
       });
+      await AsyncStorage.setItem(profileCacheKey, JSON.stringify(freshProfile));
+      if (currentRole) {
+        await AsyncStorage.setItem(roleCacheKey, currentRole);
+      } else {
+        await AsyncStorage.removeItem(roleCacheKey);
+      }
     } catch {
       Alert.alert("Error", "Failed to load profile.");
     } finally {
-      setLoading(false);
+      if (isMounted.current) setLoading(false);
     }
   };
 
   useEffect(() => {
+    isMounted.current = true;
     loadProfile();
+    return () => {
+      isMounted.current = false;
+    };
   }, []);
 
   const handleSave = async () => {

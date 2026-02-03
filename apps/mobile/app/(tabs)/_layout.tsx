@@ -10,6 +10,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { createMaterialTopTabNavigator } from '@react-navigation/material-top-tabs';
 import { Platform } from 'react-native';
 import { TabSwipeProvider } from '../../src/contexts/tab-swipe';
+import { supabase } from '../../src/lib/supabase';
 
 const MaterialTopTabs = createMaterialTopTabNavigator();
 const Tabs = withLayoutContext(MaterialTopTabs.Navigator);
@@ -69,6 +70,20 @@ export default function TabLayout() {
 
   const showAdmin = isAdmin && !loadingRole;
 
+  const makeAuthGuard = useCallback((path: string) => ({
+    tabPress: (e: any) => {
+      e.preventDefault();
+      void (async () => {
+        const { data } = await supabase.auth.getSession();
+        if (data.session) {
+          router.replace(path);
+        } else {
+          router.replace('/(auth)/login');
+        }
+      })();
+    },
+  }), []);
+
   useEffect(() => {
     if (loadingRole || autoOpenedAdminRef.current) return;
     const maybeAutoOpen = async () => {
@@ -104,6 +119,7 @@ export default function TabLayout() {
               title: 'Reservations',
               tabBarIcon: ({ color }) => <IconSymbol size={28} name="calendar" color={color} />,
             }}
+            listeners={makeAuthGuard('/(tabs)/bookings')}
           />
           <ExpoTabs.Screen
             name="profile/index"
@@ -111,6 +127,7 @@ export default function TabLayout() {
               title: 'Profile',
               tabBarIcon: ({ color }) => <IconSymbol size={28} name="person.crop.circle" color={color} />,
             }}
+            listeners={makeAuthGuard('/(tabs)/profile')}
           />
         </ExpoTabs>
       </TabSwipeProvider>
@@ -145,6 +162,7 @@ export default function TabLayout() {
             title: 'Reservations',
             tabBarIcon: ({ color }) => <IconSymbol size={28} name="calendar" color={color} />,
           }}
+          listeners={makeAuthGuard('/(tabs)/bookings')}
         />
         <Tabs.Screen
           name="profile/index"
@@ -152,6 +170,7 @@ export default function TabLayout() {
             title: 'Profile',
             tabBarIcon: ({ color }) => <IconSymbol size={28} name="person.crop.circle" color={color} />,
           }}
+          listeners={makeAuthGuard('/(tabs)/profile')}
         />
       </Tabs>
     </TabSwipeProvider>
