@@ -53,6 +53,7 @@ export default function ProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
   const isMounted = useRef(true);
   const webAdminBase = useMemo(() => process.env.EXPO_PUBLIC_WEB_ADMIN_URL || "", []);
   const webAdminOrigin = useMemo(() => {
@@ -228,6 +229,64 @@ export default function ProfileScreen() {
   const handleLogout = async () => {
     await logout();
     router.replace("/(auth)/login");
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!webAdminOrigin) {
+      Alert.alert(
+        "Account deletion unavailable",
+        "Set EXPO_PUBLIC_WEB_ADMIN_URL to enable account deletion."
+      );
+      return;
+    }
+
+    Alert.alert(
+      "Delete account?",
+      "This will permanently delete your account and data. This cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            if (deletingAccount) return;
+            setDeletingAccount(true);
+            try {
+              const { data, error } = await supabase.auth.getSession();
+              if (error || !data.session) {
+                Alert.alert("Not signed in", "Please sign in again and retry.");
+                return;
+              }
+
+              const response = await fetch(`${webAdminOrigin}/api/account/delete`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${data.session.access_token}`,
+                },
+                body: JSON.stringify({}),
+              });
+
+              const payload = await response.json().catch(() => ({}));
+              if (!response.ok) {
+                Alert.alert(
+                  "Delete failed",
+                  payload?.error || "Unable to delete your account."
+                );
+                return;
+              }
+
+              await logout();
+              router.replace("/(auth)/login");
+            } catch (err: any) {
+              Alert.alert("Delete failed", err?.message || "Unable to delete your account.");
+            } finally {
+              setDeletingAccount(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const openAdminDashboard = async () => {
@@ -444,6 +503,28 @@ export default function ProfileScreen() {
           )}
         </Pressable>
 
+        <View style={styles.dangerCard}>
+          <Text style={styles.dangerTitle}>Danger Zone</Text>
+          <Text style={styles.dangerText}>
+            Permanently delete your account and associated data.
+          </Text>
+          <Pressable
+            onPress={handleDeleteAccount}
+            disabled={deletingAccount}
+            style={({ pressed }) => [
+              styles.deleteButton,
+              pressed && { opacity: 0.9 },
+              deletingAccount && { opacity: 0.7 },
+            ]}
+          >
+            {deletingAccount ? (
+              <ActivityIndicator color="white" />
+            ) : (
+              <Text style={styles.deleteButtonText}>Delete Account</Text>
+            )}
+          </Pressable>
+        </View>
+
         <View style={{ height: 40 }} />
       </ScrollView>
     </SafeAreaView>
@@ -600,6 +681,37 @@ const styles = StyleSheet.create({
   saveButtonText: {
     color: "white",
     fontSize: 16,
+    fontWeight: "700",
+  },
+  dangerCard: {
+    marginTop: 20,
+    backgroundColor: "white",
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#fee2e2",
+  },
+  dangerTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#b91c1c",
+    marginBottom: 6,
+  },
+  dangerText: {
+    fontSize: 12,
+    color: "#7f1d1d",
+    marginBottom: 12,
+  },
+  deleteButton: {
+    backgroundColor: "#ef4444",
+    height: 48,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  deleteButtonText: {
+    color: "white",
+    fontSize: 14,
     fontWeight: "700",
   },
   adminButton: {
