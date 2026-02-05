@@ -164,6 +164,11 @@ const styles = StyleSheet.create({
     color: "#64748b",
     fontSize: 13,
   },
+  title: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#0f172a",
+  },
   card: {
     backgroundColor: "#ffffff",
     borderRadius: 16,

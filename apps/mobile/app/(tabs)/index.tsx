@@ -17,7 +17,6 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
-import Constants from "expo-constants";
 import { router } from "expo-router";
 import WebMap from "../../src/components/web-map";
 import { listStudios, type Studio } from "../../src/services/studios";
@@ -33,9 +32,6 @@ type Region = {
   latitudeDelta: number;
   longitudeDelta: number;
 };
-
-const MAP_FALLBACK =
-  "https://images.unsplash.com/photo-1526779259212-939e64788e3c?auto=format&fit=crop&w=1400&q=80";
 
 const CATEGORY_CHIPS = [
   { id: "chip-1", label: "All" },
@@ -85,10 +81,11 @@ export default function ExploreScreen() {
   let Marker: any = null;
   if (hasNativeMapsModule) {
     try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const maps = require("react-native-maps");
       MapView = maps.default ?? maps;
       Marker = maps.Marker;
-    } catch (err) {
+    } catch {
       MapView = null;
       Marker = null;
     }
@@ -197,7 +194,7 @@ export default function ExploreScreen() {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (active) setLocationPermission(status);
       } catch {
-        if (active) setLocationPermission("denied");
+        if (active) setLocationPermission(null);
       }
     };
     requestPermission();
@@ -314,27 +311,6 @@ export default function ExploreScreen() {
     } catch (err) {
       console.warn("Map zoom failed", err);
     }
-  };
-
-  const handleCenter = () => {
-    const map = mapRef.current;
-    if (!map) return;
-    
-    if (useWebMap) {
-      if (isWeb) {
-        if (!map._loaded || !map._mapPane || !map._container) return;
-        try {
-          map.setView([initialRegion.latitude, initialRegion.longitude], map.getZoom());
-        } catch (err) {
-          console.warn("Map center failed", err);
-        }
-      } else if (useWebViewMap) {
-        map.postMessage(JSON.stringify({ type: "CENTER" }));
-      }
-      return;
-    }
-
-    map.animateToRegion(initialRegion, 250);
   };
 
   const notify = (title: string, message: string) => {

@@ -1,7 +1,7 @@
-import { Tabs as ExpoTabs, router } from 'expo-router';
+import { Tabs as ExpoTabs, router, type Href } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { IconSymbol } from '@/components/ui/icon-symbol';
+import { IconSymbol } from '../../components/ui/icon-symbol';
 import { getCurrentRole, type MobileUserRole } from '../../src/services/auth';
 import { markAutoOpenedAdmin, shouldAutoOpenAdmin } from '../../src/services/admin-bridge';
 import { useFocusEffect } from '@react-navigation/native';
@@ -59,7 +59,7 @@ export default function TabLayout() {
     [swipeEnabled]
   );
 
-  const makeAuthGuard = useCallback((path: string) => ({
+  const makeAuthGuard = useCallback((path: Href) => ({
     tabPress: (e: any) => {
       e.preventDefault();
       void (async () => {
@@ -67,7 +67,7 @@ export default function TabLayout() {
         if (data.session) {
           router.replace(path);
         } else {
-          router.replace('/(auth)/login');
+          router.replace('/(auth)/login' as Href);
         }
       })();
     },
@@ -79,7 +79,7 @@ export default function TabLayout() {
       if (await shouldAutoOpenAdmin(role)) {
         autoOpenedAdminRef.current = true;
         await markAutoOpenedAdmin();
-        router.replace('/admin');
+        router.replace('/admin' as Href);
       }
     };
     void maybeAutoOpen();

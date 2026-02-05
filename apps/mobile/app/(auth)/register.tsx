@@ -59,7 +59,7 @@ export default function RegisterScreen() {
         role,
       });
       // login after registration to capture tokens if backend didn't return them
-      const { role: signedInRole } = await login(trimmedEmail, password);
+      await login(trimmedEmail, password);
       setInfo("Account created successfully. You're signed in.");
       router.replace("/(tabs)");
     } catch (err: any) {
