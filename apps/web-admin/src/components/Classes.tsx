@@ -39,7 +39,7 @@ export function Classes() {
   const { data, isLoading } = useSWR<ClassCard[]>(url, fetcher, {
     keepPreviousData: true,
   });
-  const classes = data || [];
+  const classes = useMemo(() => data || [], [data]);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
